@@ -4,7 +4,13 @@ import { VsqiError } from '../src/errors.js';
 import { HttpClient } from '../src/http/http-client.js';
 import { VsqiProvider } from '../src/providers/vsqi.provider.js';
 import { config } from '../src/config.js';
-import type { StandardDetail, StandardProvider } from '../src/types.js';
+import type {
+  DetailAttribute,
+  DetailRelation,
+  RawDetail,
+  StandardDetail,
+  StandardProvider
+} from '../src/types.js';
 
 const searchHtml = (code: string) => `<table id="list_tieu_chuan">
   <tr><td class="tc-item">
@@ -24,6 +30,64 @@ const detailHtml = `<table><tr><td>
   <div class="col-md-10">Tiêu chuẩn thử nghiệm</div>
 </td></tr></table>`;
 
+const detailAttribute: DetailAttribute = {
+  order: 0,
+  label: 'Số hiệu',
+  labelRaw: 'Số hiệu',
+  labelEn: 'Standard Number',
+  value: 'TCVN 9143:2022',
+  valueHtml: 'TCVN 9143:2022',
+  links: [],
+  lists: [],
+  source: {
+    strategy: 'vsqi-columns',
+    table: 0,
+    row: 0,
+    cell: 0,
+    labelColumn: 'col-md-2',
+    valueColumns: ['col-md-2'],
+    selector: null
+  }
+};
+
+const detailRelation: DetailRelation = {
+  type: 'replaces',
+  label: 'Thay thế cho',
+  labelEn: 'Replaced by',
+  text: 'TCVN 9143:2012',
+  code: 'TCVN 9143:2012',
+  url: null,
+  status: null,
+  active: null,
+  sourceAttributeIndex: 0,
+  links: [],
+  listItems: []
+};
+
+const emptyRaw: RawDetail = {
+  page: {
+    title: 'Tiêu chuẩn: TCVN 9143:2022',
+    metaDescription: 'Tiêu chuẩn: TCVN 9143:2022',
+    heading: 'Tiêu chuẩn quốc gia',
+    breadcrumb: ['Trang chủ', 'Tiêu chuẩn: TCVN 9143:2022'],
+    pageType: 'standard',
+    internalId: '12345',
+    barcode: null,
+    purchaseUrl: '/tieuchuan/add-gio?id=12345',
+    detailUrl: 'https://tieuchuan.vsqi.gov.vn/tieuchuan/view?sohieu=TCVN+9143%3A2022'
+  },
+  tables: [],
+  sections: [],
+  lists: [],
+  links: [],
+  documents: [],
+  images: [],
+  embeds: [],
+  forms: [],
+  dataAttributes: [],
+  embeddedData: []
+};
+
 const detail: StandardDetail = {
   code: 'TCVN 9143:2022',
   name: 'Tiêu chuẩn thử nghiệm',
@@ -36,7 +100,10 @@ const detail: StandardDetail = {
   replacedBy: null,
   replaces: null,
   detailUrl: 'https://tieuchuan.vsqi.gov.vn/tieuchuan/view?sohieu=TCVN+9143%3A2022',
-  source: 'VSQI'
+  source: 'VSQI',
+  attributes: [detailAttribute],
+  relations: [detailRelation],
+  raw: emptyRaw
 };
 
 function providerStub(overrides: Partial<StandardProvider> = {}): StandardProvider {
@@ -89,6 +156,36 @@ describe('detail API', () => {
       }
       expect(search).toHaveBeenCalledTimes(1);
       expect(getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('preserves additive attributes, relations and raw data through the API and cache round-trip', async () => {
+    const getDetail = vi.fn(async () => detail);
+    const app = await createApp(providerStub({ getDetail }));
+
+    try {
+      const first = await app.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
+      const second = await app.inject({ method: 'GET', url: '/api/v1/standards/tcvn%209143%3a2022' });
+
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
+      expect(getDetail).toHaveBeenCalledTimes(1);
+
+      for (const response of [first, second]) {
+        const body = response.json();
+        expect(body.data.attributes).toEqual([detailAttribute]);
+        expect(body.data.relations).toEqual([detailRelation]);
+        expect(body.data.raw).toEqual(emptyRaw);
+        expect(body.data.raw.page).toMatchObject({
+          pageType: 'standard',
+          internalId: '12345',
+          purchaseUrl: '/tieuchuan/add-gio?id=12345'
+        });
+      }
+
+      expect(second.json().data).toEqual(first.json().data);
     } finally {
       await app.close();
     }
