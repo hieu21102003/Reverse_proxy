@@ -15,6 +15,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node public ./public
+COPY --chown=node:node certs ./certs
 USER node
 EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

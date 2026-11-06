@@ -19,7 +19,7 @@ The `StandardProvider` interface keeps the upstream integration replaceable. The
 
 ## Requirements and installation
 
-- Node.js 20 or newer
+- Node.js 22.15 or newer (`tls.getCACertificates('default')` is used to preserve the runtime's active trust store)
 - VSQI access permitted for your use case
 
 ```sh
@@ -45,6 +45,7 @@ Copy-Item .env.example .env
 | `VSQI_ENABLED` | `true` | Set to `false` to disable upstream calls |
 | `HTTP_TIMEOUT_MS` | `10000` | Upstream timeout, 100–120000 ms |
 | `HTTP_MAX_RETRIES` | `1` | Bounded retries for network failures, 0–3 |
+| `VSQI_TLS_SUPPLEMENTAL_CA` | `true` | Add the bundled VSQI intermediate only for HTTPS requests to `tieuchuan.vsqi.gov.vn:443`; set `false` after VSQI fixes its served chain |
 | `HTTP_USER_AGENT` | `VSQI-Proxy-API/1.0` | Identify the service; configure a contact URL before production |
 | `CACHE_TTL_SECONDS` | `300` | Successful-response cache lifetime; `0` disables storage |
 | `CACHE_MAX_ENTRIES` | `1000` | Maximum in-memory cache entries; `0` disables storage |
@@ -52,27 +53,22 @@ Copy-Item .env.example .env
 | `RATE_LIMIT_WINDOW` | `1 minute` | Rate-limit window understood by `@fastify/rate-limit` |
 | `TRUST_PROXY` | `false` | Trust forwarded client IP headers only behind a trusted proxy |
 | `CORS_ORIGIN` | empty | Optional single allowed browser origin; empty disables CORS |
-| `VSQI_DIAGNOSTICS_TOKEN` | empty | Temporarily enables the protected `POST /internal/diagnostics/vsqi` endpoint; use a random token of at least 32 characters and remove it after diagnosis |
 
 Configuration is validated at startup. `VSQI_BASE_URL` must use HTTPS. TLS certificate verification remains enabled. Do not commit `.env` or put credentials in the upstream URL.
 
-### Temporary Vercel upstream diagnostics
+### VSQI TLS chain workaround
 
-The regular API logs each failed upstream attempt with the Node version, `NODE_OPTIONS`, error/cause name/message/code, failure classification, attempt number, elapsed time, and upstream host only. Request paths, query strings, authorization values, cookies, and upstream HTML are not included. The API's public error response remains unchanged.
+VSQI currently serves its leaf certificate without the required intermediate. The API bundles the **GlobalSign GCC R3 DV TLS CA 2020** intermediate at `certs/globalsign-gcc-r3-dv-tls-ca-2020.der`; it is not downloaded at runtime. The certificate was retrieved from the issuer URL in the VSQI leaf certificate's Authority Information Access extension:
 
-To test the actual Function runtime, temporarily set `VSQI_DIAGNOSTICS_TOKEN` in Vercel Production Environment Variables to a randomly generated secret with at least 32 characters, redeploy, then call:
+`http://secure.globalsign.com/cacert/gsgccr3dvtlsca2020.crt`
 
-```sh
-curl -X POST \
-  -H "Authorization: Bearer $VSQI_DIAGNOSTICS_TOKEN" \
-  https://YOUR_DEPLOYMENT_HOST/internal/diagnostics/vsqi
-```
+The DER asset is pinned by SHA-256 fingerprint `76:25:38:43:95:09:C4:11:C4:37:D3:C5:67:56:3E:13:78:67:12:81:FC:4A:14:64:AD:D0:31:87:08:43:67:6E` and expires **March 18, 2029**. Its issuer is GlobalSign Root CA - R3, already part of the Node trust store. The client combines this intermediate with Node's active default CA set and keeps `rejectUnauthorized: true` and normal hostname verification enabled.
 
-The endpoint is not registered when the token is unset, returns 404 for invalid credentials, and is limited to two calls per minute. It reports DNS lookup results and performs one HTTPS GET to `/tim-kiem?k=TCVN%209143`, returning status, content type, elapsed time, runtime version, and sanitized error details; it never returns the upstream HTML. Remove `VSQI_DIAGNOSTICS_TOKEN` after collecting the result and redeploy to remove the diagnostic route.
+The supplemental CA is used only by the Undici dispatcher for HTTPS connections to the exact host `tieuchuan.vsqi.gov.vn` on port 443. Redirects are handled individually: other hosts use ordinary `fetch` without this dispatcher, and the scoped dispatcher itself refuses other origins. `VSQI_TLS_SUPPLEMENTAL_CA=false` disables the workaround without changing the rest of the HTTP client. If the certificate expires or VSQI rotates its issuer, verify the new chain and issuer through a trusted source, update the asset and pinned fingerprint, and add/refresh the chain tests before redeploying.
 
-The project currently declares `engines.node` as `>=20`, not specifically Node 24. Vercel's supported-version mapping may therefore select a newer major (currently Node 26); use the `process.version` from the Function log/diagnostic response as the runtime evidence. Node's `--use-system-ca` support is version-dependent, and on Linux it uses the Linux runtime's system CA set, not the Windows certificate store used by local development. This flag only changes CA trust: it cannot fix DNS resolution, connection resets/refusals, timeouts, or upstream IP blocking. Certificate verification remains enabled in all cases.
+**Removal after the upstream chain is fixed:** first set `VSQI_TLS_SUPPLEMENTAL_CA=false` in production and verify live Search and Detail requests. Then remove the TLS dispatcher and certificate asset, the environment variable/configuration, its tests and documentation, and the direct `undici` dependency if no longer used. Do not remove the workaround until the upstream server serves a complete valid chain.
 
-Local connectivity was checked with Node `v24.22.0`: DNS resolved `tieuchuan.vsqi.gov.vn` to `210.245.108.206`; without `--use-system-ca`, HTTPS failed with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; with `NODE_OPTIONS=--use-system-ca`, the requested search page returned HTTP 200 and `text/html`. This establishes a local CA-store difference, but does **not** establish the Vercel failure's cause. No Vercel runtime log or diagnostic response has been available to inspect yet.
+The Vercel runtime failure was confirmed as `UNABLE_TO_VERIFY_LEAF_SIGNATURE`: VSQI served its leaf certificate without the GlobalSign GCC R3 DV TLS CA 2020 intermediate. The scoped supplemental-CA workaround above addresses this without disabling verification. Local connectivity through the compiled client and workaround succeeded; no Vercel deployment has been tested after the change, so production resolution is not claimed.
 
 ## Local development and production build
 

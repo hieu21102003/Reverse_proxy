@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { classifyUpstreamFailure, getErrorDetails, VsqiError } from '../errors.js';
+import { getVsqiTlsDispatcher, usesVsqiHost } from './vsqi-tls.js';
 import type { FastifyBaseLogger } from 'fastify';
 
 export class HttpClient {
@@ -14,9 +15,8 @@ export class HttpClient {
       const timeout = setTimeout(() => controller.abort(), config.HTTP_TIMEOUT_MS);
 
       try {
-        const response = await fetch(url, {
+        const response = await this.fetchFollowingRedirects(url, {
           method: 'GET',
-          redirect: 'follow',
           signal: controller.signal,
           headers: {
             'User-Agent': config.HTTP_USER_AGENT,
@@ -82,5 +82,37 @@ export class HttpClient {
       ...getErrorDetails(error),
       ...extra
     }, 'VSQI upstream request failed');
+  }
+
+  private async fetchFollowingRedirects(url: URL, options: RequestInit): Promise<Response> {
+    let currentUrl = url;
+
+    for (let redirectCount = 0; redirectCount <= 20; redirectCount++) {
+      const dispatcher = config.VSQI_TLS_SUPPLEMENTAL_CA && usesVsqiHost(currentUrl)
+        ? await getVsqiTlsDispatcher()
+        : undefined;
+      const response = await fetch(currentUrl, {
+        ...options,
+        redirect: 'manual',
+        ...(dispatcher ? { dispatcher } : {})
+      } as RequestInit);
+
+      if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+
+      const location = response.headers.get('location');
+      if (!location) return response;
+      if (redirectCount === 20) {
+        await response.body?.cancel();
+        throw new VsqiError('VSQI exceeded the redirect limit', 'UPSTREAM_REDIRECT_ERROR', 502);
+      }
+
+      await response.body?.cancel();
+      currentUrl = new URL(location, currentUrl);
+      if (!['http:', 'https:'].includes(currentUrl.protocol) || currentUrl.username || currentUrl.password) {
+        throw new VsqiError('VSQI returned an invalid redirect URL', 'UPSTREAM_REDIRECT_ERROR', 502);
+      }
+    }
+
+    throw new VsqiError('VSQI exceeded the redirect limit', 'UPSTREAM_REDIRECT_ERROR', 502);
   }
 }

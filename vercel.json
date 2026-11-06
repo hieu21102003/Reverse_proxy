@@ -6,7 +6,7 @@
       "src": "src/vercel.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": "public/**"
+        "includeFiles": "{public/**,certs/**}"
       }
     }
   ],

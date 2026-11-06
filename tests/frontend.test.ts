@@ -34,4 +34,15 @@ describe('API playground static assets', () => {
       await app.close();
     }
   });
+
+  it('does not expose the temporary upstream diagnostics endpoint', async () => {
+    const app = await createApp(provider);
+    try {
+      const response = await app.inject({ method: 'POST', url: '/internal/diagnostics/vsqi' });
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error.code).toBe('ROUTE_NOT_FOUND');
+    } finally {
+      await app.close();
+    }
+  });
 });

@@ -19,7 +19,7 @@ describe('Vercel deployment configuration', () => {
     expect(config.builds).toEqual([{
       src: 'src/vercel.ts',
       use: '@vercel/node',
-      config: { includeFiles: 'public/**' }
+      config: { includeFiles: '{public/**,certs/**}' }
     }]);
     expect('functions' in config).toBe(false);
     expect(config.routes).toEqual([{ src: '/(.*)', dest: '/src/vercel.ts' }]);
