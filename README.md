@@ -52,8 +52,27 @@ Copy-Item .env.example .env
 | `RATE_LIMIT_WINDOW` | `1 minute` | Rate-limit window understood by `@fastify/rate-limit` |
 | `TRUST_PROXY` | `false` | Trust forwarded client IP headers only behind a trusted proxy |
 | `CORS_ORIGIN` | empty | Optional single allowed browser origin; empty disables CORS |
+| `VSQI_DIAGNOSTICS_TOKEN` | empty | Temporarily enables the protected `POST /internal/diagnostics/vsqi` endpoint; use a random token of at least 32 characters and remove it after diagnosis |
 
 Configuration is validated at startup. `VSQI_BASE_URL` must use HTTPS. TLS certificate verification remains enabled. Do not commit `.env` or put credentials in the upstream URL.
+
+### Temporary Vercel upstream diagnostics
+
+The regular API logs each failed upstream attempt with the Node version, `NODE_OPTIONS`, error/cause name/message/code, failure classification, attempt number, elapsed time, and upstream host only. Request paths, query strings, authorization values, cookies, and upstream HTML are not included. The API's public error response remains unchanged.
+
+To test the actual Function runtime, temporarily set `VSQI_DIAGNOSTICS_TOKEN` in Vercel Production Environment Variables to a randomly generated secret with at least 32 characters, redeploy, then call:
+
+```sh
+curl -X POST \
+  -H "Authorization: Bearer $VSQI_DIAGNOSTICS_TOKEN" \
+  https://YOUR_DEPLOYMENT_HOST/internal/diagnostics/vsqi
+```
+
+The endpoint is not registered when the token is unset, returns 404 for invalid credentials, and is limited to two calls per minute. It reports DNS lookup results and performs one HTTPS GET to `/tim-kiem?k=TCVN%209143`, returning status, content type, elapsed time, runtime version, and sanitized error details; it never returns the upstream HTML. Remove `VSQI_DIAGNOSTICS_TOKEN` after collecting the result and redeploy to remove the diagnostic route.
+
+The project currently declares `engines.node` as `>=20`, not specifically Node 24. Vercel's supported-version mapping may therefore select a newer major (currently Node 26); use the `process.version` from the Function log/diagnostic response as the runtime evidence. Node's `--use-system-ca` support is version-dependent, and on Linux it uses the Linux runtime's system CA set, not the Windows certificate store used by local development. This flag only changes CA trust: it cannot fix DNS resolution, connection resets/refusals, timeouts, or upstream IP blocking. Certificate verification remains enabled in all cases.
+
+Local connectivity was checked with Node `v24.22.0`: DNS resolved `tieuchuan.vsqi.gov.vn` to `210.245.108.206`; without `--use-system-ca`, HTTPS failed with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; with `NODE_OPTIONS=--use-system-ca`, the requested search page returned HTTP 200 and `text/html`. This establishes a local CA-store difference, but does **not** establish the Vercel failure's cause. No Vercel runtime log or diagnostic response has been available to inspect yet.
 
 ## Local development and production build
 

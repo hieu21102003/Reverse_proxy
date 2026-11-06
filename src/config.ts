@@ -18,6 +18,10 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),
   TRUST_PROXY: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
+  VSQI_DIAGNOSTICS_TOKEN: z.string().default('').refine(
+    value => value === '' || value.length >= 32,
+    'VSQI_DIAGNOSTICS_TOKEN must be at least 32 characters when enabled'
+  ),
   CORS_ORIGIN: z.string().trim().default('').refine(value => {
     if (!value) return true;
     try {

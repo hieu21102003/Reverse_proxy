@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { VsqiProvider } from './providers/vsqi.provider.js';
 import { VsqiError } from './errors.js';
 import { CachedStandardProvider } from './services/response-cache.js';
+import { isDiagnosticAuthorized, runVsqiDiagnostics } from './http/upstream-diagnostics.js';
 import type { StandardProvider } from './types.js';
 
 const standardCodeSchema = z.string()
@@ -15,7 +16,7 @@ const standardCodeSchema = z.string()
   .transform(code => code.replace(/^(tcvn|qcvn)/i, prefix => prefix.toUpperCase()))
   .pipe(z.string().regex(/^(?:TCVN|QCVN)\s+\d[\d./-]*:\d{4}(?:\/[A-Z0-9.-]+)?$/i));
 
-export async function createApp(provider: StandardProvider = new VsqiProvider()) {
+export async function createApp(provider?: StandardProvider) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
     logger: {
@@ -27,7 +28,7 @@ export async function createApp(provider: StandardProvider = new VsqiProvider())
     },
     bodyLimit: 16 * 1024
   });
-  const cachedProvider = new CachedStandardProvider(provider);
+  const cachedProvider = new CachedStandardProvider(provider ?? new VsqiProvider(undefined, app.log));
 
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -86,6 +87,17 @@ export async function createApp(provider: StandardProvider = new VsqiProvider())
     service: 'vsqi-proxy-api',
     timestamp: new Date().toISOString()
   }));
+
+  if (config.VSQI_DIAGNOSTICS_TOKEN) {
+    app.post('/internal/diagnostics/vsqi', {
+      config: { rateLimit: { max: 2, timeWindow: '1 minute' } }
+    }, async (request, reply) => {
+      if (!isDiagnosticAuthorized(request.headers.authorization, config.VSQI_DIAGNOSTICS_TOKEN)) {
+        return reply.code(404).send({ error: { code: 'ROUTE_NOT_FOUND', message: 'Route not found' } });
+      }
+      return reply.send(await runVsqiDiagnostics());
+    });
+  }
 
   app.get('/', async (_request, reply) => {
     reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-cache');

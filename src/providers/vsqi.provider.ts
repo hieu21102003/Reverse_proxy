@@ -4,9 +4,14 @@ import { HttpClient } from '../http/http-client.js';
 import { parseSearchHtml } from '../parsers/search.parser.js';
 import { parseDetailHtml } from '../parsers/detail.parser.js';
 import type { SearchInput, SearchResult, StandardDetail, StandardProvider } from '../types.js';
+import type { FastifyBaseLogger } from 'fastify';
 
 export class VsqiProvider implements StandardProvider {
-  constructor(private readonly http: Pick<HttpClient, 'getHtml'> = new HttpClient()) {}
+  private readonly http: Pick<HttpClient, 'getHtml'>;
+
+  constructor(http?: Pick<HttpClient, 'getHtml'>, logger?: Pick<FastifyBaseLogger, 'warn'>) {
+    this.http = http ?? new HttpClient(logger);
+  }
 
   private ensureEnabled() {
     if (config.VSQI_ENABLED.toLowerCase() !== 'true') {
