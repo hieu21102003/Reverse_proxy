@@ -85,6 +85,24 @@ docker run --rm --env-file .env -p 3100:3100 vsqi-proxy-api
 
 The runtime image contains the compiled application and production dependencies only, runs as the non-root `node` user, and includes a `/health` container health check. Set `PORT` to `3100` in the container (or adjust the port mapping and health check if you change it). `.dockerignore` excludes local dependencies, build output, tests, and environment files.
 
+## Vercel deployment
+
+The Vercel configuration explicitly builds one Node.js Function from `src/vercel.ts` and routes requests to it. This avoids Vercel treating `src/app.ts`—the named application factory—as a Function entrypoint. The adapter creates one Fastify app, waits for it to be ready, exports a default Node.js request handler, and does not call `listen()`. Local development continues to use `src/server.ts`.
+
+1. Import the repository in Vercel with the repository root as the **Root Directory**. Keep the project **Framework Preset** set to **Other** so Vercel uses the explicit `builds` configuration in `vercel.json`.
+2. Set the required environment variables in **Project Settings → Environment Variables**. Configure `VSQI_BASE_URL` as HTTPS; TLS verification stays enabled. `HOST` and `PORT` are only used by the local server.
+3. Use Vercel CLI 48.6.0 or newer. From the repository root, link the project and deploy:
+
+   ```sh
+   npx vercel@latest link
+   npx vercel@latest
+   npx vercel@latest --prod
+   ```
+
+   Or connect the repository to Vercel for Git-based preview and production deployments.
+
+The configuration emits only `src/vercel.ts` as a Function; `src/app.ts` remains an imported factory, not a separate Function. The Function serves `/`, `/playground.css`, `/playground.js`, `/health`, and the existing `/api/v1/standards/...` routes through the same Fastify instance. The `public/**` assets are included in its bundle. Vercel supplies the runtime port; do not start a second listener. In-memory cache and rate-limit state is per Function instance, as it is per process in other deployments.
+
 ## API
 
 ### `GET /api/v1/standards/search`
