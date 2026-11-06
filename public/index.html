@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7fb">
+    <meta name="description" content="Explore the VSQI Standards API and inspect live responses.">
+    <title>VSQI API Playground</title>
+    <link rel="stylesheet" href="/playground.css?v=1">
+    <script src="/playground.js?v=1" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="VSQI Playground home">
+          <span class="brand-mark">V</span>
+          <span class="brand-name">vsqi<span>api</span></span>
+        </a>
+        <div class="workspace-label">WORKSPACE</div>
+        <nav class="side-nav" aria-label="Main navigation">
+          <button class="nav-item is-active" data-view="search" type="button">
+            <span class="nav-icon">⌕</span><span>Search standards</span>
+          </button>
+          <button class="nav-item" data-view="detail" type="button">
+            <span class="nav-icon">◈</span><span>Standard detail</span>
+          </button>
+          <button class="nav-item" data-view="docs" type="button">
+            <span class="nav-icon">⌘</span><span>API reference</span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="connection-card">
+            <span class="connection-dot"></span>
+            <div><strong>API ready</strong><small>VSQI proxy service</small></div>
+          </div>
+          <a class="sidebar-link" href="/health" target="_blank" rel="noreferrer">Service health <span>↗</span></a>
+          <div class="sidebar-foot">Developer tools <span>·</span> v1</div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Toggle navigation">☰</button>
+          <div class="breadcrumbs"><span>VSQI API</span><span class="crumb-slash">/</span><strong id="breadcrumb-current">Search standards</strong></div>
+          <div class="topbar-right">
+            <label class="base-url-control"><span>API BASE URL</span><input id="api-base-url" type="url" aria-label="API base URL" placeholder="http://localhost:3100"></label>
+            <span class="environment-pill"><span></span> PLAYGROUND</span>
+            <a class="docs-link" href="https://tieuchuan.vsqi.gov.vn" target="_blank" rel="noreferrer">VSQI source ↗</a>
+          </div>
+        </header>
+
+        <div class="content-wrap">
+          <section class="view-panel is-visible" id="view-search" aria-labelledby="page-title">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span class="eyebrow-line"></span> API EXPLORER</div>
+                <h1 id="page-title">Search standards</h1>
+                <p class="page-subtitle">Query the VSQI standards catalog and inspect the response in real time.</p>
+              </div>
+              <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
+            </div>
+
+            <div class="request-card">
+              <div class="card-title-row">
+                <div><span class="step-index">01</span><h2>Configure request</h2></div>
+                <span class="secure-label"><span>✓</span> No authentication required</span>
+              </div>
+              <form id="search-form">
+                <div class="form-grid">
+                  <label class="field search-field">
+                    <span class="field-label">Search query <span class="required">*</span></span>
+                    <span class="input-shell"><span class="input-search-icon">⌕</span><input id="search-query" name="q" type="search" minlength="2" maxlength="120" placeholder="e.g. TCVN 9143" autocomplete="off" required></span>
+                    <span class="field-hint">Search by standard code or title</span>
+                  </label>
+                  <label class="field page-field">
+                    <span class="field-label">Page</span>
+                    <input id="search-page" name="page" type="number" min="1" max="1000" value="1">
+                    <span class="field-hint">Results page (1–1000)</span>
+                  </label>
+                  <button class="button button-primary send-button" id="search-submit" type="submit"><span>Send request</span><span class="button-arrow">→</span></button>
+                </div>
+              </form>
+              <div class="quick-searches"><span>Try:</span><button type="button" data-query="TCVN 9143">TCVN 9143</button><button type="button" data-query="QCVN 16">QCVN 16</button><button type="button" data-query="cong trinh thuy loi">cong trinh thuy loi</button></div>
+            </div>
+
+            <div class="request-inspector" id="search-inspector" hidden>
+              <div class="inspector-heading"><div><span class="step-index">02</span><h2>Request inspector</h2></div><span class="timestamp" id="search-timestamp"></span></div>
+              <div class="inspector-grid">
+                <div class="inspector-item"><span>METHOD</span><strong class="method-text">GET</strong></div>
+                <div class="inspector-item inspector-url"><span>REQUEST URL</span><div><code id="search-request-url">—</code><button class="icon-button copy-url" data-copy-url="search" type="button" aria-label="Copy request URL" title="Copy request URL">▢</button></div></div>
+                <div class="inspector-item"><span>HTTP STATUS</span><strong id="search-http-status" class="status-value">—</strong></div>
+                <div class="inspector-item"><span>RESPONSE TIME</span><strong id="search-response-time">—</strong></div>
+              </div>
+              <div class="error-banner" id="search-error" hidden></div>
+            </div>
+
+            <div class="results-card" id="search-results-card">
+              <div class="results-heading">
+                <div><span class="step-index">03</span><h2>Response data</h2><span class="result-count" id="search-result-count">Awaiting request</span></div>
+                <div class="response-tabs" role="tablist" aria-label="Search response view">
+                  <button class="response-tab is-active" data-response-tab="search-table" type="button" role="tab">Table</button>
+                  <button class="response-tab" data-response-tab="search-raw" type="button" role="tab">Raw JSON</button>
+                </div>
+              </div>
+              <div class="response-pane is-active" id="search-table-pane">
+                <div class="empty-state" id="search-empty">
+                  <div class="empty-illustration"><span>⌕</span><i></i><i></i><i></i></div>
+                  <strong>Ready when you are</strong>
+                  <p>Enter a query above to explore standards from the VSQI catalog.</p>
+                </div>
+                <div class="loading-skeleton" id="search-skeleton" hidden>
+                  <div class="skeleton-row skeleton-head"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
+                </div>
+                <div class="table-scroll" id="search-table-wrap" hidden>
+                  <table class="data-table search-table">
+                    <thead><tr><th>CODE</th><th>NAME</th><th>ENGLISH NAME</th><th>YEAR</th><th>STATUS</th><th>DETAIL URL</th><th>SOURCE</th></tr></thead>
+                    <tbody id="search-table-body"></tbody>
+                  </table>
+                </div>
+                <div class="pagination-bar" id="pagination-bar" hidden>
+                  <span id="pagination-summary"></span>
+                  <div class="pagination-controls"><button class="button button-secondary button-small" id="previous-page" type="button">← Previous</button><span id="pagination-current"></span><button class="button button-secondary button-small" id="next-page" type="button">Next →</button></div>
+                </div>
+              </div>
+              <div class="response-pane raw-pane" id="search-raw-pane" hidden>
+                <div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="search" type="button">▢ Copy JSON</button></div>
+                <pre class="json-viewer"><code id="search-raw-json" class="json-code"></code></pre>
+              </div>
+            </div>
+          </section>
+
+          <section class="view-panel" id="view-detail" aria-labelledby="detail-page-title" hidden>
+            <div class="page-heading">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> API EXPLORER <span class="eyebrow-separator">/</span> DETAIL</div><h1 id="detail-page-title">Standard detail</h1><p class="page-subtitle">Inspect every field returned for an individual standard.</p></div>
+              <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div>
+            </div>
+            <div class="request-card detail-request-card">
+              <div class="card-title-row"><div><span class="step-index">01</span><h2>Request a standard</h2></div><span class="secure-label"><span>✓</span> URL-encoded automatically</span></div>
+              <form id="detail-form"><div class="form-grid detail-form-grid">
+                <label class="field"><span class="field-label">Standard code <span class="required">*</span></span><span class="input-shell"><span class="input-search-icon">◈</span><input id="detail-code" name="code" type="text" placeholder="e.g. TCVN 9143:2022" required></span><span class="field-hint">Spaces and special characters are encoded for you</span></label>
+                <button class="button button-primary send-button" type="submit"><span>Get details</span><span class="button-arrow">→</span></button>
+              </div></form>
+            </div>
+            <div class="request-inspector" id="detail-inspector" hidden>
+              <div class="inspector-heading"><div><span class="step-index">02</span><h2>Request inspector</h2></div><span class="timestamp" id="detail-timestamp"></span></div>
+              <div class="inspector-grid">
+                <div class="inspector-item"><span>METHOD</span><strong class="method-text">GET</strong></div>
+                <div class="inspector-item inspector-url"><span>REQUEST URL</span><div><code id="detail-request-url">—</code><button class="icon-button copy-url" data-copy-url="detail" type="button" aria-label="Copy request URL" title="Copy request URL">▢</button></div></div>
+                <div class="inspector-item"><span>HTTP STATUS</span><strong id="detail-http-status" class="status-value">—</strong></div>
+                <div class="inspector-item"><span>RESPONSE TIME</span><strong id="detail-response-time">—</strong></div>
+              </div>
+              <div class="error-banner" id="detail-error" hidden></div>
+            </div>
+            <div class="detail-response-card" id="detail-response-card">
+              <div class="results-heading"><div><span class="step-index">03</span><h2>Standard information</h2></div><div class="response-tabs" role="tablist" aria-label="Detail response view"><button class="response-tab is-active" data-response-tab="detail-fields" type="button" role="tab">Fields</button><button class="response-tab" data-response-tab="detail-raw" type="button" role="tab">Raw JSON</button></div></div>
+              <div class="response-pane is-active" id="detail-fields-pane">
+                <div class="empty-state detail-empty" id="detail-empty"><div class="empty-illustration"><span>◈</span><i></i><i></i><i></i></div><strong>No standard selected</strong><p>Enter a standard code above or select one from the search results.</p></div>
+                <div class="loading-skeleton detail-skeleton" id="detail-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+                <div class="detail-groups" id="detail-groups" hidden>
+                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-blue">◈</span><div><h3>Basic Information</h3><p>Standard identity and current state</p></div></div><div class="field-grid" id="basic-fields"></div></section>
+                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-violet">§</span><div><h3>Legal Information</h3><p>Dates and issuing authority</p></div></div><div class="field-grid" id="legal-fields"></div></section>
+                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-amber">↔</span><div><h3>Replacement Information</h3><p>Related and superseded standards</p></div></div><div class="field-grid" id="replacement-fields"></div></section>
+                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-green">◎</span><div><h3>Source Metadata</h3><p>Origin of this record</p></div></div><div class="field-grid" id="source-fields"></div></section>
+                </div>
+              </div>
+              <div class="response-pane raw-pane" id="detail-raw-pane" hidden><div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="detail" type="button">▢ Copy JSON</button></div><pre class="json-viewer"><code id="detail-raw-json" class="json-code"></code></pre></div>
+            </div>
+          </section>
+
+          <section class="view-panel" id="view-docs" aria-labelledby="docs-title" hidden>
+            <div class="page-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> REFERENCE</div><h1 id="docs-title">API reference</h1><p class="page-subtitle">Endpoints, parameters, and response fields at a glance.</p></div><span class="docs-version">API VERSION <strong>v1</strong></span></div>
+            <div class="docs-grid">
+              <article class="docs-card docs-wide"><div class="docs-card-heading"><div><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div><button class="try-link" data-doc-action="search" type="button">Try it →</button></div><p>Search the VSQI catalog by standard code or text.</p><h3>Query parameters</h3><div class="parameter-row"><code>q</code><span class="parameter-type">string · required</span><span>Search text (2–120 characters).</span></div><div class="parameter-row"><code>page</code><span class="parameter-type">integer · optional</span><span>Page number from 1 to 1000. Defaults to 1.</span></div><div class="code-example"><span>EXAMPLE REQUEST</span><code>GET /api/v1/standards/search?q=TCVN%209143&amp;page=1</code></div><details class="docs-example"><summary>Example success response</summary><pre><code>{
+  "data": [{
+    "code": "&lt;standard code&gt;",
+    "name": "&lt;Vietnamese title&gt;",
+    "englishName": "&lt;English title, when available&gt;",
+    "year": 2022,
+    "status": "Active",
+    "detailUrl": "&lt;VSQI detail URL&gt;",
+    "source": "VSQI"
+  }],
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 1,
+    "totalResults": 1
+  },
+  "source": "VSQI"
+}</code></pre></details></article>
+              <article class="docs-card docs-wide"><div class="docs-card-heading"><div><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div><button class="try-link" data-doc-action="detail" type="button">Try it →</button></div><p>Retrieve the detail record for an exact standard code.</p><h3>Path parameter</h3><div class="parameter-row"><code>code</code><span class="parameter-type">string · required</span><span>Standard code, URL-encoded (e.g. TCVN 9143:2022).</span></div><div class="code-example"><span>EXAMPLE REQUEST</span><code>GET /api/v1/standards/TCVN%209143%3A2022</code></div><details class="docs-example"><summary>Example success response</summary><pre><code>{
+  "data": {
+    "code": "&lt;standard code&gt;",
+    "name": "&lt;Vietnamese title, or null&gt;",
+    "englishName": "&lt;English title, or null&gt;",
+    "year": null,
+    "status": null,
+    "issuedDate": null,
+    "effectiveDate": null,
+    "issuingAgency": null,
+    "replacedBy": null,
+    "replaces": null,
+    "detailUrl": "&lt;VSQI detail URL&gt;",
+    "source": "VSQI"
+  }
+}</code></pre></details></article>
+              <article class="docs-card"><div class="docs-card-heading"><h2>Search result fields</h2></div><div class="schema-list"><div><code>data</code><span>Array of standard records</span></div><div><code>pagination</code><span>currentPage, totalPages, totalResults</span></div><div><code>source</code><span>Upstream provider identifier</span></div><div><code>code</code><span>Standard number</span></div><div><code>name</code><span>Vietnamese title</span></div><div><code>englishName</code><span>English title, when available</span></div><div><code>year</code><span>Publication year, when available</span></div><div><code>status</code><span>Active or Withdrawn</span></div><div><code>detailUrl</code><span>VSQI standard page URL</span></div></div></article>
+              <article class="docs-card"><div class="docs-card-heading"><h2>Detail response fields</h2></div><div class="schema-list"><div><code>code</code><span>Standard number</span></div><div><code>name</code><span>Vietnamese title</span></div><div><code>englishName</code><span>English title</span></div><div><code>year</code><span>Publication year</span></div><div><code>status</code><span>Standard status</span></div><div><code>issuedDate</code><span>Issue date, or null</span></div><div><code>effectiveDate</code><span>Effective date, or null</span></div><div><code>issuingAgency</code><span>Issuing agency, or null</span></div><div><code>replacedBy</code><span>Newer standard, or null</span></div><div><code>replaces</code><span>Previous standard, or null</span></div><div><code>detailUrl</code><span>VSQI detail page</span></div><div><code>source</code><span>VSQI</span></div></div></article>
+              <article class="docs-card docs-wide response-docs"><div class="docs-card-heading"><h2>Response and error codes</h2></div><p>Successful search responses contain <code>data</code>, <code>pagination</code>, and <code>source</code>. Detail responses contain <code>data</code> with all fields, including null values.</p><div class="error-code-grid"><span><b>200</b> Success</span><span><b>400</b> Invalid input</span><span><b>404</b> Standard not found</span><span><b>429</b> Rate limit exceeded</span><span><b>502</b> Upstream error</span><span><b>504</b> Upstream timeout</span></div><div class="code-example"><span>GENERIC ERROR SHAPE</span><code>{ "error": { "code": "UPSTREAM_TIMEOUT", "message": "VSQI request timed out" }, "source": "VSQI" }</code></div></article>
+            </div>
+          </section>
+
+          <footer class="page-footer"><span>VSQI Standards API Playground</span><span>Responses are fetched live from your configured API endpoint.</span><a href="https://tieuchuan.vsqi.gov.vn" target="_blank" rel="noreferrer">VSQI source ↗</a></footer>
+        </div>
+      </main>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </body>
+</html>

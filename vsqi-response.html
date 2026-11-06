@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">    
+    <meta name="viewport" content="width=device-width, initial-scale=1,minimum-scale=1, maximum-scale=1"/>
+
+    <meta name="description" content="Tra cứu Tiêu chuẩn">
+    <meta name="keywords" content="Tra cứu Tiêu chuẩn">
+    <meta name="author" content="Viện Tiêu chuẩn Chất lượng Việt Nam">
+
+     <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700,400italic|Roboto+Condensed:400,700&amp;subset=latin,vietnamese,latin-ext">
+    <meta name="csrf-param" content="_csrf-frontend">
+<meta name="csrf-token" content="15AJ29aEZKVNwBr9N8v9LEiJ0kaaCqwixmP4tNoVJvGk0XCY4LI3kC-SbZVfsbhaOfOfPNVv6ma2CZeZjFNunw==">
+    <title>Tra cứu Tiêu chuẩn</title>
+    <link href="/assets/16c78737/css/bootstrap.css" rel="stylesheet">
+<link href="/assets/c2aea24c/css/bootstrap-datepicker3.min.css" rel="stylesheet">
+<link href="/assets/c2aea24c/css/datepicker-kv.min.css" rel="stylesheet">
+<link href="/assets/8749ed3a/css/kv-widgets.min.css" rel="stylesheet">
+<link href="/assets/49234691/css/field-range-bs3.min.css" rel="stylesheet">
+<link href="/assets/4e7286a8/css/select2.min.css" rel="stylesheet">
+<link href="/assets/c040addd/css/select2-addl.min.css" rel="stylesheet">
+<link href="/assets/c040addd/css/select2-krajee-bs3.min.css" rel="stylesheet">
+<link href="/css/site.css" rel="stylesheet">
+<link href="/css/selectric.css" rel="stylesheet">
+<link href="/css/jquery.loading-indicator.css" rel="stylesheet">
+<link href="/css/custom.css" rel="stylesheet">
+<link href="//cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/10.12.4/sweetalert2.min.css" rel="stylesheet">
+<link href="//cdn.jsdelivr.net/npm/bootstrap-icons@1.3.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>#newsletter-form .help-block{text-align:left !important;}</style>
+<script>window.kvDatepicker_648c079a = {"clearBtn":true,"autoclose":true,"startDate":"1900","endDate":"1793942340","minViewMode":"years","format":"yyyy","todayHighlight":true,"language":"vi"};
+
+window.s2options_669e5a8e = {"themeCss":".select2-container--krajee-bs3","sizeCss":"","doReset":true,"doToggle":true,"doOrder":false};
+window.select2_043fe2fb = {"tags":true,"allowClear":true,"theme":"krajee-bs3","width":"100%","placeholder":"Chọn\/Select...","language":"en-US"};
+</script></head>
+<body>
+<style>
+    .navbar-inverse {
+        background-color: #dcdedd  !important;        
+        border-bottom: 5px solid #e28326;
+    }
+    .navbar-inverse .navbar-brand, .navbar-inverse .navbar-nav > li > a{color: #555 !important}
+
+    .navbar-inverse .navbar-brand:hover, .navbar-inverse .navbar-brand:focus, .navbar-inverse .navbar-nav > li > a:hover, .navbar-inverse .navbar-nav > li > a:focus{color: #807b7b !important}
+    .navbar-inverse .navbar-nav > .open > a, .navbar-inverse .navbar-nav > .open > a:hover, .navbar-inverse .navbar-nav > .open > a:focus{background-color: #FFF}
+    </style>
+<div class="wrap">
+
+    <style type="text/css">
+         body #menu_top{
+            position: relative;
+            padding: 15px;
+            border-bottom: 5px solid #e28326;            
+            width: 100%;
+            z-index: 9;
+        }
+        body #main {
+            padding-top: 0px;
+        }
+        footer.footer{
+            position: relative;
+        }
+
+        footer.footer {
+            padding: 20px 0 10px 0;
+            height: auto;
+            width: 100%;
+            bottom: 0;
+            background: #dcdedd;
+            border-top: 1px solid #bbb;
+            z-index: 9;
+        }
+       
+        #banner_top{
+                position: absolute;
+            z-index: 10;
+            width: 400px;
+        }
+         @media only screen and (max-width: 480px){
+             #banner_top{
+                 width: inherit;
+             }
+         }
+        #banner_top img{
+            height: 45px;
+            margin: 0 10px 0 0;
+        }
+        #banner_top p{
+            font-family: "Roboto Condensed", Helvetica, Arial, sans-serif;
+            font-size: 16px;
+            text-transform: uppercase;
+            font-weight: 400;
+            padding: 0 0 0 5px;
+            color: #666;
+        }
+        
+        .tcvn{
+            font-family: "Roboto Condensed", Helvetica, Arial, sans-serif;
+            /*text-transform: uppercase;*/
+            color: #555;
+        }
+        .tcvn strong{
+            font-size: 16px;
+            line-height: 25px;
+            font-family: "Roboto Condensed", Helvetica, Arial, sans-serif;
+            text-transform: uppercase;
+        }
+
+        @media only screen and (max-width: 480px){
+             #banner_top{
+                 width: inherit;
+             }
+         }
+
+        .kv-panel-pager {
+            text-align: center;
+        }
+        #main {
+            padding: 100px 0 50px 0;
+        }
+
+    </style>
+
+  
+
+    <nav id="menu_top" class="navbar-inverse navbar-fixed-top navbar" target="_blank"><div class="container"><div class="navbar-header"><button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#menu_top-collapse"><span class="sr-only">Toggle navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span></button><a class="navbar-brand" href="/"><div id="banner_top"><a href="/" title="Cổng thông tin Tiêu chuẩn">
+                <img class="pull-left" src="/images/vsqi.png" alt="Cổng thông tin Tiêu chuẩn">        
+                <p class="pull-left hidden-sm hidden-xs">Viện Tiêu chuẩn Chất lượng Việt Nam<br>
+                <strong style="font-size: 20px;">Cổng thông tin Tiêu chuẩn</strong>
+                </p>
+            </a></div></a></div><div id="menu_top-collapse" class="collapse navbar-collapse"><ul id="w1" class="navbar-nav navbar-right nav"><li class="dropdown"><a class="dropdown-toggle" href="/dich-vu" data-toggle="dropdown">Dịch vụ <span class="caret"></span></a><ul id="w2" class="dropdown-menu"><li><a href="/goi-dich-vu" tabindex="-1">Gói dịch vụ</a></li></ul></li>
+<li><a href="/gioi-thieu">Giới thiệu</a></li>
+<li class="dropdown"><a class="dropdown-toggle" href="/tin-tuc" data-toggle="dropdown">Tin tức <span class="caret"></span></a><ul id="w3" class="dropdown-menu"><li><a href="/tin-tuc-c6.html" tabindex="-1">Tin tức</a></li>
+<li><a href="/tieu-chuan-quoc-gia-tcvn-c1.html" tabindex="-1">Tiêu chuẩn quốc gia TCVN</a></li>
+<li><a href="/quy-chuan-ky-thuat-c2.html" tabindex="-1">Quy chuẩn kỹ thuật</a></li>
+<li><a href="/hoat-dong-ban-ky-thuat-c3.html" tabindex="-1">Hoạt động Ban kỹ thuật Tiêu chuẩn quốc gia</a></li>
+<li><a href="/hoat-dong-tieu-chuan-hoa-c4.html" tabindex="-1">Hoạt động Tiêu chuẩn hóa</a></li>
+<li><a href="/ky-niem-ngay-tieu-chuan-the-gioi-1410-c7.html" tabindex="-1">Kỷ niệm ngày tiêu chuẩn thế giới (14/10)</a></li>
+<li><a href="/giai-thuong-chat-luong-quoc-gia-c10.html" tabindex="-1">Giải thưởng Chất lượng Quốc Gia</a></li>
+<li><a href="/ky-niem-ngay-thanh-lap-vien-tccl-vn-205-c11.html" tabindex="-1">Kỷ niệm ngày thành lập Viện TCCL VN (20/5)</a></li>
+<li><a href="/chinh-sach-dieu-khoan-c8.html" tabindex="-1">Chính sách điều khoản</a></li></ul></li>
+<li class="dropdown active"><a class="dropdown-toggle" href="/tim-kiem" data-toggle="dropdown">Tra cứu dữ liệu <span class="caret"></span></a><ul id="w4" class="dropdown-menu"><li class="active"><a href="/tim-kiem" tabindex="-1">Tra cứu Tiêu chuẩn</a></li>
+<li><a href="/tra-cuu-quy-chuan" tabindex="-1">Tra cứu Quy chuẩn</a></li>
+<li><a href="/ban-ky-thuat" tabindex="-1">Ban Kỹ thuật Tiêu chuẩn Quốc Gia</a></li>
+<li><a href="/ban-ky-thuat-quoc-te" tabindex="-1">Ban Kỹ thuật Tiêu chuẩn Quốc tế</a></li>
+<li><a href="https://tieuchuanxaydung.vsqi.gov.vn" tabindex="-1">Tiêu chuẩn ngành Xây dựng</a></li>
+<li><a href="/du-an" tabindex="-1">Dự án xây dựng tiêu chuẩn</a></li>
+<li><a href="/tra-cuu-van-ban" tabindex="-1">Văn bản</a></li>
+<li><a href="/to-chuc-lien-quan" tabindex="-1">Tổ chức liên quan</a></li></ul></li>
+<li class="dropdown"><a class="dropdown-toggle" href="#" data-toggle="dropdown"><i class="glyphicon glyphicon-user"></i> <span class="caret"></span></a><ul id="w5" class="dropdown-menu"><li><a href="/chinh-sach-thanh-vien-t19.html" tabindex="-1">Chính sách thành viên</a></li>
+<li><a href="/gio-hang" tabindex="-1">Giỏ hàng (<span class="cart_count">0</span>)</a></li>
+<li><a href="/dang-ky" tabindex="-1">Đăng ký</a></li>
+<li><a href="/dang-nhap" tabindex="-1">Đăng nhập</a></li>
+<li><a href="https://xaydungtieuchuan.vsqi.gov.vn/agency" target="_blank" tabindex="-1">Đăng nhập thành viên Dịch vụ</a></li>
+<li><a href="https://xaydungtieuchuan.vsqi.gov.vn/acp" target="_blank" tabindex="-1">Đăng nhập Nội bộ</a></li></ul></li></ul></div></div></nav>
+    <div id="main">
+        <div class="container">
+            <ul class="breadcrumb"><li><a href="/">Trang chủ</a></li>
+<li class="active">Tra cứu Tiêu chuẩn</li>
+</ul>                            <h1>Tra cứu Tiêu chuẩn</h1>
+
+    <div class="row site-index" style="position: relative">
+        <style type="text/css">
+            h1 {
+                font-size: 24px;
+                font-family: "Roboto Condensed", Helvetica, Arial, sans-serif;
+                color: #1ca0bf;
+                text-transform: uppercase;
+            }
+
+            .tkc {
+                font-size: 20px;
+                height: 50px;
+            }
+
+            .button_search {
+                height: 50px;
+                font-size: 16px;
+                padding: 8px 10px 10px 10px;
+                position: relative;
+            }
+
+            .dks label {
+                margin: 0 20px 0 0;
+                padding: 0;
+                min-height: initial;
+            }
+
+            p.t-anh {
+                font-size: 12px;
+                font-weight: normal;
+                padding: 0;
+                margin: 0 0 10px 0;
+                line-height: initial;
+            }
+
+            .dks-c {
+                width: auto;
+                float: right;
+                margin: -6px 0 0 10px;
+            }
+
+            span.tt {
+                background: #ff0;
+                padding: 0;
+                color: #000;
+            }
+            .marquee {
+                width: 100%; /* the plugin works for responsive layouts so width is not necessary */
+                overflow: hidden;
+                margin: 10px 0 20px;
+                font-size: 16px;
+                color: #e28326;
+            }
+        </style>
+
+        <form id="search-form" action="/tim-kiem" method="get" enctype="multipart/form-data">        <div class="col-md-12 text-center">
+            <div class='marquee'><h3 style="margin:auto">© VSQI - Bản quyền xuất bản thuộc về Viện Tiêu chuẩn chất lượng Việt Nam</h3></div>
+        </div>
+        <div class="col-md-10">
+            <input type="text" class="form-control tkc" name="k" value="TCVN 9143" placeholder="Nhập từ khóa tìm kiếm chung (Keywords) ...">        </div>
+
+        <div class="col-md-2 hidden-sm hidden-xs">
+            <button type="submit" class="form-control btn btn-info button_search" name=""><i class="glyphicon glyphicon-search"></i> Tìm kiếm<p class="t-anh">Search</p></button>        </div>
+
+        <div class="clearfix" style="margin-bottom: 20px"></div>
+
+        <div class="col-md-6">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="si">Số hiệu tiêu chuẩn</label>                    <p class="t-anh">Standard number</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="text" class="form-control" name="si" value="">                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Tên tiêu chuẩn</label>                    <p class="t-anh">Title</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="text" class="form-control" name="st" value="">                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Tiêu chuẩn tương đương</label>                    <p class="t-anh">Equivalent to</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="text" class="form-control" name="rs" value="">                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">TCXD được chuyển đổi</label>                    <p class="t-anh">TCXD transfered to TCVN</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="text" class="form-control" name="tf" value="">                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Tình trạng</label>                    <p class="t-anh">Validation Status</p>
+                </div>
+                <div class="col-md-8">
+                    <select class="form-control on-change pull-left" name="tt">
+<option value="" selected>--- Select ---</option>
+<option value="A">A - Có hiệu lực (Most current)</option>
+<option value="H">W - Hết hiệu lực (Withdrawn)</option>
+</select>                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Từ năm</label>                    <p class="t-anh">Year</p>
+                </div>
+                <div class="col-md-8">
+                    <div id="w0-kvdate" class="input-group input-daterange"><input type="text" id="w0" class="form-control krajee-datepicker" name="df" value="" placeholder="Chọn/Select..." autocomplete="off" data-datepicker-source="w0-kvdate" data-datepicker-type="5" data-krajee-kvDatepicker="kvDatepicker_648c079a"><span class="input-group-addon kv-field-separator">đến/to</span><input type="text" id="dt" class="form-control" name="dt" value="" placeholder="Chọn/Select..." autocomplete="off"></div>                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Chỉ số phân loại</label>                    <p class="t-anh">By ICS</p>
+                </div>
+                <div class="col-md-8">
+                                        <span id="parent-s2-togall-chisophanloai" style="display:none"><span id="s2-togall-chisophanloai" class="s2-togall-button s2-togall-select"><span class="s2-select-label"><i class="glyphicon glyphicon-unchecked"></i>Select all</span><span class="s2-unselect-label"><i class="glyphicon glyphicon-check"></i>Unselect all</span></span></span><div class="kv-plugin-loading loading-chisophanloai">&nbsp;</div><select id="chisophanloai" class="form-control" name="ic[]" multiple size="4" data-s2-options="s2options_669e5a8e" data-krajee-select2="select2_043fe2fb" style="width: 100%; height: 1px; visibility: hidden;">
+<option value="01">01 - Thuật ngữ. Tiêu chuẩn hóa. Tư liệu</option>
+<option value="01.020">01.020 - Thuật ngữ (Nguyên tắc và phối hợp), bao gồm cả từ vựng</option>
+<option value="01.040">01.040 - Từ vựng</option>
+<option value="01.040.01">01.040.01 - Vấn đề chung. Thuật ngữ. Tiêu chuẩn hóa. Tư liệu (Từ vựng)</option>
+<option value="01.040.03">01.040.03 - Xã hội học. Dịch vụ. Tổ chức và quản lý công ty. Hành chính. Vận tải (Từ vựng)</option>
+<option value="01.040.07">01.040.07 - Khoa học tự nhiên (Từ vựng)</option>
+<option value="01.040.11">01.040.11 - Chăm sóc sức khỏe (Từ vựng)</option>
+<option value="01.040.13">01.040.13 - Bảo vệ môi trường và sức khỏe. An toàn (Từ vựng)</option>
+<option value="01.040.17">01.040.17 - Ðo lường và phép đo. Hiện tượng vật lý (Từ vựng)</option>
+<option value="01.040.19">01.040.19 - Thử nghiệm (Từ vựng)</option>
+<option value="01.040.21">01.040.21 - Hệ thống và kết cấu cơ khí công dụng chung (Từ vựng)</option>
+<option value="01.040.23">01.040.23 - Hệ thống và kết cấu truyền dẫn chất lỏng công dụng chung (Từ vựng)</option>
+<option value="01.040.25">01.040.25 - Cơ khí chế tạo (Từ vựng)</option>
+<option value="01.040.27">01.040.27 - Năng lượng và truyền nhiệt (Từ vựng)</option>
+<option value="01.040.29">01.040.29 - Kỹ thuật điện (Từ vựng)</option>
+<option value="01.040.31">01.040.31 - Ðiện tử (Từ vựng)</option>
+<option value="01.040.33">01.040.33 - Viễn thông. Âm thanh, nghe nhìn (Từ vựng)</option>
+<option value="01.040.35">01.040.35 - Thông tin. Thiết bị văn phòng (Từ vựng)</option>
+<option value="01.040.37">01.040.37 - Quang học. Chụp ảnh. Ðiện ảnh. In (Từ vựng)</option>
+<option value="01.040.39">01.040.39 - Cơ khí chính xác. Kim hoàn (Từ vựng)</option>
+<option value="01.040.43">01.040.43 - Ðường bộ (Từ vựng)</option>
+<option value="01.040.45">01.040.45 - Ðường sắt (Từ vựng)</option>
+<option value="01.040.47">01.040.47 - Ðóng tàu và trang bị tàu biển (Từ vựng)</option>
+<option value="01.040.49">01.040.49 - Máy bay và tàu vũ trụ (Từ vựng)</option>
+<option value="01.040.53">01.040.53 - Thiết bị vận chuyển vật liệu (Từ vựng)</option>
+<option value="01.040.55">01.040.55 - Bao gói và phân phối hàng hóa (Từ vựng)</option>
+<option value="01.040.59">01.040.59 - Dệt và da (Từ vựng)</option>
+<option value="01.040.61">01.040.61 - May mặc (Từ vựng)</option>
+<option value="01.040.65">01.040.65 - Nông nghiệp (Từ vựng)</option>
+<option value="01.040.67">01.040.67 - Thực phẩm (Từ vựng)</option>
+<option value="01.040.71">01.040.71 - Hóa chất (Từ vựng)</option>
+<option value="01.040.73">01.040.73 - Khai thác mỏ và khoáng sản (Từ vựng)</option>
+<option value="01.040.75">01.040.75 - Dầu mỏ (Từ vựng)</option>
+<option value="01.040.77">01.040.77 - Luyện kim (Từ vựng)</option>
+<option value="01.040.79">01.040.79 - Gỗ (Từ vựng)</option>
+<option value="01.040.81">01.040.81 - Thủy tinh và gốm (Từ vựng)</option>
+<option value="01.040.83">01.040.83 - Cao su và chất dẻo (Từ vựng)</option>
+<option value="01.040.85">01.040.85 - Giấy (Từ vựng)</option>
+<option value="01.040.87">01.040.87 - Sơn và chất mầu (Từ vựng)</option>
+<option value="01.040.91">01.040.91 - Vật liệu xây dựng và nhà (Từ vựng)</option>
+<option value="01.040.93">01.040.93 - Xây dựng dân dụng (Từ vựng)</option>
+<option value="01.040.95">01.040.95 - Quân sự (Từ vựng)</option>
+<option value="01.040.97">01.040.97 - Giải trí. Thể thao (Từ vựng)</option>
+<option value="01.060">01.060 - Ðại lượng và đơn vị</option>
+<option value="01.060.10">01.060.10 - Ðại lượng và đơn vị cơ bản</option>
+<option value="01.060.20">01.060.20 - Ðại lượng và đơn vị cho các lĩnh vực kỹ thuật riêng biệt</option>
+<option value="01.070">01.070 - Mã màu</option>
+<option value="01.075">01.075 - Các ký hiệu ký tự</option>
+<option value="01.080">01.080 - Ký hiệu sơ đồ (Biểu trưng)</option>
+<option value="01.080.01">01.080.01 - Ký hiệu đồ thị nói chung</option>
+<option value="01.080.10">01.080.10 - Tiêu chuẩn cơ sở cho ký hiệu sơ đồ</option>
+<option value="01.080.20">01.080.20 - Ký hiệu sơ đồ dùng trên thiết bị riêng biệt</option>
+<option value="01.080.30">01.080.30 - Ký hiệu sơ đồ dùng trên các bản vẽ kỹ thuật, biểu đồ, sơ đồ, bản đồ và trong tài liệu kỹ</option>
+<option value="01.080.40">01.080.40 - Ký hiệu đồ thị dùng trong các biểu đồ về điện, điện tử,...</option>
+<option value="01.080.50">01.080.50 - Ký hiệu đồ thị dùng trong công nghệ thông tin</option>
+<option value="01.080.99">01.080.99 - Các ký hiệu đồ thị khác</option>
+<option value="01.100">01.100 - Bản vẽ kỹ thuật</option>
+<option value="01.100.01">01.100.01 - Bản vẽ kỹ thuật nói chung</option>
+<option value="01.100.10">01.100.10 - Quy tắc chung về vẽ</option>
+<option value="01.100.20">01.100.20 - Biểu thị quy ước các phần tử riêng biệt trên bản vẽ</option>
+<option value="01.100.25">01.100.25 - Bản vẽ kỹ thuật điện và điện tử</option>
+<option value="01.100.27">01.100.27 - Bản vẽ kỹ thuật dùng trong truyền thông và công nghệ thông tin</option>
+<option value="01.100.30">01.100.30 - Quy tắc riêng về bản vẽ xây dựng</option>
+<option value="01.100.40">01.100.40 - Dụng cụ vẽ</option>
+<option value="01.100.99">01.100.99 - Các tiêu chuẩn khác liên quan đến bản vẽ kỹ thuật</option>
+<option value="01.110">01.110 - Tài liệu sản phẩm kỹ thuật</option>
+<option value="01.120">01.120 - Tiêu chuẩn hóa. Quy tắc chung</option>
+<option value="01.140">01.140 - Khoa học thông tin. Xuất bản</option>
+<option value="01.140.10">01.140.10 - Viết và chuyển chữ</option>
+<option value="01.140.20">01.140.20 - Khoa học thông tin</option>
+<option value="01.140.30">01.140.30 - Tài liệu trong hành chính, thương mại và công nghiệp</option>
+<option value="01.140.40">01.140.40 - Xuất bản</option>
+<option value="03">03 - Dịch vụ. Tổ chức và quản lý công ty. Hành chính. Vận tải</option>
+<option value="03.020">03.020 - Xã hội học. Nhân khẩu học</option>
+<option value="03.040">03.040 - Lao động. Việc làm</option>
+<option value="03.060">03.060 - Tài chính. Ngân hàng. Hệ thống tiền tệ. Bảo hiểm</option>
+<option value="03.080">03.080 - Dịch vụ</option>
+<option value="03.080.01">03.080.01 - Dịch vụ nói chung</option>
+<option value="03.080.10">03.080.10 - Dịch vụ công nghiệp</option>
+<option value="03.080.20">03.080.20 - Dịch vụ cho công ty</option>
+<option value="03.080.30">03.080.30 - Dịch vụ người tiêu dùng</option>
+<option value="03.080.99">03.080.99 - Các dịch vụ khác</option>
+<option value="03.100">03.100 - Tổ chức và quản lý công ty</option>
+<option value="03.100.01">03.100.01 - Tổ chức và quản lý công ty nói chung</option>
+<option value="03.100.02">03.100.02 - Điều hành và đạo đức (Bao gồm chống hối lộ, chống gian lận mua sắm, trách nhiệm xã hội)</option>
+<option value="03.100.10">03.100.10 - Mua vào. Tìm nguồn (Procurement). Quản lý hàng trong kho. Tiếp cận thị trường</option>
+<option value="03.100.20">03.100.20 - Thương mại. Chức năng thương mại</option>
+<option value="03.100.30">03.100.30 - Quản lý nguồn nhân lực</option>
+<option value="03.100.40">03.100.40 - Nghiên cứu và phát triển</option>
+<option value="03.100.50">03.100.50 - Sản xuất. Quản lý sản xuất</option>
+<option value="03.100.60">03.100.60 - Kế toán</option>
+<option value="03.100.70">03.100.70 - Hệ thống quản lý</option>
+<option value="03.100.99">03.100.99 - Các tiêu chuẩn khác liên quan đến tổ chức và quản lý công ty</option>
+<option value="03.120">03.120 - Chất lượng</option>
+<option value="03.120.01">03.120.01 - Chất lượng nói chung</option>
+<option value="03.120.10">03.120.10 - Quản lý chất lượng và đảm bảo chất lượng</option>
+<option value="03.120.20">03.120.20 - Chứng nhận sản phẩm và công ty. Ðánh giá sự phù hợp</option>
+<option value="03.120.30">03.120.30 - Áp dụng các phương pháp thống kê</option>
+<option value="03.120.99">03.120.99 - Các tiêu chuẩn khác liên quan đến chất lượng</option>
+<option value="03.140">03.140 - Sáng chế. Sở hữu trí tuệ</option>
+<option value="03.160">03.160 - Luật. Hành chính</option>
+<option value="03.180">03.180 - Giáo dục</option>
+<option value="03.200">03.200 - Nhàn rỗi. Du lịch</option>
+<option value="03.200.01">03.200.01 - Giao thông vận tải nói chung</option>
+<option value="03.200.10">03.200.10 - Du lịch mạo hiểm</option>
+<option value="03.200.99">03.200.99 - Các tiêu chuẩn khác liên quan đến giải trí và du lịch</option>
+<option value="03.220">03.220 - Vận tải. Bưu chính</option>
+<option value="03.220.01">03.220.01 - Giao thông vận tải nói chung</option>
+<option value="03.220.10">03.220.10 - Vận tải nói chung</option>
+<option value="03.220.20">03.220.20 - Vận tải đường bộ</option>
+<option value="03.220.30">03.220.30 - Vận tải đường sắt</option>
+<option value="03.220.40">03.220.40 - Vận tải đường thủy</option>
+<option value="03.220.50">03.220.50 - Vận tải đường không</option>
+<option value="03.220.60">03.220.60 - Bưu chính</option>
+<option value="03.220.99">03.220.99 - Các dạng giao thông khác</option>
+<option value="03.240">03.240 - Dịch vụ bưu chính</option>
+<option value="07">07 - Khoa học tự nhiên</option>
+<option value="07.020">07.020 - Toán học</option>
+<option value="07.030">07.030 - Vật lý. Hoá học</option>
+<option value="07.040">07.040 - Thiên văn. Ðo đạc</option>
+<option value="07.060">07.060 - Ðịa chất. Khí tượng. Thủy văn</option>
+<option value="07.080">07.080 - Sinh học. Thực vật học. Ðộng vật học</option>
+<option value="07.100">07.100 - Vi sinh học</option>
+<option value="07.100.01">07.100.01 - Vi sinh vật nói chung</option>
+<option value="07.100.10">07.100.10 - Vi sinh học y tế</option>
+<option value="07.100.20">07.100.20 - Vi sinh học nước</option>
+<option value="07.100.30">07.100.30 - Vi sinh học thực phẩm</option>
+<option value="07.100.40">07.100.40 - Vi sinh học cho mỹ phẩm</option>
+<option value="07.100.99">07.100.99 - Các tiêu chuẩn khác liên quan đến vi sinh vật</option>
+<option value="07.120">07.120 - Công nghệ Na nô</option>
+<option value="07.140">07.140 - Khoa học pháp y</option>
+<option value="11">11 - Chăm sóc sức khỏe</option>
+<option value="11.020">11.020 - Y học nói chung</option>
+<option value="11.020.01">11.020.01 - Quản lý chất lượng và môi trường trong lĩnh vực chăm sóc sức khỏe</option>
+<option value="11.020.10">11.020.10 - Dịch vụ chăm sóc sức khỏe nói chung</option>
+<option value="11.020.20">11.020.20 - Khoa học y tế</option>
+<option value="11.020.99">11.020.99 - Các tiêu chuẩn khác liên quan đến chăm sóc sức khỏe nói chung</option>
+<option value="11.040">11.040 - Thiết bị y tế</option>
+<option value="11.040.01">11.040.01 - Thiết bị y tế nói chung</option>
+<option value="11.040.10">11.040.10 - Thiết bị hồi sức, gây mê và hô hấp</option>
+<option value="11.040.20">11.040.20 - Thiết bị truyền máu, tiêm truyền và tiêm</option>
+<option value="11.040.25">11.040.25 - Bơm kim tiêm, kim tiêm và ống thông</option>
+<option value="11.040.30">11.040.30 - Dụng cụ mổ xẻ</option>
+<option value="11.040.40">11.040.40 - Mô cấy dùng cho mổ xẻ, lắp bộ phận giả và chỉnh hình</option>
+<option value="11.040.50">11.040.50 - Thiết bị X quang và chẩn đoán khác</option>
+<option value="11.040.55">11.040.55 - Thiết bị chẩn đoán</option>
+<option value="11.040.60">11.040.60 - Thiết bị chữa bệnh</option>
+<option value="11.040.70">11.040.70 - Thiết bị chữa mắt</option>
+<option value="11.040.99">11.040.99 - Thiết bị y tế khác</option>
+<option value="11.060">11.060 - Nha khoa</option>
+<option value="11.060.01">11.060.01 - Nha khoa nói chung</option>
+<option value="11.060.10">11.060.10 - Vật liệu chữa răng</option>
+<option value="11.060.15">11.060.15 - Cấy ghép răng, bao gồm cả răng giả</option>
+<option value="11.060.20">11.060.20 - Thiết bị chữa răng</option>
+<option value="11.060.25">11.060.25 - Dụng cụ nha khoa</option>
+<option value="11.080">11.080 - Thanh trùng</option>
+<option value="11.080.01">11.080.01 - Thanh trùng và khử trùng nói chung</option>
+<option value="11.080.10">11.080.10 - Thiết bị thanh trùng</option>
+<option value="11.080.20">11.080.20 - Khử trùng</option>
+<option value="11.080.30">11.080.30 - Bao gói thanh trùng</option>
+<option value="11.080.99">11.080.99 - Các tiêu chuẩn khác liên quan đến thanh trùng</option>
+<option value="11.100">11.100 - Y học thí nghiệm</option>
+<option value="11.100.01">11.100.01 - Y học thí nghiệm nói chung</option>
+<option value="11.100.10">11.100.10 - Hệ thống xét nghiệm chẩn đoán trong ống nghiệm</option>
+<option value="11.100.20">11.100.20 - Đánh giá sinh học các thiết bị y tế, Vi sinh y khoa, xem 07.100.10</option>
+<option value="11.100.30">11.100.30 - Phân tích nước tiểu và máu, bao gồm cả kiểm soát doping</option>
+<option value="11.100.99">11.100.99 - Các tiêu chuẩn khác về y học thí nghiệm</option>
+<option value="11.120">11.120 - Dược khoa</option>
+<option value="11.120.01">11.120.01 - Dược phẩm nói chung</option>
+<option value="11.120.10">11.120.10 - Thuốc</option>
+<option value="11.120.20">11.120.20 - Vật liệu y tế. Ðồ băng bó mổ xẻ</option>
+<option value="11.120.99">11.120.99 - Các tiêu chuẩn khác liên quan đến dược phẩm</option>
+<option value="11.140">11.140 - Thiết bị bệnh viện</option>
+<option value="11.160">11.160 - Chăm sóc ban đầu</option>
+<option value="11.180">11.180 - Chăm sóc người tàn tật hoặc yếu sức khỏe</option>
+<option value="11.180.01">11.180.01 - Chăm sóc người tàn tật hoặc yếu sức khỏe nói chung</option>
+<option value="11.180.10">11.180.10 - Trợ giúp và đáp ứng để di chuyển (bao gồm xe lăn, gậy chống và thiết bị nâng)</option>
+<option value="11.180.15">11.180.15 - Trợ giúp cho người điếc và người khiếm thính</option>
+<option value="11.180.20">11.180.20 - Hỗ trợ người không kiềm chế được và người có hậu môn nhân tạo</option>
+<option value="11.180.30">11.180.30 - Hỗ trợ cho người mù hoặc người khiếm thị (bao gồm chữ nổi)</option>
+<option value="11.180.40">11.180.40 - Hỗ trợ ăn và uống</option>
+<option value="11.180.99">11.180.99 - Các tiêu chuẩn khác liên quan đến trợ cấp cho người tàn tật và khuyết tật</option>
+<option value="11.200">11.200 - Kiểm tra sinh đẻ. Dụng cụ tránh thai</option>
+<option value="11.220">11.220 - Thú y</option>
+<option value="13">13 - Môi trường. Bảo vệ sức khỏe. An toàn</option>
+<option value="13.020">13.020 - Bảo vệ môi trường nói chung</option>
+<option value="13.020.01">13.020.01 - Môi trường và bảo vệ môi trường nói chung</option>
+<option value="13.020.10">13.020.10 - Quản lý môi trường</option>
+<option value="13.020.20">13.020.20 - Kinh tế môi trường</option>
+<option value="13.020.30">13.020.30 - Ðánh giá sự ảnh hưởng môi trường</option>
+<option value="13.020.40">13.020.40 - Sự ô nhiễm, điều khiển sự ô nhiễm và giữ gìn môi trường</option>
+<option value="13.020.50">13.020.50 - Nhãn sinh thái</option>
+<option value="13.020.55">13.020.55 - Sản phẩm sinh học</option>
+<option value="13.020.60">13.020.60 - Chu kỳ sống của sản phẩm</option>
+<option value="13.020.70">13.020.70 - Dự án về môi trường</option>
+<option value="13.020.99">13.020.99 - Các tiêu chuẩn khác có liên quan đến bảo vệ môi trường</option>
+<option value="13.030">13.030 - Vật thải rắn</option>
+<option value="13.030.01">13.030.01 - Nước thải nói chung</option>
+<option value="13.030.10">13.030.10 - Chất thải rắn</option>
+<option value="13.030.20">13.030.20 - Chất thải lỏng. Bùn</option>
+<option value="13.030.30">13.030.30 - Chất thải đặc biệt</option>
+<option value="13.030.40">13.030.40 - Thiết bị xử lý chất thải</option>
+<option value="13.030.50">13.030.50 - Tái sử dụng</option>
+<option value="13.030.99">13.030.99 - Các tiêu chuẩn khác liên quan đến chất thải</option>
+<option value="13.040">13.040 - Chất lượng không khí</option>
+<option value="13.040.01">13.040.01 - Chất lượng không khí nói chung</option>
+<option value="13.040.10">13.040.10 - Vấn đề chung</option>
+<option value="13.040.20">13.040.20 - Không khí xung quanh</option>
+<option value="13.040.30">13.040.30 - Không khí vùng làm việc</option>
+<option value="13.040.35">13.040.35 - Phòng sạch và kiểm soát môi trường</option>
+<option value="13.040.40">13.040.40 - Phát xạ của nguồn cố định</option>
+<option value="13.040.50">13.040.50 - Phát khí xả vận tải</option>
+<option value="13.040.99">13.040.99 - Các tiêu chuẩn khác liên quan đến chất lượng không khí</option>
+<option value="13.060">13.060 - Chất lượng nước</option>
+<option value="13.060.01">13.060.01 - Chất lượng nước nói chung</option>
+<option value="13.060.10">13.060.10 - Nước tài nguyên thiên nhiên</option>
+<option value="13.060.20">13.060.20 - Nước uống</option>
+<option value="13.060.25">13.060.25 - Nước dùng cho công nghiệp</option>
+<option value="13.060.30">13.060.30 - Giải quyết và xử lý nước cống</option>
+<option value="13.060.40">13.060.40 - Xét nghiệm nước, nước thải và bùn</option>
+<option value="13.060.45">13.060.45 - Xét nghiệm nước nói chung, bao gồm cả lấy mẫu</option>
+<option value="13.060.50">13.060.50 - Nghiên cứu chất hoá học trong nước</option>
+<option value="13.060.60">13.060.60 - Nghiên cứu đặc tính vật lý của nước</option>
+<option value="13.060.70">13.060.70 - Nghiên cứu đặc tính sinh học của nước</option>
+<option value="13.060.99">13.060.99 - Các tiêu chuẩn khác liên quan đến chất lượng nước</option>
+<option value="13.080">13.080 - Chất lượng đất. Thổ nhưỡng học</option>
+<option value="13.080.01">13.080.01 - Chất lượng đất và thổ nhưỡng nói chung</option>
+<option value="13.080.05">13.080.05 - Xét nghiệm đất nói chung, bao gồm cả lấy mẫu</option>
+<option value="13.080.10">13.080.10 - Ðặc tính hoá học của đất</option>
+<option value="13.080.20">13.080.20 - Ðặc tính lý học của đất</option>
+<option value="13.080.30">13.080.30 - Ðặc tính sinh học của đất</option>
+<option value="13.080.40">13.080.40 - Ðặc tính thuỷ học của đất</option>
+<option value="13.080.99">13.080.99 - Các tiêu chuẩn khác có liên quan đến chất lượng đất</option>
+<option value="13.100">13.100 - An toàn lao động. Vệ sinh công nghiệp</option>
+<option value="13.110">13.110 - An toàn máy móc</option>
+<option value="13.120">13.120 - An toàn gia đình</option>
+<option value="13.140">13.140 - Tiếng ồn đối với con người</option>
+<option value="13.160">13.160 - Rung động đối với con người</option>
+<option value="13.180">13.180 - Công thái học (ergonomics)</option>
+<option value="13.200">13.200 - Khống chế tai nạn giao thông và thảm họa</option>
+<option value="13.220">13.220 - Bảo vệ chống cháy và nổ</option>
+<option value="13.220.01">13.220.01 - Bảo vệ chống cháy nói chung</option>
+<option value="13.220.10">13.220.10 - Chữa cháy</option>
+<option value="13.220.20">13.220.20 - Thiết bị phòng cháy</option>
+<option value="13.220.30">13.220.30 - Thiết bị chữa cháy</option>
+<option value="13.220.40">13.220.40 - Tính dễ bắt lửa và dễ cháy của vật liệu và sản phẩm</option>
+<option value="13.220.50">13.220.50 - Ðộ bền chống lửa của vật liệu và kết cấu xây dựng</option>
+<option value="13.220.60">13.220.60 - Phòng nổ</option>
+<option value="13.220.99">13.220.99 - Các tiêu chuẩn khác có liên quan đến bảo vệ chống cháy</option>
+<option value="13.230">13.230 - Bảo vệ nổ</option>
+<option value="13.240">13.240 - Bảo vệ phòng chống áp lực thừa</option>
+<option value="13.260">13.260 - Bảo vệ phòng chống điện giật</option>
+<option value="13.280">13.280 - Bảo vệ phòng chống phóng xạ</option>
+<option value="13.300">13.300 - Bảo vệ phòng chống hàng nguy hiểm</option>
+<option value="13.310">13.310 - Bảo vệ chống lại sự vi phạm</option>
+<option value="13.320">13.320 - Hệ thống báo động và báo trước</option>
+<option value="13.340">13.340 - Quần áo và thiết bị bảo vệ</option>
+<option value="13.340.01">13.340.01 - Thiết bị bảo vệ nói chung</option>
+<option value="13.340.10">13.340.10 - Quần áo bảo hộ</option>
+<option value="13.340.20">13.340.20 - Thiết bị bảo hộ</option>
+<option value="13.340.30">13.340.30 - Thiết bị bảo vệ hô hấp</option>
+<option value="13.340.40">13.340.40 - Bao tay bảo vệ</option>
+<option value="13.340.50">13.340.50 - Bao chân bảo vệ</option>
+<option value="13.340.60">13.340.60 - Protection against falling and slipping. Including safety ropes, harnesses and fall arres</option>
+<option value="13.340.70">13.340.70 - Lifejackets, buoyancy aids and flotation devices</option>
+<option value="13.340.99">13.340.99 - Các thiết bị bảo vệ khác</option>
+<option value="17">17 - Hiện tượng vật lý</option>
+<option value="17.020">17.020 - Ðo lường và phép đo nói chung</option>
+<option value="17.040">17.040 - Ðo tuyến tính và góc. Ðo bề mặt</option>
+<option value="17.040.01">17.040.01 - Ðo tuyến tính và góc nói chung</option>
+<option value="17.040.10">17.040.10 - Dung sai và lắp ghép</option>
+<option value="17.040.20">17.040.20 - Tính chất bề mặt</option>
+<option value="17.040.30">17.040.30 - Dụng cụ đo</option>
+<option value="17.040.40">17.040.40 - Quy định kỹ thuật về sản phẩm hình học (GPS)</option>
+<option value="17.040.99">17.040.99 - Các tiêu chuẩn khác có liên quan đến đo tuyến tính và góc</option>
+<option value="17.060">17.060 - Ðo thể tích, khối lượng, tỷ khối, độ nhớt</option>
+<option value="17.080">17.080 - Ðo thời gian, tốc độ, gia tốc, tốc độ góc</option>
+<option value="17.100">17.100 - Ðo lực, trọng lượng và áp suất</option>
+<option value="17.120">17.120 - Ðo dòng chất lỏng</option>
+<option value="17.120.01">17.120.01 - Ðo dòng chất lỏng nói chung</option>
+<option value="17.120.10">17.120.10 - Dòng chảy trong ống kín</option>
+<option value="17.120.20">17.120.20 - Dòng chảy trong kênh hở</option>
+<option value="17.140">17.140 - âm học và các phép đo âm</option>
+<option value="17.140.01">17.140.01 - Các phép đo âm học và độ ồn nói chung</option>
+<option value="17.140.10">17.140.10 - Các phép đo âm và sự giảm tiếng ồn nói chung</option>
+<option value="17.140.20">17.140.20 - Tiếng ồn do máy và thiết bị</option>
+<option value="17.140.30">17.140.30 - Tiếng ồn do xe cộ</option>
+<option value="17.140.40">17.140.40 - Tiếng ồn trong xây dựng</option>
+<option value="17.140.50">17.140.50 - Ðiện âm học</option>
+<option value="17.140.99">17.140.99 - Các tiêu chuẩn khác có liên quan đến âm học</option>
+<option value="17.160">17.160 - Rung động, sốc và các phép đo rung động</option>
+<option value="17.180">17.180 - Quang học và các phép đo quang học</option>
+<option value="17.180.01">17.180.01 - Quang học và đo quang học nói chung</option>
+<option value="17.180.10">17.180.10 - Quang học nói chung</option>
+<option value="17.180.20">17.180.20 - Mầu sắc và đo ánh sáng</option>
+<option value="17.180.30">17.180.30 - Dụng cụ đo quang học</option>
+<option value="17.180.99">17.180.99 - Các tiêu chuẩn khác có liên quan đến quang học và đo quang học</option>
+<option value="17.200">17.200 - Nhiệt động học và các phép đo nhiệt độ</option>
+<option value="17.200.01">17.200.01 - Nhiệt độ nói chung</option>
+<option value="17.200.10">17.200.10 - Nhiệt. Phép đo nhiệt lượng</option>
+<option value="17.200.20">17.200.20 - Dụng cụ đo nhiệt độ</option>
+<option value="17.200.99">17.200.99 - Các tiêu chuẩn khác có liên quan đến nhiệt độ</option>
+<option value="17.220">17.220 - Ðiện. Từ. Các phép đo điện và từ</option>
+<option value="17.220.01">17.220.01 - Ðiện. Từ. Các khía cạnh chung</option>
+<option value="17.220.10">17.220.10 - Ðiện. Từ. Ðiện từ</option>
+<option value="17.220.20">17.220.20 - Ðo các đại lượng điện và từ</option>
+<option value="17.220.99">17.220.99 - Các tiêu chuẩn khác có liên quan đến điện và từ</option>
+<option value="17.240">17.240 - Ðo phóng xạ</option>
+<option value="19">19 - Thử nghiệm</option>
+<option value="19.020">19.020 - Ðiều kiện và trình tự thử nói chung</option>
+<option value="19.040">19.040 - Thử môi trường</option>
+<option value="19.060">19.060 - Thử cơ và thiết bị</option>
+<option value="19.080">19.080 - Thử điện và điện tử và thiết bị đo</option>
+<option value="19.100">19.100 - Thử không phá hủy và thiết bị</option>
+<option value="19.120">19.120 - Phân tích cỡ hạt. Rây (sàng)</option>
+<option value="21">21 - Hệ thống và kết cấu cơ khí công dụng chung</option>
+<option value="21.020">21.020 - Ðặc tính và thiết kế máy móc, thiết bị</option>
+<option value="21.040">21.040 - Ren</option>
+<option value="21.040.01">21.040.01 - Ren nói chung</option>
+<option value="21.040.10">21.040.10 - Ren hệ mét</option>
+<option value="21.040.20">21.040.20 - Ren whitworth</option>
+<option value="21.040.30">21.040.30 - Ren đặc biệt</option>
+<option value="21.060">21.060 - Chi tiết lắp xiết</option>
+<option value="21.060.01">21.060.01 - Chi tiết lắp xiết nói chung</option>
+<option value="21.060.10">21.060.10 - Bulông, đinh vít, đinh tán (stud)</option>
+<option value="21.060.20">21.060.20 - Ðai ốc</option>
+<option value="21.060.30">21.060.30 - Vòng đệm, chốt</option>
+<option value="21.060.40">21.060.40 - Ðinh tán</option>
+<option value="21.060.50">21.060.50 - Chốt, đinh</option>
+<option value="21.060.60">21.060.60 - Vòng, lót trục (bush), ống bọc ngoài (sleeve), vòng đệm</option>
+<option value="21.060.70">21.060.70 - Kẹp, đinh kẹp và các chi tiết lắp xiết khác</option>
+<option value="21.060.99">21.060.99 - Các chi tiết lắp xiết khác</option>
+<option value="21.080">21.080 - Khớp, lỗ suốt và các nối khớp khác</option>
+<option value="21.100">21.100 - Ổ đỡ</option>
+<option value="21.100.01">21.100.01 - Ổ đỡ nói chung</option>
+<option value="21.100.10">21.100.10 - Ổ trượt</option>
+<option value="21.100.20">21.100.20 - Ổ lăn</option>
+<option value="21.120">21.120 - Trục và khớp nối</option>
+<option value="21.120.01">21.120.01 - Trục và khớp nối nói chung</option>
+<option value="21.120.10">21.120.10 - Trục</option>
+<option value="21.120.20">21.120.20 - Khớp nối</option>
+<option value="21.120.30">21.120.30 - Then và rãnh chốt, chốt trục (spline)</option>
+<option value="21.120.40">21.120.40 - Sự làm cân bằng và máy thử cân bằng</option>
+<option value="21.120.99">21.120.99 - Các tiêu chuẩn khác có liên quan đến trục và khớp nối</option>
+<option value="21.140">21.140 - Vật bít kín, miếng đệm</option>
+<option value="21.160">21.160 - Lò xo</option>
+<option value="21.180">21.180 - Hộp, bộ phận máy khác</option>
+<option value="21.200">21.200 - Bánh răng</option>
+<option value="21.21.020">21.21.020 - Ðặc tính và thiết kế máy móc, thiết bị</option>
+<option value="21.220">21.220 - Dẫn động và truyền động mềm</option>
+<option value="21.220.01">21.220.01 - Dẫn động và truyền động mềm nói chung</option>
+<option value="21.220.10">21.220.10 - Dẫn động bằng đai truyền và các thành phần</option>
+<option value="21.220.20">21.220.20 - Dẫn động bằng cáp hoặc dây và các thành phần</option>
+<option value="21.220.30">21.220.30 - Dẫn động bằng xích và các thành phần</option>
+<option value="21.220.99">21.220.99 - Dẫn động và truyền động mềm khác</option>
+<option value="21.240">21.240 - Cơ cấu chuyển động quay tròn - qua lại và các bộ phận</option>
+<option value="21.260">21.260 - Hệ bôi trơn</option>
+<option value="23">23 - Hệ thống và kết cấu dẫn chất lỏng công dụng chung</option>
+<option value="23.020">23.020 - Thiết bị bảo quản chất lỏng</option>
+<option value="23.020.01">23.020.01 - Thiết bị bảo quản chất lỏng nói chung</option>
+<option value="23.020.10">23.020.10 - Thùng chứa và xitéc cố định</option>
+<option value="23.020.20">23.020.20 - Thùng chứa lắp trên xe</option>
+<option value="23.020.30">23.020.30 - Thùng chịu áp lực, bình khí</option>
+<option value="23.020.35">23.020.35 - Bình gas</option>
+<option value="23.020.40">23.020.40 - Bình hỗn hợp lạnh</option>
+<option value="23.020.99">23.020.99 - Các thiết bị bảo quản chất lỏng khác</option>
+<option value="23.040">23.040 - Phụ tùng đường ống và đường ống</option>
+<option value="23.040.01">23.040.01 - Ðường ống và phụ tùng đường ống nói chung</option>
+<option value="23.040.03">23.040.03 - Đường ống và các bộ phận của đường ống cho các hệ thống vận chuyển nước bên ngoài</option>
+<option value="23.040.05">23.040.05 - Đường ống và các bộ phận của đường ống cho các hệ thống nước thải bên ngoài</option>
+<option value="23.040.07">23.040.07 - Đường ống và các bộ phận của đường ống cho vận chuyển nước nóng của đô thị</option>
+<option value="23.040.10">23.040.10 - Ống bằng gang và thép</option>
+<option value="23.040.15">23.040.15 - Ống bằng kim loại không có sắt</option>
+<option value="23.040.20">23.040.20 - Ống bằng chất dẻo</option>
+<option value="23.040.30">23.040.30 - Ống bằng các vật liệu khác (thủy tinh, xi măng, v.v..)</option>
+<option value="23.040.40">23.040.40 - Ðầu nối bằng kim loại</option>
+<option value="23.040.45">23.040.45 - Ðầu nối bằng chất dẻo</option>
+<option value="23.040.50">23.040.50 - Ðầu nối bằng các vật liệu khác (thủy tinh, xi măng, v.v...)</option>
+<option value="23.040.60">23.040.60 - Mặt bích, chỗ nối và các nối ống khác</option>
+<option value="23.040.70">23.040.70 - Vòi và các bộ lắp ráp vòi (hose)</option>
+<option value="23.040.80">23.040.80 - Vật bịt kín dùng để lắp ráp ống và vòi</option>
+<option value="23.040.90">23.040.90 - Ðường ống nói chung</option>
+<option value="23.040.99">23.040.99 - Các phụ tùng đường ống khác</option>
+<option value="23.060">23.060 - Van</option>
+<option value="23.060.01">23.060.01 - Van nói chung</option>
+<option value="23.060.10">23.060.10 - Van cầu</option>
+<option value="23.060.20">23.060.20 - Van bi</option>
+<option value="23.060.30">23.060.30 - Van cửa</option>
+<option value="23.060.40">23.060.40 - Bộ điều chỉnh áp suất</option>
+<option value="23.060.50">23.060.50 - Kiểm tra van</option>
+<option value="23.060.99">23.060.99 - Các van khác</option>
+<option value="23.080">23.080 - Bơm</option>
+<option value="23.100">23.100 - Hệ truyền lực chất lỏng</option>
+<option value="23.100.01">23.100.01 - Hệ thống truyền lực chất lỏng nói chung</option>
+<option value="23.100.10">23.100.10 - Bơm và động cơ</option>
+<option value="23.100.20">23.100.20 - Xi lanh</option>
+<option value="23.100.30">23.100.30 - Ống dẫn, chi tiết nối, van và các phần tử khác (piping)</option>
+<option value="23.100.40">23.100.40 - Ống và vật nối</option>
+<option value="23.100.50">23.100.50 - Thành phần điều khiển bao gồm các van</option>
+<option value="23.100.60">23.100.60 - Bộ lọc, nút và truyền chất lỏng (Chất lỏng thủy lực, xem 75.120)</option>
+<option value="23.100.99">23.100.99 - Các thành phần hệ thống truyền lực chất lỏng khác</option>
+<option value="23.120">23.120 - Máy thông gió. Quạt. Máy điều hòa không khí</option>
+<option value="23.140">23.140 - Máy nén và máy chạy bằng khí</option>
+<option value="23.160">23.160 - Kỹ thuật chân không</option>
+<option value="25">25 - Chế tạo</option>
+<option value="25.020">25.020 - Quá trình hình thành chế tạo</option>
+<option value="25.030">25.030 - Sản xuất phụ gia</option>
+<option value="25.040">25.040 - Hệ thống tự động hóa công nghiệp</option>
+<option value="25.040.01">25.040.01 - Các hệ thống công nghiệp tự động nói chung</option>
+<option value="25.040.10">25.040.10 - Trung tâm máy</option>
+<option value="25.040.20">25.040.20 - Máy điều khiển bằng số</option>
+<option value="25.040.30">25.040.30 - Rôbốt công nghiệp. Manip</option>
+<option value="25.040.40">25.040.40 - Ðo và điều khiển quá trình công nghiệp</option>
+<option value="25.040.99">25.040.99 - Các hệ thống công nghiệp tự động khác</option>
+<option value="25.060">25.060 - Máy công cụ nói chung</option>
+<option value="25.060.01">25.060.01 - Các hệ thống máy công cụ nói chung</option>
+<option value="25.060.10">25.060.10 - Ðơn vị mođun và các thiết bị khác</option>
+<option value="25.060.20">25.060.20 - Thiết bị phân chia và giữ phôi gia công công cụ</option>
+<option value="25.060.30">25.060.30 - Hệ thống làm lạnh và bôi trơn cho máy công cụ</option>
+<option value="25.060.99">25.060.99 - Other machine tool systems</option>
+<option value="25.080">25.080 - Máy công cụ</option>
+<option value="25.080.01">25.080.01 - Máy công cụ nói chung</option>
+<option value="25.080.10">25.080.10 - Máy tiện</option>
+<option value="25.080.20">25.080.20 - Máy xọc và phay</option>
+<option value="25.080.25">25.080.25 - Máy vẽ bản đồ</option>
+<option value="25.080.30">25.080.30 - Máy doa</option>
+<option value="25.080.40">25.080.40 - Máy khoan</option>
+<option value="25.080.50">25.080.50 - Máy mài và đánh bóng</option>
+<option value="25.080.60">25.080.60 - Máy cưa</option>
+<option value="25.080.99">25.080.99 - Máy công cụ khác</option>
+<option value="25.100">25.100 - Dụng cụ cắt</option>
+<option value="25.100.01">25.100.01 - Dụng cụ cắt nói chung</option>
+<option value="25.100.10">25.100.10 - Dụng cụ tiện</option>
+<option value="25.100.20">25.100.20 - Dụng cụ nghiền</option>
+<option value="25.100.25">25.100.25 - Dung cụ cho máy vẽ và máy doa</option>
+<option value="25.100.30">25.100.30 - Mũi khoan, mũi khoét, mũi doa</option>
+<option value="25.100.40">25.100.40 - Cưa</option>
+<option value="25.100.50">25.100.50 - Tarô và bàn ren</option>
+<option value="25.100.60">25.100.60 - Giũa</option>
+<option value="25.100.70">25.100.70 - Vật liệu mài</option>
+<option value="25.100.99">25.100.99 - Máy dụng cụ cắt khác</option>
+<option value="25.120">25.120 - Thiết bị làm việc không phoi</option>
+<option value="25.120.01">25.120.01 - Thiết bị làm việc không phoi nói chung</option>
+<option value="25.120.10">25.120.10 - Thiết bị rèn. Dao</option>
+<option value="25.120.20">25.120.20 - Thiết bị cán, đẩy và kéo</option>
+<option value="25.120.30">25.120.30 - Thiết bị đúc</option>
+<option value="25.120.40">25.120.40 - Máy điện hoá học</option>
+<option value="25.120.99">25.120.99 - Thiết bị làm việc không phoi khác</option>
+<option value="25.140">25.140 - Dụng cụ cầm tay</option>
+<option value="25.140.01">25.140.01 - Dụng cụ cầm tay nói chung</option>
+<option value="25.140.10">25.140.10 - Dụng cụ chạy bằng hơi</option>
+<option value="25.140.20">25.140.20 - Dụng cụ điện</option>
+<option value="25.140.30">25.140.30 - Dụng cụ lắp ráp</option>
+<option value="25.140.99">25.140.99 - Dụng cụ cầm tay khác</option>
+<option value="25.160">25.160 - Hàn, hàn đồng và hàn vẩy</option>
+<option value="25.160.01">25.160.01 - Hàn, hàn đồng và hàn vẩy nói chung</option>
+<option value="25.160.10">25.160.10 - Quá trình hàn và trình độ của thợ hàn</option>
+<option value="25.160.20">25.160.20 - Ðiện cực và kim loại làm điện cực</option>
+<option value="25.160.30">25.160.30 - Thiết bị hàn</option>
+<option value="25.160.40">25.160.40 - Mối hàn</option>
+<option value="25.160.50">25.160.50 - Hàn đồng và hàn vẩy</option>
+<option value="25.180">25.180 - Lò công nghiệp</option>
+<option value="25.180.01">25.180.01 - Lò công nghiệp nói chung</option>
+<option value="25.180.10">25.180.10 - Lò điện</option>
+<option value="25.180.20">25.180.20 - Lò nhiên liệu</option>
+<option value="25.200">25.200 - Xử lý nhiệt</option>
+<option value="25.220">25.220 - Xử lý bề mặt và mạ</option>
+<option value="25.220.01">25.220.01 - Xử lý bề mặt và mạ nói chung</option>
+<option value="25.220.10">25.220.10 - Thổi</option>
+<option value="25.220.20">25.220.20 - Xử lý bề mặt</option>
+<option value="25.220.30">25.220.30 - Lớp mạ vô cơ</option>
+<option value="25.220.40">25.220.40 - Lớp mạ kim loại</option>
+<option value="25.220.50">25.220.50 - Men</option>
+<option value="25.220.60">25.220.60 - Lớp mạ hữu cơ</option>
+<option value="25.220.99">25.220.99 - Các cách xử lý và mạ khác</option>
+<option value="25.240">25.240 - Hệ thống chế tạo sản xuất huyết tương</option>
+<option value="27">27 - Năng lượng và truyền nhiệt</option>
+<option value="27.010">27.010 - Năng lượng và công nghệ truyền nhiệt nói chung</option>
+<option value="27.015">27.015 - Hiệu suất năng lượng. Bảo toàn năng lượng nói chung</option>
+<option value="27.020">27.020 - Ðộng cơ đốt trong</option>
+<option value="27.040">27.040 - Tuabin khí và hơi nước. Ðộng cơ hơi nước</option>
+<option value="27.060">27.060 - Vòi phun. Nồi hơi</option>
+<option value="27.060.01">27.060.01 - Vòi phun và nồi hơi nói chung</option>
+<option value="27.060.10">27.060.10 - Vòi phun nhiên liệu lỏng và rắn</option>
+<option value="27.060.20">27.060.20 - Vòi phun nhiên liệu khí</option>
+<option value="27.060.30">27.060.30 - Nồi hơi và các thiết bị trao đổi nhiệt</option>
+<option value="27.070">27.070 - Ngăn nhiên liệu</option>
+<option value="27.075">27.075 - Công nghệ hydro (Ứng dụng công nghiệp của khí, xem 71.100.20)</option>
+<option value="27.080">27.080 - Bơm nhiệt</option>
+<option value="27.100">27.100 - Nhà máy điện nói chung</option>
+<option value="27.120">27.120 - Kỹ thuật năng lượng hạt nhân</option>
+<option value="27.120.01">27.120.01 - Năng lượng hạt nhân nói chung</option>
+<option value="27.120.10">27.120.10 - Kỹ thuật lò phản ứng</option>
+<option value="27.120.20">27.120.20 - Nhà máy năng lượng hạt nhân. An toàn</option>
+<option value="27.120.30">27.120.30 - Vật liệu phân rã</option>
+<option value="27.120.99">27.120.99 - Các tiêu chuẩn khác có liên quan đến năng lượng hạt nhân</option>
+<option value="27.140">27.140 - Kỹ thuật thủy năng</option>
+<option value="27.160">27.160 - Kỹ thuật năng lượng mặt trời</option>
+<option value="27.180">27.180 - Tuabin gió và các nguồn năng lượng lựa chọn khác</option>
+<option value="27.190">27.190</option>
+<option value="27.200">27.200 - Kỹ thuật làm lạnh</option>
+<option value="27.220">27.220 - Thu hồi nhiệt. Cách nhiệt</option>
+<option value="29">29 - Ðiện</option>
+<option value="29.020">29.020 - Kỹ thuật điện nói chung</option>
+<option value="29.030">29.030 - Nguyên liệu từ tính</option>
+<option value="29.035">29.035 - Vật liệu cách điện</option>
+<option value="29.035.01">29.035.01 - Vật liệu cách điện nói chung</option>
+<option value="29.035.10">29.035.10 - Vật liệu cách điện giấy và bảng</option>
+<option value="29.035.20">29.035.20 - Vật liệu cách điện nhựa và cao su</option>
+<option value="29.035.30">29.035.30 - Vật liệu cách điện gốm và thuỷ tinh</option>
+<option value="29.035.50">29.035.50 - Vật liệu mi ca</option>
+<option value="29.035.60">29.035.60 - Vải tẩm véc ni</option>
+<option value="29.035.99">29.035.99 - Các vật liệu cách điện khác</option>
+<option value="29.040">29.040 - Vật liệu điện</option>
+<option value="29.040.01">29.040.01 - Chất lỏng cách điện nói chung</option>
+<option value="29.040.10">29.040.10 - Vật liệu từ</option>
+<option value="29.040.20">29.040.20 - Vật liệu cách điện</option>
+<option value="29.040.30">29.040.30 - Vật liệu bán dẫn</option>
+<option value="29.040.99">29.040.99 - Chất lỏng cách điện khác</option>
+<option value="29.045">29.045 - Vật liệu bán dẫn</option>
+<option value="29.050">29.050 - Vật liệu dẫn</option>
+<option value="29.060">29.060 - Dây và cáp điện</option>
+<option value="29.060.01">29.060.01 - Dây và cáp điện nói chung</option>
+<option value="29.060.10">29.060.10 - Dây điện</option>
+<option value="29.060.20">29.060.20 - Cáp</option>
+<option value="29.080">29.080 - Cách điện</option>
+<option value="29.080.01">29.080.01 - Cách điện nói chung</option>
+<option value="29.080.10">29.080.10 - ống cách điện</option>
+<option value="29.080.20">29.080.20 - ống lót</option>
+<option value="29.080.30">29.080.30 - Hệ thống cách điện</option>
+<option value="29.080.99">29.080.99 - Các tiêu chuẩn khác liên quan đến cách điện</option>
+<option value="29.100">29.100 - Bộ phận của thiết bị điện</option>
+<option value="29.100.01">29.100.01 - Bộ phận của thiết bị điện nói chung</option>
+<option value="29.100.10">29.100.10 - Bộ phận từ</option>
+<option value="29.100.20">29.100.20 - Bộ phận điện và điện cơ</option>
+<option value="29.100.99">29.100.99 - Các bộ phận của thiết bị điện khác</option>
+<option value="29.120">29.120 - Phụ tùng điện</option>
+<option value="29.120.01">29.120.01 - Phụ tùng điện nói chung</option>
+<option value="29.120.10">29.120.10 - ống cách điện</option>
+<option value="29.120.20">29.120.20 - Thiết bị nối tiếp</option>
+<option value="29.120.30">29.120.30 - Phích, ổ cắm, bộ nối</option>
+<option value="29.120.40">29.120.40 - Công tắc</option>
+<option value="29.120.50">29.120.50 - Cầu chảy và các thiết bị bảo vệ quá tải</option>
+<option value="29.120.60">29.120.60 - Dụng cụ ngắt điện và dụng cụ kiểm tra điện</option>
+<option value="29.120.70">29.120.70 - Rơle</option>
+<option value="29.120.99">29.120.99 - Phụ tùng điện khác</option>
+<option value="29.130">29.130 - Cơ cấu chuyển mạch và cơ cấu điều khiển</option>
+<option value="29.130.01">29.130.01 - Cơ cấu chuyển mạch và cơ cấu điều khiển nói chung</option>
+<option value="29.130.10">29.130.10 - Cơ cấu chuyển điện áp cao và cơ cấu điều khiển</option>
+<option value="29.130.20">29.130.20 - Cơ cấu chuyển mạch điện áp thấp và cơ cấu điều khiển</option>
+<option value="29.130.99">29.130.99 - Cơ cấu chuyển mạch và cơ cấu điều khiển khác</option>
+<option value="29.140">29.140 - Ðèn và thiết bị liên quan</option>
+<option value="29.140.01">29.140.01 - Ðèn nói chung</option>
+<option value="29.140.10">29.140.10 - Ðầu và đui đèn điện</option>
+<option value="29.140.20">29.140.20 - Bóng đèn nung sáng</option>
+<option value="29.140.30">29.140.30 - Bóng đèn huỳnh quang. Bóng đèn phóng điện</option>
+<option value="29.140.40">29.140.40 - Ðèn huỳnh quang</option>
+<option value="29.140.50">29.140.50 - Hệ thống đặt ánh sáng</option>
+<option value="29.140.99">29.140.99 - Các tiêu chuẩn có liên quan đến đèn</option>
+<option value="29.160">29.160 - Máy điện quay</option>
+<option value="29.160.01">29.160.01 - Máy điện quay nói chung</option>
+<option value="29.160.10">29.160.10 - Bộ phận của máy điện quay</option>
+<option value="29.160.20">29.160.20 - Máy phát điện</option>
+<option value="29.160.30">29.160.30 - Ðộng cơ điện</option>
+<option value="29.160.40">29.160.40 - Bộ phát điện (tổ hợp máy phát điện)</option>
+<option value="29.160.99">29.160.99 - Các tiêu chuẩn khác có liên quan đến máy điện quay</option>
+<option value="29.180">29.180 - Máy biến áp. Máy kháng điện</option>
+<option value="29.200">29.200 - Máy chỉnh lưu. Máy đổi điện. Nguồn ổn áp</option>
+<option value="29.220">29.220 - Pin và ác quy ganvanic</option>
+<option value="29.220.01">29.220.01 - Hộp điện và bộ ắc qui</option>
+<option value="29.220.10">29.220.10 - Pin và ác quy sơ cấp</option>
+<option value="29.220.30">29.220.30 - Pin và acquy thứ cấp kiềm</option>
+<option value="29.220.99">29.220.99 - Other cells and batteries</option>
+<option value="29.240">29.240 - Mạng lưới phân phối điện</option>
+<option value="29.240.01">29.240.01 - Nguồn truyền và mạng phân phối nói chung</option>
+<option value="29.240.10">29.240.10 - Trạm. Bộ phóng điện bảo vệ quá áp</option>
+<option value="29.240.20">29.240.20 - Ðường dây phân phối điện</option>
+<option value="29.240.30">29.240.30 - Thiết bị điều khiển các hệ thống điện năng</option>
+<option value="29.240.99">29.240.99 - Thiết bị khác có liên quan đến nguồn truyền và mạng phân phối</option>
+<option value="29.260">29.260 - Thiết bị điện để làm việc trong điều kiện đặc biệt</option>
+<option value="29.260.01">29.260.01 - Thiết bị điện để làm việc trong điều kiện đặc biệt nói chung</option>
+<option value="29.260.10">29.260.10 - Trang bị điện dùng ngoài trời</option>
+<option value="29.260.20">29.260.20 - Máy điện dùng trong các môi trường nổ</option>
+<option value="29.260.99">29.260.99 - Thiết bị điện khác để làm việc trong điều kiện đặc biệt</option>
+<option value="29.280">29.280 - Thiết bị truyền động điện</option>
+<option value="29.300">29.300 - Dao động điện</option>
+<option value="31">31 - Điện tử</option>
+<option value="31.020">31.020 - Thành phần điện tử nói chung</option>
+<option value="31.040">31.040 - Ðiện trở</option>
+<option value="31.040.01">31.040.01 - Ðiện trở nói chung</option>
+<option value="31.040.10">31.040.10 - Ðiện trở không đổi</option>
+<option value="31.040.20">31.040.20 - Máy đo điện thế, điện trở biến đổi</option>
+<option value="31.040.30">31.040.30 - Ðiện nhiệt trở</option>
+<option value="31.040.99">31.040.99 - Các điện trở khác</option>
+<option value="31.060">31.060 - Tụ điện</option>
+<option value="31.060.01">31.060.01 - Tụ điện nói chung</option>
+<option value="31.060.10">31.060.10 - Tụ điện không đổi nói chung</option>
+<option value="31.060.20">31.060.20 - Tụ điện gốm và mica</option>
+<option value="31.060.30">31.060.30 - Tụ điện giấy và chất dẻo</option>
+<option value="31.060.40">31.060.40 - Tụ điện điện giải tantan</option>
+<option value="31.060.50">31.060.50 - Tụ điện điện giải nhôm</option>
+<option value="31.060.60">31.060.60 - Tụ điện biến đổi</option>
+<option value="31.060.70">31.060.70 - Tụ điện công suất</option>
+<option value="31.060.99">31.060.99 - Các tụ điện khác</option>
+<option value="31.080">31.080 - Thiết bị bán dẫn</option>
+<option value="31.080.01">31.080.01 - Thiết bị bán dẫn nói chung</option>
+<option value="31.080.10">31.080.10 - Ðiôt</option>
+<option value="31.080.20">31.080.20 - Thyristo</option>
+<option value="31.080.30">31.080.30 - Tranzito</option>
+<option value="31.080.99">31.080.99 - Thiết bị bán dẫn khác</option>
+<option value="31.100">31.100 - ống điện tử</option>
+<option value="31.120">31.120 - Thiết bị chỉ thị điện tử</option>
+<option value="31.140">31.140 - Dụng cụ áp điện</option>
+<option value="31.160">31.160 - Lọc điện</option>
+<option value="31.180">31.180 - Mạch và bảng in</option>
+<option value="31.190">31.190 - Thành phần lắp ráp điện tử</option>
+<option value="31.200">31.200 - Mạch tổ hợp. Vi điện tử</option>
+<option value="31.220">31.220 - Thành phần cơ điện cho thiết bị điện tử và viễn thông</option>
+<option value="31.220.01">31.220.01 - Thành phần điện cơ học nói chung</option>
+<option value="31.220.10">31.220.10 - Thiết bị phích và ổ cắm. Thiết bị nối mạch (connector)</option>
+<option value="31.220.20">31.220.20 - Cái chuyển mạch</option>
+<option value="31.220.99">31.220.99 - Các thành phần điện cơ học khác</option>
+<option value="31.240">31.240 - Cơ cấu cơ cho thiết bị điện tử</option>
+<option value="31.260">31.260 - Quang điện tử. Thiết bị lade</option>
+<option value="33">33 - Viễn thông</option>
+<option value="33.020">33.020 - Viễn thông nói chung</option>
+<option value="33.030">33.030 - Dịch vụ viễn thông. áp dụng</option>
+<option value="33.040">33.040 - Liên lạc điện thoại và điện báo</option>
+<option value="33.040.01">33.040.01 - Hệ thống viễn thông nói chung</option>
+<option value="33.040.10">33.040.10 - Quy tắc chung. Dịch vụ viễn thông</option>
+<option value="33.040.20">33.040.20 - Hệ thống truyền tin</option>
+<option value="33.040.30">33.040.30 - Hệ thống ngắt điện và báo hiệu</option>
+<option value="33.040.35">33.040.35 - Mạng điện thoại</option>
+<option value="33.040.40">33.040.40 - Mạng lưới thông tin dữ liệu</option>
+<option value="33.040.50">33.040.50 - Ðường dây, nối tiếp và mạch</option>
+<option value="33.040.60">33.040.60 - Thiết bị điện thoại</option>
+<option value="33.040.70">33.040.70 - Thiết bị cho telex, teletext, telefax, v.v...</option>
+<option value="33.040.99">33.040.99 - Hệ thống thiết bị viễn thông khác</option>
+<option value="33.050">33.050 - Thiết bị đầu cuối viễn thông</option>
+<option value="33.050.01">33.050.01 - Thiết bị đầu cuối viễn thông nói chung</option>
+<option value="33.050.10">33.050.10 - Thiết bị điện thoại</option>
+<option value="33.050.20">33.050.20 - Thiết bị đánh trang</option>
+<option value="33.050.30">33.050.30 - Thiết bị mạng điện báo thuê bao, teletext, telefax</option>
+<option value="33.050.99">33.050.99 - Thiết bị đầu cuối viễn thông khác</option>
+<option value="33.060">33.060 - Thông tin vô tuyến</option>
+<option value="33.060.01">33.060.01 - Thông tin vô tuyến nói chung</option>
+<option value="33.060.10">33.060.10 - Quy tắc chung</option>
+<option value="33.060.20">33.060.20 - Thiết bị nhận và truyền tin</option>
+<option value="33.060.30">33.060.30 - Hệ thống thông tin tiếp âm vô tuyến và vệ tinh cố định</option>
+<option value="33.060.40">33.060.40 - Hệ thống phân phối theo cáp</option>
+<option value="33.060.60">33.060.60 - Dịch vụ điện thoại di động</option>
+<option value="33.060.65">33.060.65 - Dịch vụ điện thoại di động, hệ thống phân trang</option>
+<option value="33.060.70">33.060.70 - Dịch vụ điện thoại di động, ....</option>
+<option value="33.060.75">33.060.75 - Dịch vụ điện thoại di động, vệ tinh</option>
+<option value="33.060.80">33.060.80 - Dịch vụ điện thoại di động, .... (chưa có)</option>
+<option value="33.060.99">33.060.99 - Thiết bị thông tin vô tuyến khác</option>
+<option value="33.070">33.070 - Dịch vụ di động</option>
+<option value="33.070.01">33.070.01 - Dịch vụ di động nói chung</option>
+<option value="33.070.10">33.070.10 - Đài phát thanh trên mặt đất (TETRA)</option>
+<option value="33.070.20">33.070.20 - Hệ thống nhắn tin</option>
+<option value="33.070.30">33.070.30 - Thiết bị viễn thông không dây kỹ thuật số tăng cường (DECT)</option>
+<option value="33.070.40">33.070.40 - Vệ tinh</option>
+<option value="33.070.50">33.070.50 - Hệ thống toàn cầu về truyền thông di đông (GSM)</option>
+<option value="33.070.99">33.070.99 - Dịch vụ di động khác</option>
+<option value="33.080">33.080 - Mạng lưới số dịch vụ tổ hợp (ISDN)</option>
+<option value="33.100">33.100 - Tương thích điện từ</option>
+<option value="33.100.01">33.100.01 - Ðiện từ có tính tương hợp nói chung</option>
+<option value="33.100.10">33.100.10 - Sự phát xạ</option>
+<option value="33.100.20">33.100.20 - Sự miễn nhiễm</option>
+<option value="33.100.99">33.100.99 - Các khía cạnh khác liên quan đến điện từ có tính tương hợp</option>
+<option value="33.120">33.120 - Thành phần và phụ tùng cho thiết bị viễn thông</option>
+<option value="33.120.01">33.120.01 - Các thành phần và phụ tùng nói chung</option>
+<option value="33.120.10">33.120.10 - Cáp đồng trục. Dẫn sóng</option>
+<option value="33.120.20">33.120.20 - Dây và cáp đối xứng</option>
+<option value="33.120.30">33.120.30 - Thiết bị nối R.F</option>
+<option value="33.120.40">33.120.40 - Anten ngoài trời</option>
+<option value="33.120.99">33.120.99 - Các thành phần và phụ tùng khác</option>
+<option value="33.140">33.140 - Thiết bị đo đặc biệt để dùng trong viễn thông</option>
+<option value="33.160">33.160 - Thiết bị và hệ thống trong lĩnh vực kỹ thuật nghe hoặc/và nhìn</option>
+<option value="33.160.01">33.160.01 - Thiết bị và hệ thống kỹ thuật nghe/nhìn nói chung</option>
+<option value="33.160.10">33.160.10 - Máy khuếch đại</option>
+<option value="33.160.20">33.160.20 - Máy thu thanh và thu hình</option>
+<option value="33.160.25">33.160.25 - Máy thu hình</option>
+<option value="33.160.30">33.160.30 - Hệ thống ghi âm</option>
+<option value="33.160.40">33.160.40 - Hệ thống ghi hình</option>
+<option value="33.160.50">33.160.50 - Phụ tùng</option>
+<option value="33.160.60">33.160.60 - Hệ thống đa phương tiện và thiết bị hội nghị truyền hình</option>
+<option value="33.160.99">33.160.99 - Âm thanh, hình ảnh và thiết bị nghe khác</option>
+<option value="33.170">33.170 - Phát thanh và truyền hình</option>
+<option value="33.180">33.180 - Thông tin sợi quang</option>
+<option value="33.180.01">33.180.01 - Hệ thống sợi quang học nói chung</option>
+<option value="33.180.10">33.180.10 - Sợi và cáp</option>
+<option value="33.180.20">33.180.20 - Thiết bị sợi quang nối liền nhau</option>
+<option value="33.180.30">33.180.30 - Hệ thống sợi quang</option>
+<option value="33.180.99">33.180.99 - Thiết bị sợi quang học khác</option>
+<option value="33.200">33.200 - Ðiều khiển từ xa. Ðo từ xa</option>
+<option value="35">35 - Công nghệ thông tin</option>
+<option value="35.020">35.020 - Công nghệ thông tin nói chung</option>
+<option value="35.030">35.030 - An toàn công nghệ thông tin (bao gồm cả mật mã)</option>
+<option value="35.040">35.040 - Bộ chữ và mã hóa thông tin</option>
+<option value="35.040.01">35.040.01 - Mã hóa thông tin nói chung</option>
+<option value="35.040.10">35.040.10 - Mã hóa bộ ký tự</option>
+<option value="35.040.30">35.040.30 - Mã hóa thông tin đồ họa và hình ảnh</option>
+<option value="35.040.40">35.040.40 - Mã hóa thông tin âm thanh, video, truyền thông đa phương tiện và truyền thông siêu phương tiện</option>
+<option value="35.040.50">35.040.50 - Kỹ thuật nhận dạng và thu thập thông tin tự động (bao gồm: RFDI, OCD, mã số mã vạch ...)</option>
+<option value="35.040.99">35.040.99 - Các tiêu chuẩn khác liên quan đến mã hóa thông tin</option>
+<option value="35.060">35.060 - Ngôn ngữ dùng trong công nghệ thông tin</option>
+<option value="35.080">35.080 - Phát triển phần mềm và hệ thống tư liệu</option>
+<option value="35.100">35.100 - Liên thông hệ thống mở (OSI)</option>
+<option value="35.100.01">35.100.01 - Nối hệ thống mở</option>
+<option value="35.100.05">35.100.05 - Ứng dụng nhiều tầng</option>
+<option value="35.100.10">35.100.10 - Lớp vật lý</option>
+<option value="35.100.20">35.100.20 - Lớp liên kết dữ liệu</option>
+<option value="35.100.30">35.100.30 - Lớp mạng lưới</option>
+<option value="35.100.40">35.100.40 - Lớp vận chuyển</option>
+<option value="35.100.50">35.100.50 - Lớp hội nghị</option>
+<option value="35.100.60">35.100.60 - Lớp trình bày</option>
+<option value="35.100.70">35.100.70 - Lớp ứng dụng</option>
+<option value="35.100.80">35.100.80 - Mạng lưới khu vực địa phương</option>
+<option value="35.110">35.110 - Mạng</option>
+<option value="35.120">35.120 - Mạng lưới dịch vụ tổ hợp đơn lẻ</option>
+<option value="35.140">35.140 - Chữ viết máy tính</option>
+<option value="35.160">35.160 - Hệ thống vi xử lý</option>
+<option value="35.180">35.180 - Thiết bị đầu cuối và ngoại vi khác</option>
+<option value="35.200">35.200 - Thiết bị mặt phân giới và liên thông</option>
+<option value="35.210">35.210 - Điện toán đám mây</option>
+<option value="35.220">35.220 - Thiết bị lưu trữ dữ liệu</option>
+<option value="35.220.01">35.220.01 - Thiết bị nhớ dữ liệu nói chung</option>
+<option value="35.220.10">35.220.10 - Phiếu và băng giấy</option>
+<option value="35.220.20">35.220.20 - Thiết bị lưu trữ từ</option>
+<option value="35.220.21">35.220.21 - Ðĩa</option>
+<option value="35.220.22">35.220.22 - Băng từ</option>
+<option value="35.220.23">35.220.23 - Máy ghi âm và đầu</option>
+<option value="35.220.30">35.220.30 - Thiết bị lưu trữ quang học</option>
+<option value="35.220.99">35.220.99 - Các thiết bị lưu trữ dữ liệu khác</option>
+<option value="35.230">35.230 - Thiết bị nhớ quang học</option>
+<option value="35.240">35.240 - Ứng dụng kỹ thuật thông tin (IT)</option>
+<option value="35.240.01">35.240.01 - Ứng dụng kỹ thuật thông tin nói chung</option>
+<option value="35.240.10">35.240.10 - Thiết kế có hỗ trợ của máy tính (CAD)</option>
+<option value="35.240.15">35.240.15 - Thẻ nhận dạng và thiết bị có liên quan</option>
+<option value="35.240.20">35.240.20 - Ứng dụng IT trong công tác văn phòng</option>
+<option value="35.240.30">35.240.30 - Ứng dụng IT trong thông tin tư liệu và xuất bản</option>
+<option value="35.240.40">35.240.40 - Ứng dụng IT trong ngân hàng</option>
+<option value="35.240.50">35.240.50 - Ứng dụng IT trong công nghiệp</option>
+<option value="35.240.60">35.240.60 - Ứng dụng IT trong vận tải, thương mại và các lĩnh vực khác</option>
+<option value="35.240.63">35.240.63 - Các ứng dụng công nghệ thông tin trong thương mại (bao gồm: trao đổi dữ liệu điện tử (EDIFACT) và thương mại điện tử)</option>
+<option value="35.240.67">35.240.67 - Ứng dụng công nghệ thông tin (IT) trong ngành xây dựng và tòa nhà (bao gồm mô hình thông tin xây dựng (BIM), Hệ thống điện tử Nhà và công trình xây dựng (HBES))</option>
+<option value="35.240.68">35.240.68 - Ứng dụng công nghệ thông tin trong nông nghiệp</option>
+<option value="35.240.69">35.240.69 - Ứng dụng công nghệ thông tin trong dịch vụ bưu điện</option>
+<option value="35.240.70">35.240.70 - Ứng dụng IT trong khoa học</option>
+<option value="35.240.80">35.240.80 - Áp dụng IT trong công nghệ bảo vệ sức khỏe</option>
+<option value="35.240.90">35.240.90 - Ứng dụng công nghệ thông tin trong giáo dục (bao gồm; học trực tuyến (e-learning))</option>
+<option value="35.240.95">35.240.95 - Ứng dụng Internet</option>
+<option value="35.240.99">35.240.99 - Áp dụng IT trong các lĩnh vực khác</option>
+<option value="35.260">35.260 - Máy văn phòng</option>
+<option value="35.260.10">35.260.10 - Máy văn phòng</option>
+<option value="35.260.20">35.260.20 - Văn phòng phẩm</option>
+<option value="37">37 - Công nghệ hình ảnh</option>
+<option value="37.020">37.020 - Thiết bị quang</option>
+<option value="37.040">37.040 - Chụp ảnh</option>
+<option value="37.040.01">37.040.01 - Thuật chụp ảnh nói chung</option>
+<option value="37.040.10">37.040.10 - Thiết bị chụp ảnh. Máy chiếu</option>
+<option value="37.040.20">37.040.20 - Giấy ảnh, phim và cuộn phim</option>
+<option value="37.040.25">37.040.25 - Phim chụp tia X</option>
+<option value="37.040.30">37.040.30 - Hóa chất ảnh</option>
+<option value="37.040.99">37.040.99 - Các tiêu chuẩn khác có liên quan đến thuật chụp ảnh</option>
+<option value="37.060">37.060 - Quay phim</option>
+<option value="37.060.01">37.060.01 - Thuật quay phim nói chung</option>
+<option value="37.060.10">37.060.10 - Thiết bị điện ảnh</option>
+<option value="37.060.20">37.060.20 - Phim điện ảnh. Cuộn phim</option>
+<option value="37.060.99">37.060.99 - Các tiêu chuẩn khác có liên quan đến thuật quay phim</option>
+<option value="37.080">37.080 - Vi đồ họa</option>
+<option value="37.100">37.100 - Công nghệ đồ họa</option>
+<option value="37.100.01">37.100.01 - Kỹ thuật đồ hoạ nói chung</option>
+<option value="37.100.10">37.100.10 - Thiết bị sao chụp</option>
+<option value="37.100.20">37.100.20 - Vật liệu cho công nghệ đồ họa</option>
+<option value="37.100.99">37.100.99 - Các tiêu chuẩn khác có liên quan đến công nghệ đồ hoạ</option>
+<option value="39">39 - Cơ khí chính xác. Kim hoàn</option>
+<option value="39.020">39.020 - Cơ khí chính xác</option>
+<option value="39.040">39.040 - Nghề đồng hồ</option>
+<option value="39.040.01">39.040.01 - Thuật làm đồng hồ nói chung</option>
+<option value="39.040.10">39.040.10 - Ðồng hồ đeo tay</option>
+<option value="39.040.20">39.040.20 - Ðồng hồ và các dụng cụ đo thời gian khác</option>
+<option value="39.040.99">39.040.99 - Các công cụ đo thời gian khác</option>
+<option value="39.060">39.060 - Nghề kim hoàn</option>
+<option value="43">43 - Đường bộ</option>
+<option value="43.020">43.020 - Phương tiện đường bộ nói chung</option>
+<option value="43.040">43.040 - Hệ thống phương tiện đường bộ</option>
+<option value="43.040.01">43.040.01 - Hệ thống phương tiện đường bộ nói chung</option>
+<option value="43.040.10">43.040.10 - Thiết bị điện</option>
+<option value="43.040.15">43.040.15 - Tin học cho xe ô tô. Hệ thống máy tính trên xe (bao gồm hệ thống định vị, đài phát thanh ...)</option>
+<option value="43.040.20">43.040.20 - Thiết bị chiếu sáng và báo hiệu</option>
+<option value="43.040.30">43.040.30 - Thiết bị chỉ dẫn và điều khiển</option>
+<option value="43.040.40">43.040.40 - Hệ thống phanh</option>
+<option value="43.040.50">43.040.50 - Truyền động, treo</option>
+<option value="43.040.60">43.040.60 - Khung xe và bộ phận khung</option>
+<option value="43.040.65">43.040.65 - Hệ thống kính và gạt nước (bao gồm thiết bị làm sạch, làm tan băng và làm giảm nhiệt độ, gương ...)</option>
+<option value="43.040.70">43.040.70 - Khớp nối</option>
+<option value="43.040.80">43.040.80 - Hệ thống bảo vệ và hạn chế tai nạn xe (bao gồm túi khí, dây an toàn, các vấn đề về tai nạn giao thông và các vấn đề nâng cao an toàn)</option>
+<option value="43.040.99">43.040.99 - Hệ thống phương tiện đường bộ khác</option>
+<option value="43.060">43.060 - Ðộng cơ đốt trong dùng cho phương tiện đường bộ</option>
+<option value="43.060.01">43.060.01 - Ðộng cơ đốt trong dùng cho phương tiện đường bộ nói chung</option>
+<option value="43.060.10">43.060.10 - Cụm động cơ và các thành phần bên trong</option>
+<option value="43.060.20">43.060.20 - Hệ thống nạp áp suất và dẫn không khí/ khí xả</option>
+<option value="43.060.30">43.060.30 - Hệ thống làm nguội. Hệ thống bôi trơn</option>
+<option value="43.060.40">43.060.40 - Hệ thống nhiên liệu</option>
+<option value="43.060.50">43.060.50 - Thiết bị điện. Hệ thống điều khiển</option>
+<option value="43.060.99">43.060.99 - Các thành phần khác và hệ thống của động cơ đốt trong</option>
+<option value="43.080">43.080 - Xe thương mại</option>
+<option value="43.080.01">43.080.01 - Xe thương mại nói chung</option>
+<option value="43.080.10">43.080.10 - Xe tải và xe moóc</option>
+<option value="43.080.20">43.080.20 - Xe buýt</option>
+<option value="43.080.99">43.080.99 - Xe thương mại khác</option>
+<option value="43.100">43.100 - Xe ca hành khách. Xe tải lón có mui và xe moóc nhẹ</option>
+<option value="43.120">43.120 - Xe cộ đường bộ chạy điện và các bộ phận</option>
+<option value="43.140">43.140 - Xe gắn máy, xe đạp và các bộ phận</option>
+<option value="43.150">43.150 - Xe đạp</option>
+<option value="43.160">43.160 - Xe cho mục tiêu đặc biệt</option>
+<option value="43.180">43.180 - Thiết bị chẩn đoán, bảo trì và thử nghiệm</option>
+<option value="45">45 - Kỹ thuật đường sắt</option>
+<option value="45.020">45.020 -  Kỹ thuật đường sắt nói chung</option>
+<option value="45.040">45.040 - Vật liệu và kết cấu cho kỹ thuật đường sắt</option>
+<option value="45.060">45.060 - Giàn tàu đường sắt</option>
+<option value="45.060.01">45.060.01 - Giàn tàu đường sắt nói chung</option>
+<option value="45.060.10">45.060.10 - Giàn tàu kéo</option>
+<option value="45.060.20">45.060.20 - Giàn tàu</option>
+<option value="45.080">45.080 - Ray và kết cấu đường sắt</option>
+<option value="45.08001.040.45">45.08001.040.45</option>
+<option value="45.100">45.100 - Thiết bị đường cáp</option>
+<option value="45.120">45.120 - Thiết bị đường sắt/Xây dựng và bảo vệ dây kéo toa</option>
+<option value="45.140">45.140 - Thiết bị cho tàu điện ngầm, xe điện và tàu điện hạng nhẹ</option>
+<option value="47">47 - Ðóng tàu và trang bị tàu biển</option>
+<option value="47.020">47.020 - Ðóng tàu và trang bị tàu biển nói chung</option>
+<option value="47.020.01">47.020.01 - Các tiêu chuẩn có liên quan đến đóng tàu và trang bị tàu biển nói chung</option>
+<option value="47.020.05">47.020.05 - Vật liệu và thành phần sử dụng cho việc đóng thuyền biển</option>
+<option value="47.020.10">47.020.10 - Thân tàu thủy và các phần tử kết cấu</option>
+<option value="47.020.20">47.020.20 - Ðộng cơ tàu biển</option>
+<option value="47.020.30">47.020.30 - Hệ thống ống</option>
+<option value="47.020.40">47.020.40 - Thiết bị nâng của tàu</option>
+<option value="47.020.50">47.020.50 - Boong tàu và các thiết bị và máy móc lắp đặt khác</option>
+<option value="47.020.60">47.020.60 - Thiết bị điện của tàu và của trang bị tàu biển</option>
+<option value="47.020.70">47.020.70 - Thiết bị hàng hải và điều khiển</option>
+<option value="47.020.80">47.020.80 - Không gian sinh hoạt</option>
+<option value="47.020.85">47.020.85 - Khoảng cách hàng hoá</option>
+<option value="47.020.90">47.020.90 - Hệ thống thông gió, điều hoà nhiệt độ và làm nóng</option>
+<option value="47.020.99">47.020.99 - Các tiêu chuẩn khác có liên quan đến đóng tàu và trang bị tàu biển</option>
+<option value="47.040">47.040 - Tàu biển</option>
+<option value="47.060">47.060 - Tàu nội địa</option>
+<option value="47.080">47.080 - Tàu nhỏ</option>
+<option value="49">49 - Máy bay và tàu vũ trụ</option>
+<option value="49.020">49.020 - Máy bay và tàu vũ trụ nói chung</option>
+<option value="49.025">49.025 - Vật liệu dùng cho xây dựng công nghiệp vũ trụ</option>
+<option value="49.025.01">49.025.01 - Vật liệu dùng cho công nghiệp vũ trụ nói chung</option>
+<option value="49.025.05">49.025.05 - Hỗn hợp có chứa sắt nói chung</option>
+<option value="49.025.10">49.025.10 - Thép</option>
+<option value="49.025.15">49.025.15 - Hỗn hợp không có sắt nói chung</option>
+<option value="49.025.20">49.025.20 - Nhôm</option>
+<option value="49.025.30">49.025.30 - Titan</option>
+<option value="49.025.40">49.025.40 - Cao su và chất dẻo</option>
+<option value="49.025.50">49.025.50 - Chất dính</option>
+<option value="49.025.60">49.025.60 - Hàng dệt</option>
+<option value="49.025.99">49.025.99 - Các vật liệu khác</option>
+<option value="49.030">49.030 - Chi tiết lắp xiết dùng cho công nghiệp hàng không-vũ trụ</option>
+<option value="49.030.01">49.030.01 - Chốt nói chung</option>
+<option value="49.030.10">49.030.10 - Ren</option>
+<option value="49.030.20">49.030.20 - Bulông, ốc vít, đinh tán</option>
+<option value="49.030.30">49.030.30 - Trôn đinh ốc</option>
+<option value="49.030.40">49.030.40 - Ðinh gim, đinh</option>
+<option value="49.030.50">49.030.50 - Yếu tố vòng đệm và khóa</option>
+<option value="49.030.60">49.030.60 - Ðinh tán</option>
+<option value="49.030.99">49.030.99 - Các chốt khác</option>
+<option value="49.035">49.035 - Thành phần dùng cho công nghiệp xây dựng vũ trụ</option>
+<option value="49.040">49.040 - Vật liệu, thành phần và quá trình</option>
+<option value="49.040.10">49.040.10 - Vật liệu</option>
+<option value="49.040.20">49.040.20 - Chi tiết lắp xiết</option>
+<option value="49.040.30">49.040.30 - Thành phần</option>
+<option value="49.040.40">49.040.40 - Lớp mạ và quá trình</option>
+<option value="49.045">49.045 - Kết cấu và các yếu tố kết cấu</option>
+<option value="49.050">49.050 - Ðộng cơ vũ trụ và hệ thống đẩy</option>
+<option value="49.060">49.060 - Thiết bị và hệ thống điện của máy bay</option>
+<option value="49.080">49.080 - Hệ thống và cơ cấu dẫn chất lỏng của hàng không vũ trụ</option>
+<option value="49.090">49.090 - Thiết bị công cụ trên boong</option>
+<option value="49.095">49.095 - Buồng lái và boong chở khách</option>
+<option value="49.100">49.100 - Thiết bị dịch vụ và bảo trì ở mặt đất</option>
+<option value="49.120">49.120 - Thiết bị vận chuyển hàng hóa</option>
+<option value="49.140">49.140 - Hệ thống không gian và quá trình hoạt động</option>
+<option value="53">53 - Thiết bị vận chuyển vật liệu</option>
+<option value="53.020">53.020 - Thiết bị nâng</option>
+<option value="53.020.01">53.020.01 - Dụng cụ nâng nói chung</option>
+<option value="53.020.10">53.020.10 - Dụng cụ nâng</option>
+<option value="53.020.20">53.020.20 - Cần trục</option>
+<option value="53.020.30">53.020.30 - Phụ tùng cho thiết bị nâng</option>
+<option value="53.020.99">53.020.99 - Thiết bị nâng khác</option>
+<option value="53.040">53.040 - Thiết bị vận chuyển liên tục</option>
+<option value="53.040.01">53.040.01 - Thiết bị điều khiển liên tục nói chung</option>
+<option value="53.040.10">53.040.10 - Băng tải và thiết bị vận chuyển bằng khí</option>
+<option value="53.040.20">53.040.20 - Phụ kiện băng tải</option>
+<option value="53.040.30">53.040.30 - Vận truyền bằng khí và các thành phần khí</option>
+<option value="53.040.99">53.040.99 - Thiết bị điều khiển liên tục khác</option>
+<option value="53.060">53.060 - Xe tải công nghiệp</option>
+<option value="53.080">53.080 - Thiết bị lưu kho</option>
+<option value="53.100">53.100 - Máy làm đất</option>
+<option value="53.120">53.120 - Thiết bị để vận chuyển bằng tay</option>
+<option value="55">55 - Bao gói và phân phối hàng hóa</option>
+<option value="55.020">55.020 - Bao gói và phân phối hàng hóa nói chung</option>
+<option value="55.040">55.040 - Phụ kiện và vật liệu bao gói</option>
+<option value="55.060">55.060 - Ống. Cuộn</option>
+<option value="55.080">55.080 - Bao. Túi</option>
+<option value="55.100">55.100 - Chai. Lọ. Vại</option>
+<option value="55.120">55.120 - Hộp. Hộp kim loại. Ống</option>
+<option value="55.130">55.130 - Thùng đựng các chất</option>
+<option value="55.140">55.140 - Thùng tròn. Thùng hình ống. Hộp nhỏ</option>
+<option value="55.160">55.160 - Hộp. Hòm. Thùng thưa</option>
+<option value="55.180">55.180 - Vận chuyển hàng hóa</option>
+<option value="55.180.01">55.180.01 - Thùng phân phối hàng nói chung</option>
+<option value="55.180.10">55.180.10 - Thùng chứa công dụng chung</option>
+<option value="55.180.20">55.180.20 - Khay chứa công dụng chung</option>
+<option value="55.180.30">55.180.30 - Thùng chứa, khay chứa và lưới vận chuyển đường không</option>
+<option value="55.180.40">55.180.40 - Bao gói vận tải kín </option>
+<option value="55.180.99">55.180.99 - Các tiêu chuẩn khác có liên quan đến thùng phân phối hàng</option>
+<option value="55.200">55.200 - Máy đóng gói</option>
+<option value="55.220">55.220 - Lưu kho. Xếp kho</option>
+<option value="55.230">55.230 - Máy phân phối và bán hàng tự động</option>
+<option value="59">59 - Công nghệ dệt và da</option>
+<option value="59.020">59.020 - Quy trình công nghiệp dệt</option>
+<option value="59.040">59.040 - Vật liệu phụ trợ cho dệt</option>
+<option value="59.060">59.060 - Xơ dệt</option>
+<option value="59.060.01">59.060.01 - Xơ dệt nói chung</option>
+<option value="59.060.10">59.060.10 - Xơ tự nhiên</option>
+<option value="59.060.20">59.060.20 - Xơ nhân tạo</option>
+<option value="59.060.30">59.060.30 - Xơ khoáng và kim loại</option>
+<option value="59.060.99">59.060.99 - Xơ dệt khác</option>
+<option value="59.080">59.080 - Sản phẩm của công nghiệp dệt</option>
+<option value="59.080.01">59.080.01 - Vật liệu dệt nói chung</option>
+<option value="59.080.10">59.080.10 - Vật liệu dệt nói chung</option>
+<option value="59.080.20">59.080.20 - Sợi</option>
+<option value="59.080.30">59.080.30 - Vải</option>
+<option value="59.080.40">59.080.40 - Vải có lớp tráng</option>
+<option value="59.080.50">59.080.50 - Dây thừng</option>
+<option value="59.080.60">59.080.60 - Hàng dệt trải sàn</option>
+<option value="59.080.70">59.080.70 - Vải địa (Geotextile)</option>
+<option value="59.080.80">59.080.80 - Dệt thông minh (Smart textiles)</option>
+<option value="59.080.99">59.080.99 - Sản phẩm công nghiệp dệt khác</option>
+<option value="59.100">59.100 - Vật liệu gia cố phức hợp</option>
+<option value="59.100.01">59.100.01 - Hợp chất dùng để củng cố vật liệu nói chung</option>
+<option value="59.100.10">59.100.10 - Thủy tinh dệt</option>
+<option value="59.100.20">59.100.20 - Vải và sợi cacbon</option>
+<option value="59.100.30">59.100.30 - Vải và sợi xơ nhân tạo</option>
+<option value="59.100.99">59.100.99 - Các hợp chất khác dùng để củng cố vật liệu</option>
+<option value="59.120">59.120 - Máy dệt</option>
+<option value="59.120.01">59.120.01 - Máy dệt nói chung</option>
+<option value="59.120.10">59.120.10 - Máy xe chỉ, bện và dệt</option>
+<option value="59.120.20">59.120.20 - Máy và thiết bị guồng</option>
+<option value="59.120.30">59.120.30 - Khung cửi. Máy dệt</option>
+<option value="59.120.40">59.120.40 - Máy đan</option>
+<option value="59.120.50">59.120.50 - Thiết bị nhuộm và hoàn thiện</option>
+<option value="59.120.99">59.120.99 - Máy dệt khác</option>
+<option value="59.140">59.140 - Công nghệ da</option>
+<option value="59.140.01">59.140.01 - Công nghệ da nói chung</option>
+<option value="59.140.10">59.140.10 - Quá trình chế biến và vật liệu phụ</option>
+<option value="59.140.20">59.140.20 - Da thô, da sống</option>
+<option value="59.140.30">59.140.30 - Da thuộc và da lông thú</option>
+<option value="59.140.35">59.140.35 - Sản phẩm da</option>
+<option value="59.140.40">59.140.40 - Máy móc và thiết bị sản xuất da thuộc và da lông thú</option>
+<option value="59.140.99">59.140.99 - Các tiêu chuẩn khác có liên quan đến công nghệ da</option>
+<option value="61">61 - May mặc</option>
+<option value="61.020">61.020 - Quần áo</option>
+<option value="61.040">61.040 - Mũ. Phụ tùng may mặc. Khóa, bấm, móc... dùng cho quần áo</option>
+<option value="61.060">61.060 - Giầy</option>
+<option value="61.080">61.080 - Máy may và thiết bị khác cho công nghiệp may mặc</option>
+<option value="65">65 - Nông nghiệp</option>
+<option value="65.020">65.020 - Trang trại và lâm nghiệp</option>
+<option value="65.020.01">65.020.01 - Trang trại và lâm nghiệp nói chung</option>
+<option value="65.020.10">65.020.10 - Quản lý và tổ chức trang trại</option>
+<option value="65.020.20">65.020.20 - Trồng trọt</option>
+<option value="65.020.30">65.020.30 - Chăn nuôi</option>
+<option value="65.020.40">65.020.40 - Làm vườn và lâm nghiệp</option>
+<option value="65.020.99">65.020.99 - Các tiêu chuẩn khác có liên quan đến trang trại và lâm nghiệp</option>
+<option value="65.040">65.040 - Công trình, kết cấu và máy móc lắp đặt cho trang trại</option>
+<option value="65.040.01">65.040.01 - Xây dựng và hệ thống lắp đặt máy móc cho trang trại nói chung</option>
+<option value="65.040.10">65.040.10 - Công trình, máy móc lắp đặt và thiết bị cho vật nuôi</option>
+<option value="65.040.20">65.040.20 - Công trình và máy móc lắp đặt cho chế biến và lưu kho sản phẩm nông nghiệp</option>
+<option value="65.040.30">65.040.30 - Nhà kính và các máy móc lắp đặt khác</option>
+<option value="65.040.99">65.040.99 - Các tiêu chuẩn khác có liên quan đến xây dựng và hệ thống lắp đặt máy móc cho trang trại</option>
+<option value="65.060">65.060 - Máy móc, dụng cụ và thiết bị nông nghiệp</option>
+<option value="65.060.01">65.060.01 - Máy móc, và thiết bị nông nghiệp nói chung</option>
+<option value="65.060.10">65.060.10 - Máy kéo và xe có moóc nông nghiệp</option>
+<option value="65.060.20">65.060.20 - Thiết bị làm đất</option>
+<option value="65.060.25">65.060.25 - Thiết bị lưu kho, chuẩn bị và bón phân</option>
+<option value="65.060.30">65.060.30 - Thiết bị gieo trồng</option>
+<option value="65.060.35">65.060.35 - Thiết bị tưới</option>
+<option value="65.060.40">65.060.40 - Thiết bị chăm sóc cây</option>
+<option value="65.060.50">65.060.50 - Thiết bị gặt</option>
+<option value="65.060.60">65.060.60 - Thiết bị trồng nho và làm rượu vang</option>
+<option value="65.060.70">65.060.70 - Thiết bị làm vườn</option>
+<option value="65.060.80">65.060.80 - Thiết bị lâm nghiệp</option>
+<option value="65.060.99">65.060.99 - Máy móc và thiết bị nông nghiệp khác</option>
+<option value="65.080">65.080 - Phân bón</option>
+<option value="65.100">65.100 - Thuốc bảo vệ thực vật và các hóa chất nông nghiệp khác</option>
+<option value="65.100.01">65.100.01 - Thuốc trừ dịch hại và các hoá chất nông nghiệp nói chung</option>
+<option value="65.100.10">65.100.10 - Thuốc trừ sâu</option>
+<option value="65.100.20">65.100.20 - Thuốc diệt cỏ</option>
+<option value="65.100.30">65.100.30 - Thuốc diệt nấm</option>
+<option value="65.100.99">65.100.99 - Thuốc trừ dịch hại và các hoá chất nông nghiệp khác</option>
+<option value="65.120">65.120 - Thức ăn gia súc</option>
+<option value="65.140">65.140 - Nuôi ong</option>
+<option value="65.145">65.145 - Săn bắn</option>
+<option value="65.150">65.150 - Ðánh bắt và nuôi thủy sản</option>
+<option value="65.160">65.160 - Thuốc lá, sản phẩm thuốc lá và thiết bị dùng cho công nghiệp thuốc lá</option>
+<option value="67">67 - Thực phẩm</option>
+<option value="67.020">67.020 - Quá trình chế biến trong công nghiệp thực phẩm</option>
+<option value="67.040">67.040 - Nông sản thực phẩm nói chung</option>
+<option value="67.050">67.050 - Phương pháp thử và phân tích thực phẩm nói chung</option>
+<option value="67.060">67.060 - Ngũ cốc, đậu đỗ và sản phẩm chế biến</option>
+<option value="67.080">67.080 - Rau quả</option>
+<option value="67.080.01">67.080.01 - Rau quả và sản phẩm chế biến nói chung</option>
+<option value="67.080.10">67.080.10 - Quả và sản phẩm chế biến</option>
+<option value="67.080.20">67.080.20 - Rau và sản phẩm chế biến</option>
+<option value="67.100">67.100 - Sữa và sản phẩm sữa</option>
+<option value="67.100.01">67.100.01 - Sữa và sản phẩm sữa nói chung</option>
+<option value="67.100.10">67.100.10 - Sữa. Sản phẩm sữa</option>
+<option value="67.100.20">67.100.20 - Bơ. Phomat</option>
+<option value="67.100.30">67.100.30 - Pho mát</option>
+<option value="67.100.40">67.100.40 - Kem và kẹo ướp lạnh</option>
+<option value="67.100.99">67.100.99 - Sản phẩm có sữa khác</option>
+<option value="67.120">67.120 - Thịt, sản phẩm thịt và sản phẩm động vật khác</option>
+<option value="67.120.01">67.120.01 - Sản phẩm động vật nói chung</option>
+<option value="67.120.10">67.120.10 - Thịt và sản phẩm thịt</option>
+<option value="67.120.20">67.120.20 - Gia cầm và trứng</option>
+<option value="67.120.30">67.120.30 - Cá và sản phẩm nghề cá</option>
+<option value="67.120.99">67.120.99 - Sản phẩm động vật khác</option>
+<option value="67.140">67.140 - Chè. Cà phê. Cacao</option>
+<option value="67.140.10">67.140.10 - Chè</option>
+<option value="67.140.20">67.140.20 - Cà phê và sản phẩm thay thế cà phê</option>
+<option value="67.140.30">67.140.30 - Cacao. Sôcôla</option>
+<option value="67.160">67.160 - Ðồ uống</option>
+<option value="67.160.01">67.160.01 - Ðồ uống nói chung</option>
+<option value="67.160.10">67.160.10 - Ðồ uống có rượu</option>
+<option value="67.160.20">67.160.20 - Ðồ uống không rượu</option>
+<option value="67.180">67.180 - Ðường. Sản phẩm đường. Tinh bột</option>
+<option value="67.180.10">67.180.10 - Ðường và sản phẩm đường</option>
+<option value="67.180.20">67.180.20 - Tinh bột và sản phẩm chế biến</option>
+<option value="67.190">67.190 - Sôcôla</option>
+<option value="67.200">67.200 - Dầu và mỡ ăn. Hạt có dầu</option>
+<option value="67.200.10">67.200.10 - Mỡ và dầu động vật và thực vật</option>
+<option value="67.200.20">67.200.20 - Hạt có dầu</option>
+<option value="67.220">67.220 - Gia vị. Phụ gia thực phẩm</option>
+<option value="67.220.10">67.220.10 - Gia vị</option>
+<option value="67.220.20">67.220.20 - Phụ gia thực phẩm</option>
+<option value="67.230">67.230 - Thực phẩm đóng gói và chế biến sẵn</option>
+<option value="67.240">67.240 - Phân tích cảm quan</option>
+<option value="67.250">67.250 - Nguyên liệu và dụng cụ tiếp xúc với thực phẩm</option>
+<option value="67.260">67.260 - Nhà máy và thiết bị công nghiệp thực phẩm</option>
+<option value="71">71 - Hóa chất</option>
+<option value="71.020">71.020 - Sản phẩm trong công nghiệp hóa học</option>
+<option value="71.040">71.040 - Hóa phân tích</option>
+<option value="71.040.01">71.040.01 - Hoá phân tích nói chung</option>
+<option value="71.040.10">71.040.10 - Phòng thí nghiệm hóa. Thiết bị phòng thí nghiệm</option>
+<option value="71.040.20">71.040.20 - Ðồ vật trong phòng thí nghiệm và máy móc có liên quan</option>
+<option value="71.040.30">71.040.30 - Thuốc thử hóa học và vật liệu chuẩn</option>
+<option value="71.040.40">71.040.40 - Phân tích hóa học</option>
+<option value="71.040.50">71.040.50 - Phương pháp vật lý hoá học của phân tích</option>
+<option value="71.040.99">71.040.99 - Các tiêu chuẩn khác có liên quan đến hoá phân tích</option>
+<option value="71.060">71.060 - Hóa chất vô cơ</option>
+<option value="71.060.01">71.060.01 - Hoá chất vô cơ nói chung</option>
+<option value="71.060.10">71.060.10 - Nguyên tố hóa học</option>
+<option value="71.060.20">71.060.20 - Oxit</option>
+<option value="71.060.30">71.060.30 - Axit</option>
+<option value="71.060.40">71.060.40 - Badơ</option>
+<option value="71.060.50">71.060.50 - Muối</option>
+<option value="71.060.99">71.060.99 - Hoá chất vô cơ khác</option>
+<option value="71.080">71.080 - Hóa chất hữu cơ</option>
+<option value="71.080.01">71.080.01 - Hoá chất hữu cơ nói chung</option>
+<option value="71.080.10">71.080.10 - Hiđrocacbon béo</option>
+<option value="71.080.15">71.080.15 - Hidrocacbon thơm</option>
+<option value="71.080.20">71.080.20 - Hiđrocacbon halogen hóa</option>
+<option value="71.080.30">71.080.30 - Hợp chất nitơ hữu cơ</option>
+<option value="71.080.40">71.080.40 - Axit hữu cơ</option>
+<option value="71.080.50">71.080.50 - Anhydrit</option>
+<option value="71.080.60">71.080.60 - Rượu. Ete</option>
+<option value="71.080.70">71.080.70 - Este</option>
+<option value="71.080.80">71.080.80 - Andehyt và xeton</option>
+<option value="71.080.90">71.080.90 - Phenol</option>
+<option value="71.080.99">71.080.99 - Hoá chất hữu cơ khác</option>
+<option value="71.100">71.100 - Sản phẩm công nghiệp hóa học</option>
+<option value="71.100.01">71.100.01 - Sản phẩm công nghiệp hoá học nói chung</option>
+<option value="71.100.10">71.100.10 - Vật liệu cho sản xuất nhôm</option>
+<option value="71.100.20">71.100.20 - Khí dùng trong công nghiệp</option>
+<option value="71.100.30">71.100.30 - Chất nổ. Kỹ thuật pháo hoa</option>
+<option value="71.100.35">71.100.35 - Chất hóa học cho công nghiệp và dùng làm chất tẩy trong gia đình</option>
+<option value="71.100.40">71.100.40 - Tác nhân hoạt động bề mặt</option>
+<option value="71.100.45">71.100.45 - Chất làm lạnh và hoá chất chống đông</option>
+<option value="71.100.50">71.100.50 - Hóa chất bảo vệ gỗ</option>
+<option value="71.100.55">71.100.55 - Silicon</option>
+<option value="71.100.60">71.100.60 - Tinh dầu</option>
+<option value="71.100.70">71.100.70 - Mỹ phẩm. Ðồ trang điểm</option>
+<option value="71.100.80">71.100.80 - Chất hoá học dùng để làm sạch nước</option>
+<option value="71.100.99">71.100.99 - Các sản phẩm công nghiệp hoá học khác</option>
+<option value="71.120">71.120 - Thiết bị cho công nghiệp hóa học</option>
+<option value="71.120.01">71.120.01 - Thiết bị dùng cho công nghiệp hoá học nói chung</option>
+<option value="71.120.10">71.120.10 - Nồi phản ứng và các thành phần</option>
+<option value="71.120.20">71.120.20 - Cột</option>
+<option value="71.120.30">71.120.30 - Thiết bị trao đổi nhiệt và các thiết bị hóa học khác</option>
+<option value="71.120.99">71.120.99 - Thiết bị khác dùng cho công nghiệp hoá học</option>
+<option value="73">73 - Khai thác mỏ và khoáng sản</option>
+<option value="73.020">73.020 - Khai thác mỏ và khai thác than</option>
+<option value="73.040">73.040 - Than</option>
+<option value="73.060">73.060 - Khoáng sản kim loại và tinh quặng</option>
+<option value="73.060.01">73.060.01 - Khoáng sản kim loại nói chung</option>
+<option value="73.060.10">73.060.10 - Quặng sắt</option>
+<option value="73.060.20">73.060.20 - Quặng mangan</option>
+<option value="73.060.30">73.060.30 - Quặng crom</option>
+<option value="73.060.40">73.060.40 - Quặng nhôm</option>
+<option value="73.060.99">73.060.99 - Khoáng sản kim loại khác</option>
+<option value="73.080">73.080 - Khoáng sản phi kim loại</option>
+<option value="73.100">73.100 - Thiết bị khai thác mỏ</option>
+<option value="73.100.01">73.100.01 - Thiết bị khai thác mỏ nói chung</option>
+<option value="73.100.10">73.100.10 - Thiết bị đào hầm và đặt goòng</option>
+<option value="73.100.20">73.100.20 - Thiết bị thông gió, điều hòa không khí và chiếu sáng</option>
+<option value="73.100.30">73.100.30 - Thiết bị khoan và đào mỏ</option>
+<option value="73.100.40">73.100.40 - Thiết bị đẩy và kéo goòng</option>
+<option value="73.100.99">73.100.99 - Thiết bị khai thác mỏ khác</option>
+<option value="73.120">73.120 - Thiết bị xử lý khoáng sản</option>
+<option value="75">75 - Dầu mỏ</option>
+<option value="75.020">75.020 - Khai thác và chế biến dầu mỏ và khí thiên nhiên</option>
+<option value="75.040">75.040 - Dầu thô</option>
+<option value="75.060">75.060 - Khí thiên nhiên</option>
+<option value="75.080">75.080 - Sản phẩm dầu mỏ nói chung</option>
+<option value="75.100">75.100 - Chất bôi trơn, dầu công nghiệp và các sản phẩm liên quan</option>
+<option value="75.120">75.120 - Chất lỏng thủy lực</option>
+<option value="75.140">75.140 - Sáp, vật liệu bitum và các sản phẩm dầu mỏ khác</option>
+<option value="75.160">75.160 - Nhiên liệu</option>
+<option value="75.160.01">75.160.01 - Nhiên liệu nói chung</option>
+<option value="75.160.10">75.160.10 - Nhiên liệu rắn</option>
+<option value="75.160.20">75.160.20 - Nhiên liệu lỏng</option>
+<option value="75.160.30">75.160.30 - Nhiên liệu khí</option>
+<option value="75.160.40">75.160.40 - Nhiên liệu sinh học (bao gồm nhiên liệu sinh học rắn, nhiên liệu sinh học lỏng và biogas)</option>
+<option value="75.180">75.180 - Thiết bị cho công nghiệp dầu mỏ và khí thiên nhiên</option>
+<option value="75.180.01">75.180.01 - Thiết bị dùng cho công nghiệp dầu mỏ và khí thiên nhiên nói chung</option>
+<option value="75.180.10">75.180.10 - Thiết bị thăm dò và khai thác</option>
+<option value="75.180.20">75.180.20 - Thiết bị chế biến</option>
+<option value="75.180.30">75.180.30 - Thiết bị đo thể tích và đo lường</option>
+<option value="75.180.99">75.180.99 - Thiết bị khác dùng cho công nghiệp dầu mỏ và khí thiên nhiên</option>
+<option value="75.200">75.200 - Thiết bị vận chuyển sản phẩm dầu mỏ và khí thiên nhiên</option>
+<option value="77">77 - Luyện kim</option>
+<option value="77.020">77.020 - Sản xuất kim loại</option>
+<option value="77.040">77.040 - Thử nghiệm kim loại</option>
+<option value="77.040.01">77.040.01 - Thử nghiệm kim loại nói chung</option>
+<option value="77.040.10">77.040.10 - Thử nghiệm cơ học kim loại</option>
+<option value="77.040.20">77.040.20 - Thử nghiệm không phá hủy kim loại</option>
+<option value="77.040.30">77.040.30 - Phương pháp kiểm tra. Kim tương và phương pháp thử khác</option>
+<option value="77.040.99">77.040.99 - Các phương pháp thử kim loại khác</option>
+<option value="77.060">77.060 - Ăn mòn kim loại</option>
+<option value="77.080">77.080 - Kim loại đen</option>
+<option value="77.080.01">77.080.01 - Kim loại sắt nói chung</option>
+<option value="77.080.10">77.080.10 - Gang đúc và gang thỏi</option>
+<option value="77.080.20">77.080.20 - Thép nói chung</option>
+<option value="77.100">77.100 - Hợp kim sắt</option>
+<option value="77.120">77.120 - Kim loại màu</option>
+<option value="77.120.01">77.120.01 - Kim loại không có sắt nói chung</option>
+<option value="77.120.10">77.120.10 - Nhôm và hợp kim nhôm</option>
+<option value="77.120.20">77.120.20 - Magie và hợp kim magie</option>
+<option value="77.120.30">77.120.30 - Ðồng và hợp kim đồng</option>
+<option value="77.120.40">77.120.40 - Niken, crom và hợp kim của chúng</option>
+<option value="77.120.50">77.120.50 - Titan và hợp kim titan</option>
+<option value="77.120.60">77.120.60 - Chì, kẽm, thiếc và hợp kim</option>
+<option value="77.120.70">77.120.70 - Cadimi, coban, kim loại khác và hợp kim của chúng</option>
+<option value="77.120.99">77.120.99 - Kim loại không có sắt và các hợp kim khác</option>
+<option value="77.140">77.140 - Sản phẩm sắt và thép</option>
+<option value="77.140.01">77.140.01 - Sản phẩm sắt và sản phẩm thép nói chung</option>
+<option value="77.140.10">77.140.10 - Thép cải thiện</option>
+<option value="77.140.15">77.140.15 - Thép dùng để đổ bê tông</option>
+<option value="77.140.20">77.140.20 - Thép không gỉ</option>
+<option value="77.140.25">77.140.25 - Thép lò xo</option>
+<option value="77.140.30">77.140.30 - Thép chịu áp suất</option>
+<option value="77.140.35">77.140.35 - Thép công cụ</option>
+<option value="77.140.40">77.140.40 - Thép có từ tính đặc biệt</option>
+<option value="77.140.45">77.140.45 - Thép không hợp kim</option>
+<option value="77.140.50">77.140.50 - Sản phẩm và bán sản phẩm thép tấm</option>
+<option value="77.140.60">77.140.60 - Thép thanh</option>
+<option value="77.140.65">77.140.65 - Dây thép, cáp thép và xích thép</option>
+<option value="77.140.70">77.140.70 - Thép profin</option>
+<option value="77.140.75">77.140.75 - Ống thép và thép ống dùng cho công nghệ đặc biệt</option>
+<option value="77.140.80">77.140.80 - Vật đúc và rèn sắt và thép</option>
+<option value="77.140.85">77.140.85 - Rèn sắt và thép</option>
+<option value="77.140.90">77.140.90 - Sản phẩm kim loại không phải sắt</option>
+<option value="77.140.99">77.140.99 - Sản phẩm sắt và thép khác</option>
+<option value="77.150">77.150 - Sản phẩm của kim loại màu</option>
+<option value="77.150.01">77.150.01 - Sản phẩm của kim loại không có sắt nói chung</option>
+<option value="77.150.10">77.150.10 - Sản phẩm nhôm</option>
+<option value="77.150.20">77.150.20 - Sản phẩm magiê</option>
+<option value="77.150.30">77.150.30 - Sản phẩm đồng</option>
+<option value="77.150.40">77.150.40 - Sản phẩm mạ kền và cờ rôm</option>
+<option value="77.150.50">77.150.50 - Sản phẩm titan</option>
+<option value="77.150.60">77.150.60 - Sản phẩm chì, kẽm, thiếc</option>
+<option value="77.150.70">77.150.70 - Sản phẩm cadimi và coban</option>
+<option value="77.150.99">77.150.99 - Sản phẩm kim loại khác không có sắt</option>
+<option value="77.160">77.160 - Luyện kim bột</option>
+<option value="77.180">77.180 - Thiết bị cho công nghiệp luyện kim</option>
+<option value="79">79 - Gỗ</option>
+<option value="79.020">79.020 - Quy trình công nghệ chế biến gỗ</option>
+<option value="79.040">79.040 - Gỗ, gỗ khúc và gỗ xẻ</option>
+<option value="79.060">79.060 - Gỗ ván</option>
+<option value="79.060.01">79.060.01 - Gỗ ván nói chung</option>
+<option value="79.060.10">79.060.10 - Gỗ dán</option>
+<option value="79.060.20">79.060.20 - Gỗ ván sợi và dăm</option>
+<option value="79.060.99">79.060.99 - Gỗ ván khác</option>
+<option value="79.080">79.080 - Bán thành phẩm gỗ</option>
+<option value="79.100">79.100 - Li e và sản phẩm li e</option>
+<option value="79.120">79.120 - Thiết bị gia công gỗ</option>
+<option value="79.120.01">79.120.01 - Thiết bị gia công gỗ nói chung</option>
+<option value="79.120.10">79.120.10 - Máy gia công gỗ</option>
+<option value="79.120.20">79.120.20 - Dụng cụ gia công gỗ</option>
+<option value="79.120.99">79.120.99 - Thiết bị gia công gỗ khác</option>
+<option value="81">81 - Thủy tinh và Gốm</option>
+<option value="81.020">81.020 - Quá trình chế biến trong công nghiệp thủy tinh và gốm</option>
+<option value="81.040">81.040 - Thủy tinh</option>
+<option value="81.040.01">81.040.01 - Thuỷ tinh nói chung</option>
+<option value="81.040.10">81.040.10 - Nguyên vật liệu và thủy tinh thô</option>
+<option value="81.040.20">81.040.20 - Kính xây dựng</option>
+<option value="81.040.30">81.040.30 - Sản phẩm thủy tinh</option>
+<option value="81.060">81.060 - Ðồ gốm</option>
+<option value="81.060.01">81.060.01 - Ðồ gốm nói chung</option>
+<option value="81.060.10">81.060.10 - Nguyên vật liệu</option>
+<option value="81.060.20">81.060.20 - Sản phẩm gốm</option>
+<option value="81.060.30">81.060.30 - Gốm cao cấp</option>
+<option value="81.060.99">81.060.99 - Các tiêu chuẩn khác có liên quan đến gốm</option>
+<option value="81.080">81.080 - Vật liệu chịu lửa</option>
+<option value="81.100">81.100 - Thiết bị dùng cho công nghiệp thuỷ tinh và gốm</option>
+<option value="83">83 - Cao su và chất dẻo</option>
+<option value="83.020">83.020 - Quá trình chế biến trong công nghiệp cao su và chất dẻo</option>
+<option value="83.040">83.040 - Nguyên vật liệu cho cao su và chất dẻo</option>
+<option value="83.040.01">83.040.01 - Nguyên vật liệu cho cao su và chất dẻo nói chung</option>
+<option value="83.040.10">83.040.10 - Mủ cao su và cao su sống</option>
+<option value="83.040.20">83.040.20 - Thành phần hợp thành cao su</option>
+<option value="83.040.30">83.040.30 - Vật liệu phụ và phụ gia cho chất dẻo</option>
+<option value="83.060">83.060 - Cao su</option>
+<option value="83.080">83.080 - Chất dẻo</option>
+<option value="83.080.01">83.080.01 - Chất dẻo nói chung</option>
+<option value="83.080.10">83.080.10 - Vật liệu rắn nhiệt</option>
+<option value="83.080.20">83.080.20 - Vật liệu dẻo nhiệt</option>
+<option value="83.080.30">83.080.30 - Các tông. Giấy để bao gói, xem 55.040</option>
+<option value="83.100">83.100 - Vật liệu xốp</option>
+<option value="83.120">83.120 - Chất dẻo có cốt</option>
+<option value="83.140">83.140 - Sản phẩm cao su và chất dẻo</option>
+<option value="83.140.01">83.140.01 - Cao su và sản phẩm chất dẻo nói chung</option>
+<option value="83.140.10">83.140.10 - Màng và tấm</option>
+<option value="83.140.20">83.140.20 - Tấm dát mỏng</option>
+<option value="83.140.30">83.140.30 - Ống, phụ tùng nối ống và van bằng nhựa</option>
+<option value="83.140.40">83.140.40 - Ống dẫn</option>
+<option value="83.140.50">83.140.50 - Nút</option>
+<option value="83.140.99">83.140.99 - Các sản phẩm nhựa và cao su khác</option>
+<option value="83.160">83.160 - Lốp</option>
+<option value="83.160.01">83.160.01 - Lốp nói chung</option>
+<option value="83.160.10">83.160.10 - Lốp xe đường bộ</option>
+<option value="83.160.20">83.160.20 - Lốp máy bay</option>
+<option value="83.160.30">83.160.30 - Lốp cho máy móc nông nghiệp và máy móc khác</option>
+<option value="83.160.99">83.160.99 - Các loại lốp khác</option>
+<option value="83.180">83.180 - Chất kết dính</option>
+<option value="83.200">83.200 - Thiết bị dùng cho công nghiệp cao su và chất dẻo</option>
+<option value="85">85 - Giấy</option>
+<option value="85.020">85.020 - Quá trình sản xuất giấy</option>
+<option value="85.040">85.040 - Bột giấy</option>
+<option value="85.060">85.060 - Giấy và cactông</option>
+<option value="85.080">85.080 - Sản phẩm giấy</option>
+<option value="85.080.01">85.080.01 - Sản phẩm giấy nói chung</option>
+<option value="85.080.10">85.080.10 - Giấy văn phòng</option>
+<option value="85.080.20">85.080.20 - Giấy ăn</option>
+<option value="85.080.30">85.080.30 - Các tông (bao gồm các tông sóng)</option>
+<option value="85.080.99">85.080.99 - Các sản phẩm giấy khác</option>
+<option value="85.100">85.100 - Thiết bị cho công nghiệp giấy</option>
+<option value="87">87 - Sơn và chất màu</option>
+<option value="87.020">87.020 - Quá trình sơn</option>
+<option value="87.040">87.040 - Sơn và vecni</option>
+<option value="87.040.01">87.040.01 - Sơn và vecni nói chung</option>
+<option value="87.040.10">87.040.10 - Sơn và vecni</option>
+<option value="87.040.20">87.040.20 - Lớp sơn lót</option>
+<option value="87.040.99">87.040.99 - Sơn và vecni khác</option>
+<option value="87.060">87.060 - Thành phần sơn</option>
+<option value="87.060.01">87.060.01 - Thành phần sơn nói chung</option>
+<option value="87.060.10">87.060.10 - Chất mầu</option>
+<option value="87.060.20">87.060.20 - Chất kết dính</option>
+<option value="87.060.30">87.060.30 - Dung môi, chất độn và các chất phụ khác</option>
+<option value="87.060.99">87.060.99 - Các thành phần sơn khác</option>
+<option value="87.080">87.080 - Mực. Mực in</option>
+<option value="87.100">87.100 - Thiết bị sơn</option>
+<option value="91">91 - Vật liệu xây dựng công trình</option>
+<option value="91.010">91.010 - Công nghệ xây dựng</option>
+<option value="91.010.01">91.010.01 - Công nghiệp xây dựng nói chung</option>
+<option value="91.010.10">91.010.10 - Khía cạnh luật pháp</option>
+<option value="91.010.20">91.010.20 - Khía cạnh hợp đồng</option>
+<option value="91.010.30">91.010.30 - Khía cạnh kỹ thuật</option>
+<option value="91.010.99">91.010.99 - Các khía cạnh khác</option>
+<option value="91.020">91.020 - Quy hoạch vật chất. Quy hoạch đô thị</option>
+<option value="91.040">91.040 - Nhà</option>
+<option value="91.040.01">91.040.01 - Công trình nói chung</option>
+<option value="91.040.10">91.040.10 - Công trình công cộng</option>
+<option value="91.040.20">91.040.20 - Công trình cho thương mại và công nghiệp</option>
+<option value="91.040.30">91.040.30 - Nhà ở</option>
+<option value="91.040.99">91.040.99 - Các công trình khác</option>
+<option value="91.060">91.060 - Thành phần của nhà</option>
+<option value="91.060.01">91.060.01 - Các thành phần của công trình nói chung</option>
+<option value="91.060.10">91.060.10 - Tường. Vách phân cách. Mặt chính của công trình</option>
+<option value="91.060.20">91.060.20 - Mái</option>
+<option value="91.060.30">91.060.30 - Trần. Sàn. Thang gác</option>
+<option value="91.060.40">91.060.40 - Ống khói, ống thông hơi</option>
+<option value="91.060.50">91.060.50 - Cửa và cửa sổ </option>
+<option value="91.060.99">91.060.99 - Các thành phần khác của công trình</option>
+<option value="91.080">91.080 - Kết cấu nhà</option>
+<option value="91.080.01">91.080.01 - Kết cấu của công trình nói chung</option>
+<option value="91.080.10">91.080.10 - Kết cấu kim loại</option>
+<option value="91.080.13">91.080.13 - Kết cấu thép</option>
+<option value="91.080.17">91.080.17 - Kết cấu nhôm</option>
+<option value="91.080.20">91.080.20 - Kết cấu gỗ</option>
+<option value="91.080.30">91.080.30 - Phần xây nề</option>
+<option value="91.080.40">91.080.40 - Kết cấu bêtông</option>
+<option value="91.080.99">91.080.99 - Các kết cấu khác</option>
+<option value="91.090">91.090 - Kết cấu bên ngoài</option>
+<option value="91.100">91.100 - Vật liệu xây dựng</option>
+<option value="91.100.01">91.100.01 - Vật liệu xây dựng nói chung</option>
+<option value="91.100.10">91.100.10 - Xi măng. Thạch cao. Vữa</option>
+<option value="91.100.15">91.100.15 - Vật liệu khoáng sản và sản phẩm</option>
+<option value="91.100.23">91.100.23 - Vật liệu và sản phẩm khoáng và gốm</option>
+<option value="91.100.25">91.100.25 - Sản phẩm gốm xây dựng</option>
+<option value="91.100.30">91.100.30 - Bêtông và sản phẩm bêtông</option>
+<option value="91.100.40">91.100.40 - Sản phẩm xi măng gia cố sợi</option>
+<option value="91.100.50">91.100.50 - Chất kết dính. Vật liệu làm kín</option>
+<option value="91.100.60">91.100.60 - Vật liệu cách li nhiệt và âm thanh</option>
+<option value="91.100.99">91.100.99 - Các vật liệu xây dựng khác</option>
+<option value="91.120">91.120 - Bảo vệ nhà và bảo vệ bên trong nhà</option>
+<option value="91.120.01">91.120.01 - Bảo vệ và bên trong công trình nói chung</option>
+<option value="91.120.10">91.120.10 - Cách nhiệt</option>
+<option value="91.120.20">91.120.20 - Cách âm. Chống rung</option>
+<option value="91.120.25">91.120.25 - Ðộng đất và phòng sự rung</option>
+<option value="91.120.30">91.120.30 - Chống thấm</option>
+<option value="91.120.40">91.120.40 - Bảo vệ chiếu sáng</option>
+<option value="91.120.99">91.120.99 - Các tiêu chuẩn khác liên quan đến bảo vệ và bên trong nhà</option>
+<option value="91.140">91.140 - Thiết bị lắp đặt trong nhà</option>
+<option value="91.140.01">91.140.01 - Thiết bị lắp đặt trong công trình nói chung</option>
+<option value="91.140.10">91.140.10 - Hệ thống sưởi ấm trung tâm</option>
+<option value="91.140.20">91.140.20 - Thiết bị đun nóng</option>
+<option value="91.140.30">91.140.30 - Hệ thống hơi và điều hòa không khí</option>
+<option value="91.140.40">91.140.40 - Hệ thống cung cấp khí</option>
+<option value="91.140.50">91.140.50 - Hệ thống cung cấp điện</option>
+<option value="91.140.60">91.140.60 - Hệ thống cung cấp nước</option>
+<option value="91.140.65">91.140.65 - Thiết bị làm nóng nước</option>
+<option value="91.140.70">91.140.70 - Thiết bị lắp đặt vệ sinh</option>
+<option value="91.140.80">91.140.80 - Hệ thống thoát nước</option>
+<option value="91.140.90">91.140.90 - Thang máy. Cầu thang tự động</option>
+<option value="91.140.99">91.140.99 - Các thiết bị lắp đặt trong công trình khác</option>
+<option value="91.160">91.160 - Chiếu sáng</option>
+<option value="91.160.01">91.160.01 - Chiếu sáng nói chung</option>
+<option value="91.160.10">91.160.10 - Chiếu sáng bên trong</option>
+<option value="91.160.20">91.160.20 - Chiếu sáng bên ngoài</option>
+<option value="91.180">91.180 - Hoàn chỉnh bên trong</option>
+<option value="91.190">91.190 - Thiết bị phụ của nhà</option>
+<option value="91.200">91.200 - Công nghệ xây dựng</option>
+<option value="91.220">91.220 - Thiết bị xây dựng</option>
+<option value="93">93 - Xây dựng dân dụng</option>
+<option value="93.010">93.010 - Kỹ thuật xây dựng (Quy định chung)</option>
+<option value="93.020">93.020 - Công việc làm đất. Bào đất. Xây dựng móng. Công trình ngầm</option>
+<option value="93.025">93.025 - Hệ thống  nước bên ngoài</option>
+<option value="93.030">93.030 - Hệ thống nước cống bên ngoài</option>
+<option value="93.040">93.040 - Xây dựng cầu</option>
+<option value="93.060">93.060 - Xây dựng đường hầm</option>
+<option value="93.080">93.080 - Kỹ thuật làm đường</option>
+<option value="93.080.01">93.080.01 - Kỹ thuật làm đường nói chung</option>
+<option value="93.080.10">93.080.10 - Xây dựng đường</option>
+<option value="93.080.20">93.080.20 - Hè đường</option>
+<option value="93.080.30">93.080.30 - Thiết bị và máy móc lắp đặt đường</option>
+<option value="93.080.40">93.080.40 - Ðèn đường và thiết bị có liên quan</option>
+<option value="93.080.99">93.080.99 - Các tiêu chuẩn khác liên quan đến đường bộ</option>
+<option value="93.100">93.100 - Xây dựng đường sắt</option>
+<option value="93.110">93.110 - Xây dựng đường dây</option>
+<option value="93.120">93.120 - Xây dựng sân bay</option>
+<option value="93.140">93.140 - Xây dựng đường thủy và cảng</option>
+<option value="93.160">93.160 - Xây dựng thủy lợi</option>
+<option value="95">95 - Quân sự. Kỹ thuật quân sự. Vũ khí</option>
+<option value="95.020">95.020 - Kỹ thuật quân sự. Vấn đề quân sự. Vũ khí</option>
+<option value="95.040">95.040 - Kỹ thuật quân sự</option>
+<option value="95.060">95.060 - Vũ khí</option>
+<option value="97">97 - Nội trợ, Giải trí, Thể thao</option>
+<option value="97.006">97.006</option>
+<option value="97.020">97.020 - Kinh tế hộ gia đình (Quy định chung)</option>
+<option value="97.030">97.030 - Dụng cụ điện gia dụng nói chung</option>
+<option value="97.040">97.040 - Thiết bị nhà bếp</option>
+<option value="97.040.01">97.040.01 - Thiết bị nhà bếp nói chung</option>
+<option value="97.040.10">97.040.10 - Ðồ đạc nhà bếp</option>
+<option value="97.040.20">97.040.20 - Dẫy bếp, bàn để làm thức ăn, lò và các dụng cụ tương tự</option>
+<option value="97.040.30">97.040.30 - Thiết bị làm lạnh dùng trong gia đình</option>
+<option value="97.040.40">97.040.40 - Máy rửa bát đĩa</option>
+<option value="97.040.50">97.040.50 - Thiết bị nhà bếp nhỏ</option>
+<option value="97.040.60">97.040.60 - Dụng cụ nấu, đồ dao kéo và đồ dẹt</option>
+<option value="97.040.99">97.040.99 - Thiết bị nhà bếp khác</option>
+<option value="97.060">97.060 - Thiết bị giặt là</option>
+<option value="97.080">97.080 - Thiết bị lau chùi</option>
+<option value="97.100">97.100 - Thiết bị đun nóng gia dụng, thương mại và công nghiệp</option>
+<option value="97.100.01">97.100.01 - Thiết bị gia nhiệt nói chung</option>
+<option value="97.100.10">97.100.10 - Thiết bị gia nhiệt dùng điện</option>
+<option value="97.100.20">97.100.20 - Thiết bị gia nhiệt dùng gas</option>
+<option value="97.100.30">97.100.30 - Thiết bị gia nhiệt dùng nhiên liệu rắn</option>
+<option value="97.100.40">97.100.40 - Thiết bị gia nhiệt dùng nhiên liệu lỏng</option>
+<option value="97.100.99">97.100.99 - Thiết bị gia nhiệt dùng các nguồn năng lượng khác</option>
+<option value="97.120">97.120 - Ðiều khiển tự động dùng trong gia đình</option>
+<option value="97.130">97.130 - Công cụ bán hàng</option>
+<option value="97.130.01">97.130.01 - Công cụ bán hàng nói chung</option>
+<option value="97.130.10">97.130.10 - Giá hàng</option>
+<option value="97.130.20">97.130.20 - Dụng cụ làm lạnh thương nghiệp</option>
+<option value="97.130.30">97.130.30 - Xe đẩy hàng được dùng trong siêu thị</option>
+<option value="97.130.99">97.130.99 - Các công cụ bán hàng khác</option>
+<option value="97.140">97.140 - Ðồ đạc</option>
+<option value="97.145">97.145 - Thang</option>
+<option value="97.150">97.150 - Nguyên liệu không sợi dùng để phủ sàn nhà</option>
+<option value="97.160">97.160 - Vật liệu dệt dùng trong gia đình. Ðồ vải lanh</option>
+<option value="97.170">97.170 - Thiết bị chăm sóc con người</option>
+<option value="97.180">97.180 - Thiết bị gia dụng và thương mại khác</option>
+<option value="97.190">97.190 - Thiết bị dùng cho trẻ con</option>
+<option value="97.195">97.195 - Hàng thủ công và mỹ nghệ</option>
+<option value="97.200">97.200 - Thiết bị để giải trí</option>
+<option value="97.200.01">97.200.01 - Thiết bị để giảỉ trí nói chung</option>
+<option value="97.200.10">97.200.10 - Thiết bị nhà hát, sân khấu và xưởng phim</option>
+<option value="97.200.20">97.200.20 - Dụng cụ âm nhạc</option>
+<option value="97.200.30">97.200.30 - Thiết bị cắm trại và nơi cắm trại</option>
+<option value="97.200.40">97.200.40 - Sân chơi</option>
+<option value="97.200.50">97.200.50 - Đồ chơi</option>
+<option value="97.200.99">97.200.99 - Thiết bị dùng để giải trí khác</option>
+<option value="97.220">97.220 - Thiết bị và phương tiện thể thao</option>
+<option value="97.220.01">97.220.01 - Thiết bị thể thao và phương tiện thể thao nói chung</option>
+<option value="97.220.10">97.220.10 - Phương tiện thể thao</option>
+<option value="97.220.20">97.220.20 - Thiết bị thể thao mùa đông</option>
+<option value="97.220.30">97.220.30 - Thiết bị thể thao trong nhà</option>
+<option value="97.220.40">97.220.40 - Thiết bị thể thao ngoài trời và dưới nước</option>
+<option value="97.220.99">97.220.99 - Thiết bị thể thao và phương tiện thể thao khác</option>
+</select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Quyết định công bố</label>                    <p class="t-anh">Decision number</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="text" class="form-control" name="qd" value="">                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-control-static" for="">Tiêu chuẩn cốt lõi</label>                    <p class="t-anh">Core Standard</p>
+                </div>
+                <div class="col-md-8">
+                    <input type="checkbox" name="core" value="1">                </div>
+            </div>
+
+        </div>
+
+        <div class="btn-mobile col-md-12">
+            <button type="button" class="form-control btn btn-info button_search_nocap hide"><i
+                        class="glyphicon glyphicon-search" style="margin: 0 10px 0 0;"></i>Tìm kiếm
+            </button>
+
+            <button type="submit" class="form-control btn btn-info button_search" name=""><i class="glyphicon glyphicon-search" style="margin: 0 10px 0 0;"></i> Tìm kiếm</button>        </div>
+        <div class="clearfix"></div>
+
+
+                    <div class="show_page" disabled="disabled" style="margin-top: 25px">
+                <div class="col-md-4">
+                            <span class="pull-left">
+                                Số bản ghi
+                                <p class="t-anh">Number of records</p>    
+                            </span>
+
+                    <select id="sobanghi" class="form-control on-change dks-c pull-left" name="nr">
+<option value="20" selected>20</option>
+<option value="50">50</option>
+<option value="100">100</option>
+<option value="200">200</option>
+</select>                </div>
+
+                <div class="col-md-8 sapxep-mb">
+                    <select id="sapxep" class="form-control on-change pull-right   dks-c" name="so">
+<option value="" selected>--- Chọn/Select ---</option>
+<option value="sohieut">Tăng dần Số hiệu tiêu chuẩn (Ascending of standard No)</option>
+<option value="sohieug">Giảm dần Số hiệu tiêu chuẩn (Descending of standard No)</option>
+<option value="nbht">Tăng dần theo năm bàn hành (Ascending of standard year)</option>
+<option value="nbhg">Giảm dần theo năm ban hành (Descending of standard year)</option>
+</select>                    <span class="pull-right">
+                                Sắp xếp
+                                <p class="t-anh">Sort</p>
+                            </span>
+
+                </div>
+            </div>
+        
+
+        </form>        <br>
+        <div class="col-md-12" style="background: #FFF">
+
+            <p>Tìm thấy 2 kết quả.<p class="t-anh">Searching result</p></p>
+            <table class="table table-bordered" id="list_tieu_chuan">
+                                                            <tr>
+                            <td style="text-align: center; vertical-align: middle">1</td>
+
+                            <td class="tc-item">
+                                <div class="col-md-2">
+                                    <a target="_blank"
+                                       href="/tieuchuan/view?sohieu=TCVN+9143%3A2022"><img
+                                                class="img-tc"
+                                                src="https://xaydungtieuchuan.vsqi.gov.vn/acp/images/vsqi.png"/></a>
+
+                                </div>
+                                <div class="col-md-10">
+                                    <div class="col-md-10">
+
+                                        
+                                        <h4 class="text-blue">
+                                            
+                                            <a href="/tieuchuan/view?sohieu=TCVN+9143%3A2022" target="blank">TCVN 9143:2022</a>                                        </h4>
+                                                                                <p><b>Công trình thuỷ lợi - Tính toán thiết kế thấm dưới đáy và vai công trình trên nền không phải là đá</b></p>
+                                        <p>Hydraulic structures - Seepage analysis through non-rock foundation and around abutments of hydraulic structures</p>
+                                    </div>
+                                    <div class="col-md-2 text-right dat-mua">
+                                        <p style="margin: 0;">
+                                            <a style="width: 100px" class="btn btn-warning"
+                                               href="/tieuchuan/add-gio?id=44706">
+                                                Đặt mua
+                                                <span class="clearfix" style="font-size: 12px;">Order</span>
+                                            </a>
+                                        </p>
+                                        <p style="margin: 5px 0 0 0;">
+                                            <a style="width: 100px" class="btn btn-info" target="_blank"
+                                               href="/tieuchuan/view?sohieu=TCVN+9143%3A2022">
+                                                Xem chi tiết
+                                                <span class="clearfix" style="font-size: 12px;">View</span>
+                                            </a>
+                                        </p>
+                                    </div>
+
+                                </div>
+                            </td>
+                        </tr>
+                                                <tr>
+                            <td style="text-align: center; vertical-align: middle">2</td>
+
+                            <td class="tc-item">
+                                <div class="col-md-2">
+                                    <a target="_blank"
+                                       href="/tieuchuan/view?sohieu=TCVN+9143%3A2012"><img
+                                                class="img-tc"
+                                                src="https://xaydungtieuchuan.vsqi.gov.vn/acp/images/vsqi.png"/></a>
+
+                                </div>
+                                <div class="col-md-10">
+                                    <div class="col-md-10">
+
+                                        
+                                        <h4 class="text-blue">
+                                                                                            <span title="Tiêu chuẩn đã hết hiệu lực"
+                                                      class="glyphicon glyphicon-ban-circle"
+                                                      style="color: #F00; margin: 0 5px 0 0;"></span>
+                                            
+                                            <a href="/tieuchuan/view?sohieu=TCVN+9143%3A2012" target="blank">TCVN 9143:2012</a>                                        </h4>
+                                                                                <p><b>Công trình thủy lợi - Tính toán đường viền thấm dưới đất của đập trên nền không phải là đá</b></p>
+                                        <p>Hydraulic structures - Calculate permeable borders of dam on unrock foundation</p>
+                                    </div>
+                                    <div class="col-md-2 text-right dat-mua">
+                                        <p style="margin: 0;">
+                                            <a style="width: 100px" class="btn btn-warning"
+                                               href="/tieuchuan/add-gio?id=22471">
+                                                Đặt mua
+                                                <span class="clearfix" style="font-size: 12px;">Order</span>
+                                            </a>
+                                        </p>
+                                        <p style="margin: 5px 0 0 0;">
+                                            <a style="width: 100px" class="btn btn-info" target="_blank"
+                                               href="/tieuchuan/view?sohieu=TCVN+9143%3A2012">
+                                                Xem chi tiết
+                                                <span class="clearfix" style="font-size: 12px;">View</span>
+                                            </a>
+                                        </p>
+                                    </div>
+
+                                </div>
+                            </td>
+                        </tr>
+                        
+                            </table>
+                            <div class="row">
+                    <div class="col-md-9">
+                                            </div>
+                    <div class="cold-md-3" style="margin: 30px 0; text-align: right; margin-right: 15px;">
+                        <p class="text-right">Tổng số trang: <strong>1</strong>
+                    </div>
+                </div>
+                    </div>
+
+        <div id="show_loading"
+             style="position: fixed;width: 50%;top: 30%;left: 0;opacity: 0.5;z-index: 99999;display: none;">
+            <img class="img-responsive" src="/images/loading.gif" alt="" style="display:inline-block;float: right;">
+        </div>
+
+
+    </div>
+
+    <style type="text/css">
+        mark {
+            padding: .2em 0 !important;
+            color: #000 !important;
+            background: #ff0 !important;
+        }
+    </style>
+
+        </div>
+    </div>
+</div>
+
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+        <div class="tcvn col-md-5">
+            <strong>VIỆN TIÊU CHUẨN CHẤT LƯỢNG VIỆT NAM (VSQI)</strong>
+            <br><i class="glyphicon glyphicon-map-marker"></i> &nbsp; Số 8 Hoàng Quốc Việt, Phường Nghĩa Đô, TP. Hà nội
+            <br><i class="glyphicon glyphicon-phone"></i> &nbsp;Tel: <strong>(024) 37 564 269</strong> (đặt mua tiêu chuẩn)<br><strong>(024) 37 562 807 </strong>(liên hệ Chứng nhận sản phẩm)
+            <br><i class="glyphicon glyphicon-circle-arrow-right"></i> &nbsp;Fax: (024)38 361 771
+            <br><i class="glyphicon glyphicon-circle-arrow-right"></i> &nbsp;Email: tieuchuan@vsqi.gov.vn (đặt mua tiêu chuẩn) <br> info@vsqi.gov.vn (liên hệ Chứng nhận sản phẩm)
+            <br><br>
+            <i class="glyphicon glyphicon-circle-arrow-right"></i> &nbsp;MST: 0100111835
+            <br><i class="glyphicon glyphicon-circle-arrow-right"></i> &nbsp;Giấy phép thành lập số: 150/QĐ ngày 20/05/1983 của Ủy Ban Khoa học và Kỹ Thuật Nhà nước nay là Bộ Khoa học và Công nghệ
+        </div>
+        <div class="tcvn col-md-3">
+            <ul class="footer_link">
+                <li><a href="/lien-he">Liên hệ</a></li>
+                <li><a href="https://mail.vnptemail.vn/">Email nội bộ</a></li>
+                Xem file toàn văn<li><a href="http://xaydungtieuchuan.vsqi.gov.vn/">Đăng nhập nội bộ</a></li>
+                <li>
+                    <strong>LIÊN KẾT CÁC WEBSITE</strong>
+
+                    <select id="lkws" style="padding: 0 5px;margin: -5px 0 0 10px;width: 180px;">
+                        <option value="">--Chọn--</option>
+                        <option value="most.gov.vn">Bộ Khoa học và Công nghệ</option><option value="tcvn.gov.vn">Tổng cục Tiêu chuẩn Đo lường Chất lượng</option><option value="vsqi.gov.vn">Viện Tiêu chuẩn Chất lượng Việt Nam</option><option value="gs1vn.org.vn">Tổ chức Mã số mã vạch Quốc gia Việt Nam (GS1 Việt Nam)</option><option value="giaithuong.org.vn">Giải thưởng Chất lượng Quốc gia</option><option value="vietq.vn">Tạp chí Tiêu chuẩn Đo lường Chất lượng</option>                    </select>
+                    <p style="margin-top: 20px; font-weight: bold; color: #e28326"><span style="cursor: pointer" data-toggle="modal" data-target="#newsletterModal">ĐĂNG KÝ NHẬN TIN</span></p>
+                </li>
+
+
+            </ul>
+        </div>
+        <div class="tcvn col-md-4 hidden-sm hidden-xs">
+            <strong>CHÍNH SÁCH - ĐIỀU KHOẢN</strong>
+            <ul class="footer_link">
+                                <li><a href="/huong-dan-dat-hang-t235.html">HƯỚNG DẪN ĐẶT HÀNG</a></li>
+                                <li><a href="/chinh-sach-doi-tra-hoan-tien-t234.html">CHÍNH SÁCH ĐỔI TRẢ HOÀN TIỀN</a></li>
+                                <li><a href="/chinh-sach-khach-hang-si-t233.html">CHÍNH SÁCH KHÁCH HÀNG SỈ</a></li>
+                                <li><a href="/chinh-sach-bao-mat-thong-tin-t232.html">CHÍNH SÁCH BẢO MẬT THÔNG TIN</a></li>
+                                <li><a href="/cach-thuc-van-chuyen-t231.html">CÁCH THỨC VẬN CHUYỂN</a></li>
+                                            </ul>
+            <div>
+                <a target="_blank" href='http://online.gov.vn/Home/WebDetails/82863'><img style="width: 60%" alt='' title='' src='/images/thongbao-bct.png'/></a>
+            </div>
+            <div>
+                <a href="https://tinnhiemmang.vn/danh-ba-tin-nhiem/tieuchuanvsqigovvn-1709538682" title="Chung nhan Tin Nhiem Mang" target="_blank"><img src="https://tinnhiemmang.vn/handle_cert?id=tieuchuan.vsqi.gov.vn" width="150px" height="auto" alt="Chung nhan Tin Nhiem Mang"></a>
+            </div>
+        </div>
+        </div>
+        <div class="row">
+            <div class="tcvn col-md-5">
+                <p>
+                    <br>
+                    <strong>Thông tin chuyển khoản:</strong><br>
+                    Viện Tiêu chuẩn Chất lượng Việt Nam<br>
+                    <b>Số tài khoản</b>: 111000002900 Tại: Ngân hàng TMCP Công thương Việt Nam – Chi nhánh Nam Thăng Long<br>
+                    <b>Nội dung chuyển khoản</b>:   Tên công ty / cá nhân - Mua TCVN (ghi số hiệu tiêu chuẩn) / Mua gói dịch vụ (ghi tên gói dịch vụ)
+                </p>
+            </div>
+            <div class="tcvn col-md-3" style="padding-bottom:10px">
+                <img src="/images/vsqi_VNPAY_QR.jpg" style="max-width: 100%;width: 120px;">
+            </div>
+        </div>
+    </div>
+</footer>
+<a class="btn btn-primary scrollToTop"><span class="glyphicon glyphicon-chevron-up"></span></a>
+    <script type="text/javascript" charset="UTF-8" src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.js">
+    </script>
+<!-- Modal -->
+<div class="modal fade" id="newsletterModal" tabindex="-1" role="dialog" aria-labelledby="newsletterModal" aria-hidden="true" data-keyboard="false" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newsletterModal">Đăng ký nhận tin</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                
+<div class="newsletter">
+    <form id="newsletter-form" action="/site/newsletter" method="post">
+<input type="hidden" name="_csrf-frontend" value="15AJ29aEZKVNwBr9N8v9LEiJ0kaaCqwixmP4tNoVJvGk0XCY4LI3kC-SbZVfsbhaOfOfPNVv6ma2CZeZjFNunw==">    <div class="row">
+        <div class="col-md-10">
+            <div class="form-group field-newsletterform-email required">
+
+<input type="text" id="newsletterform-email" class="form-control" name="NewsletterForm[email]" placeholder="Nhập thông tin email" aria-required="true">
+
+<p class="help-block help-block-error"></p>
+</div>        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-primary newsletter-register">Đăng ký</button>        </div>
+    </div>
+    </form></div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/assets/4ff18650/jquery.js"></script>
+<script src="/assets/2976fa88/yii.js"></script>
+<script src="//cdn.jsdelivr.net/npm/jquery.marquee@1.5.0/jquery.marquee.min.js"></script>
+<script src="/assets/c2aea24c/js/bootstrap-datepicker.min.js"></script>
+<script src="/assets/c2aea24c/js/datepicker-kv.min.js"></script>
+<script src="/assets/c2aea24c/js/locales/bootstrap-datepicker.vi.min.js"></script>
+<script src="/assets/8749ed3a/js/kv-widgets.min.js"></script>
+<script src="/assets/49234691/js/field-range.min.js"></script>
+<script src="/assets/4e7286a8/js/select2.full.min.js"></script>
+<script src="/assets/c040addd/js/select2-krajee.min.js"></script>
+<script src="/assets/2976fa88/yii.activeForm.js"></script>
+<script src="/js/formatCurrency/jquery.formatCurrency.js"></script>
+<script src="/js/site.js"></script>
+<script src="/js/jquery.selectric.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/10.12.4/sweetalert2.min.js"></script>
+<script src="/assets/16c78737/js/bootstrap.js"></script>
+<script src="/assets/2976fa88/yii.validation.js"></script>
+<script>
+    
+    var context = document.querySelector("#list_tieu_chuan");
+    var instance = new Mark(context);
+    instance.mark('TCVN 9143');
+
+    var year = "2026";
+    var ics = "";
+    // $(document).ready(function() {
+    //     $('.on-change').change(function() {
+    //         $('.button_search_nocap').trigger('click');
+    //     });        
+    // });
+
+    $('select#sobanghi').on('change',function() {                
+        $('.button_search_nocap').trigger('click');
+    });
+
+    $('select#sapxep').on('change',function() {                
+        $('.button_search_nocap').trigger('click');
+    });
+
+//    $('.pagination_click').on('click',function() {        
+//        $('.page_curent').val($(this).data('page'));
+//        $('.button_search_nocap').trigger('click');
+//    });
+    
+    $('.button_search_nocap').click(function(){
+        $('#show_loading').show();
+        var form = $('#search-form')[0];
+        var formData = new FormData(form);          
+        $.ajax({
+            'url': '/site/switch-tim-kiem',     
+            type: 'post',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function (data) {                
+                console.log(data);
+            }
+        });
+    });
+    
+    // $('#search-form').keypress(function (e) {
+    //      $('.page_curent').val(1);        
+    //      var key = e.which;
+    //      if(key == 13)  // the enter key code
+    //       {           
+    //         // $('.button_search_nocap').trigger('click');
+    //         return false;  
+    //       }
+    //     });  
+        
+    $('input[name*="df"]').on('change',function(){
+        tunam = $(this).val();
+        dennam = $('#dt').val();
+        if(tunam !='' && (dennam == '' || tunam === dennam)){
+            // $('#dt').val(year);
+        }
+    });
+</script>
+<script>jQuery(function ($) {
+//$('.marquee').marquee({
+//	//duration in milliseconds of the marquee
+//	duration: 12000,
+//	//gap in pixels between the tickers
+//	gap: 50,
+//	//time in milliseconds before the marquee will start animating
+//	delayBeforeStart: 0,
+//	//'left' or 'right'
+//	direction: 'left',
+//	//true or false - should the marquee be duplicated to show an effect of continues flow
+//	duplicated: true,
+//	pauseOnHover: true
+//});
+jQuery.fn.kvDatepicker.dates={};
+jQuery&&jQuery.pjax&&(jQuery.pjax.defaults.maxCacheLength=0);
+if (jQuery('#w0').data('kvDatepicker')) { jQuery('#w0').kvDatepicker('destroy'); }
+jQuery('#w0-kvdate').kvDatepicker(kvDatepicker_648c079a);
+
+initDPRemove('w0', true);
+if (jQuery('#chisophanloai').data('select2')) { jQuery('#chisophanloai').select2('destroy'); }
+jQuery.when(jQuery('#chisophanloai').select2(select2_043fe2fb)).done(initS2Loading('chisophanloai','s2options_669e5a8e'));
+
+jQuery('#search-form').yiiActiveForm([], []);
+jQuery('#newsletter-form').yiiActiveForm([{"id":"newsletterform-email","name":"email","container":".field-newsletterform-email","input":"#newsletterform-email","error":".help-block.help-block-error","enableAjaxValidation":true,"validate":function (attribute, value, messages, deferred, $form) {yii.validation.required(value, messages, {"message":"Vui lòng nhập Email"});yii.validation.email(value, messages, {"pattern":/^[a-zA-Z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/,"fullPattern":/^[^@]*<[a-zA-Z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?>$/,"allowName":false,"message":"Email is not a valid email address.","enableIDN":false,"skipOnEmpty":1});value = yii.validation.trim($form, attribute, {"skipOnArray":true,"skipOnEmpty":false,"chars":false}, value);yii.validation.regularExpression(value, messages, {"pattern":/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,})$/i,"not":false,"message":"Email không đúng định dạng","skipOnEmpty":1});}}], []);
+    $('.newsletter-register').off('click').on('click', function(e) {        
+        var form = $('#newsletter-form'),
+            form_ = $('#newsletter-form')[0],
+            formData = new FormData(form_);          
+            $.ajax({
+                'url': '/site/newsletter',     
+                type: 'post',
+                data: formData,
+                dataType: 'json',
+                processData: false,
+                contentType: false,
+                success: function (data) {
+                    if(data.success === 'error'){
+                        $.each(data.errors, function (k, v) {
+                            form.find('.field-' + k).addClass('has-error');
+                            form.find('.field-' + k + ' .help-block').html(v[0]);
+                        });
+                    }else{
+                        form_.reset();
+                        $('#newsletterModal').modal('hide');
+                        setTimeout(function () {
+                            Swal.fire(
+                              'Thành công',
+                              'Thông tin đăng ký của bạn đã được gửi đi thành công!',
+                              'success'
+                            );
+                        }, 1000);
+                    }
+                }
+            });       
+    });
+
+});</script><div class="loading-indicator-wrapper loader-hidden"><span class="loading-indicator-helper"></span>
+    <div class="loader"></div>
+</div>
+<div class="hotlinefixed">
+    <a href="tel:+842437564269">
+    <div class="ring hotlinecall">
+        <div class="coccoc-alo-phone coccoc-alo-green coccoc-alo-show">
+            <div class="coccoc-alo-ph-circle"></div>
+            <div class="coccoc-alo-ph-circle-fill"></div>
+            <div class="coccoc-alo-ph-img-circle"></div>
+        </div>
+    </div>
+    </a>
+</div>
+<div class="chatfixed">
+    <a href="https://m.me/TCVN.Vientieuchuan" target="_blank">
+        <div class="">
+            <img src="/images/messenger.png" width="60px">
+        </div>
+    </a>
+</div>
+</body>
+<script type="text/javascript">
+    $('#lkws').change(function(){
+        url = $(this).val()
+        if(url !== ''){
+            url = 'http://'+ url
+            var win = window.open(url, '_blank');
+            win.focus();
+        }
+    })                
+
+    // scrolltop
+    $(document).ready(function(){
+        if ($(this).scrollTop() > 50) {
+            $('.scrollToTop').fadeIn();
+        } else {
+            $('.scrollToTop').fadeOut();
+        }
+        $(window).scroll(function () {
+            if ($(this).scrollTop() > 50) {
+                $('.scrollToTop').fadeIn();
+            } else {
+                $('.scrollToTop').fadeOut();
+            }
+        });
+        // scroll body to 0px on click
+        $('.scrollToTop').click(function () {
+            $('body,html').animate({
+                scrollTop: 0
+            }, 400);
+            return false;
+        });
+    });
+</script>
+
+</html>
