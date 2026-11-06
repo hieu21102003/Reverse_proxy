@@ -4,14 +4,12 @@
   "builds": [
     {
       "src": "src/vercel.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": "public/**"
+      }
     }
   ],
-  "functions": {
-    "src/vercel.ts": {
-      "includeFiles": "public/**"
-    }
-  },
   "routes": [
     {
       "src": "/(.*)",

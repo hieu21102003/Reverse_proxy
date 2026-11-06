@@ -87,7 +87,7 @@ The runtime image contains the compiled application and production dependencies 
 
 ## Vercel deployment
 
-The Vercel configuration explicitly builds one Node.js Function from `src/vercel.ts` and routes requests to it. This avoids Vercel treating `src/app.ts`—the named application factory—as a Function entrypoint. The adapter creates one Fastify app, waits for it to be ready, exports a default Node.js request handler, and does not call `listen()`. Local development continues to use `src/server.ts`.
+The Vercel configuration explicitly builds one Node.js Function from `src/vercel.ts` and routes requests to it. Vercel's automatic Fastify entrypoint detection recognizes filenames such as `src/app.ts`, `src/index.ts`, and `src/server.ts`, but not `src/vercel.ts`. Since `src/server.ts` remains the local development entrypoint and `src/app.ts` is the application factory, the project uses Vercel's explicit `@vercel/node` builder for the single `src/vercel.ts` Function instead of automatic Fastify detection. This also avoids treating `src/app.ts` as a Function entrypoint. The adapter creates one Fastify app, waits for it to be ready, exports a default Node.js request handler, and does not call `listen()`. Playground assets are included through that builder's `includeFiles` option. Local development continues to use `src/server.ts`.
 
 1. Import the repository in Vercel with the repository root as the **Root Directory**. Keep the project **Framework Preset** set to **Other** so Vercel uses the explicit `builds` configuration in `vercel.json`.
 2. Set the required environment variables in **Project Settings → Environment Variables**. Configure `VSQI_BASE_URL` as HTTPS; TLS verification stays enabled. `HOST` and `PORT` are only used by the local server.

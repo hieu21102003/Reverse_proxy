@@ -11,14 +11,17 @@ describe('Vercel deployment configuration', () => {
   it('builds and routes only the dedicated Vercel handler', async () => {
     const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8')) as {
       framework: null;
-      builds: Array<{ src: string; use: string }>;
-      functions: Record<string, { includeFiles: string }>;
+      builds: Array<{ src: string; use: string; config: { includeFiles: string } }>;
       routes: Array<{ src: string; dest: string }>;
     };
 
     expect(config.framework).toBeNull();
-    expect(config.builds).toEqual([{ src: 'src/vercel.ts', use: '@vercel/node' }]);
-    expect(config.functions['src/vercel.ts']?.includeFiles).toBe('public/**');
+    expect(config.builds).toEqual([{
+      src: 'src/vercel.ts',
+      use: '@vercel/node',
+      config: { includeFiles: 'public/**' }
+    }]);
+    expect('functions' in config).toBe(false);
     expect(config.routes).toEqual([{ src: '/(.*)', dest: '/src/vercel.ts' }]);
   });
 });
