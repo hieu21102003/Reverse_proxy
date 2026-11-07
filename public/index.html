@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f5f7fb">
     <meta name="description" content="Explore the VSQI Standards API and inspect live responses.">
     <title>VSQI API Playground</title>
-    <link rel="stylesheet" href="/playground.css?v=1">
-    <script src="/playground.js?v=1" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=2">
+    <script src="/playground.js?v=2" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -156,11 +156,56 @@
               <div class="response-pane is-active" id="detail-fields-pane">
                 <div class="empty-state detail-empty" id="detail-empty"><div class="empty-illustration"><span>◈</span><i></i><i></i><i></i></div><strong>No standard selected</strong><p>Enter a standard code above or select one from the search results.</p></div>
                 <div class="loading-skeleton detail-skeleton" id="detail-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
-                <div class="detail-groups" id="detail-groups" hidden>
-                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-blue">◈</span><div><h3>Basic Information</h3><p>Standard identity and current state</p></div></div><div class="field-grid" id="basic-fields"></div></section>
-                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-violet">§</span><div><h3>Legal Information</h3><p>Dates and issuing authority</p></div></div><div class="field-grid" id="legal-fields"></div></section>
-                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-amber">↔</span><div><h3>Replacement Information</h3><p>Related and superseded standards</p></div></div><div class="field-grid" id="replacement-fields"></div></section>
-                  <section class="detail-section"><div class="detail-section-heading"><span class="section-icon icon-green">◎</span><div><h3>Source Metadata</h3><p>Origin of this record</p></div></div><div class="field-grid" id="source-fields"></div></section>
+                <div class="standard-detail" id="detail-groups" hidden>
+                  <article class="detail-hero" id="detail-hero">
+                    <div class="detail-hero-body">
+                      <div class="detail-hero-kicker">
+                        <span class="detail-type" id="detail-type" hidden></span>
+                        <span class="detail-year" id="detail-year" hidden></span>
+                      </div>
+                      <h2 class="detail-code" id="detail-code"></h2>
+                      <p class="detail-title-vi" id="detail-title-vi"></p>
+                      <p class="detail-title-en" id="detail-title-en"></p>
+                    </div>
+                    <div class="detail-hero-status">
+                      <span class="detail-status-label">STATUS</span>
+                      <span class="badge" id="detail-status-badge" hidden></span>
+                    </div>
+                  </article>
+
+                  <section class="detail-section" id="detail-general-section" hidden>
+                    <div class="detail-section-heading"><span class="section-icon icon-blue">◈</span><div><h3>General Information</h3><p>Publication, agencies, classification, and dates</p></div></div>
+                    <div class="detail-metadata-grid" id="detail-general-grid"></div>
+                  </section>
+
+                  <section class="detail-section detail-section-scope" id="detail-scope-section" hidden>
+                    <div class="detail-section-heading"><span class="section-icon icon-violet">§</span><div><h3>Scope</h3><p>Application and subject matter</p></div></div>
+                    <div class="detail-scope-list" id="detail-scope-list"></div>
+                  </section>
+
+                  <section class="detail-section" id="detail-related-section" hidden>
+                    <div class="detail-section-heading"><span class="section-icon icon-amber">↔</span><div><h3>Related Standards</h3><p>Replacement, reference, and equivalent standards</p></div></div>
+                    <div class="detail-related-groups" id="detail-related-groups"></div>
+                  </section>
+
+                  <section class="detail-section" id="detail-history-section" hidden>
+                    <div class="detail-section-heading"><span class="section-icon icon-green">◷</span><div><h3>Revision History</h3><p>Version timeline and status changes</p></div></div>
+                    <ol class="detail-timeline" id="detail-timeline"></ol>
+                  </section>
+
+                  <section class="detail-section" id="detail-other-section" hidden>
+                    <div class="detail-section-heading"><span class="section-icon icon-slate">⋯</span><div><h3>Thông tin khác</h3><p>Additional metadata supplied by the source</p></div></div>
+                    <div class="detail-metadata-grid" id="detail-other-grid"></div>
+                  </section>
+
+                  <details class="detail-source" id="detail-source" hidden>
+                    <summary>
+                      <span class="section-icon icon-slate">↗</span>
+                      <span class="detail-source-heading"><strong>Source information</strong><small>Origin of this record</small></span>
+                      <span class="detail-source-chevron" aria-hidden="true">⌄</span>
+                    </summary>
+                    <div class="detail-source-body" id="detail-source-body"></div>
+                  </details>
                 </div>
               </div>
               <div class="response-pane raw-pane" id="detail-raw-pane" hidden><div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="detail" type="button">▢ Copy JSON</button></div><pre class="json-viewer"><code id="detail-raw-json" class="json-code"></code></pre></div>

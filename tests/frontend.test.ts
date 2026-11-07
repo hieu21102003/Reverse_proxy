@@ -18,11 +18,22 @@ describe('API playground static assets', () => {
       expect(page.body).toContain('API base URL');
       expect(page.body).toContain('issuedDate');
       expect(page.body).toContain('Raw JSON');
+      expect(page.body).toContain('General Information');
+      expect(page.body).toContain('Related Standards');
+      expect(page.body).toContain('Revision History');
+      expect(page.body).toContain('Thông tin khác');
+      expect(page.body).toContain('Source information');
+      expect(page.body).toContain('detail-metadata-grid');
+      expect(page.body).toContain('detail-source');
 
       const styles = await app.inject({ method: 'GET', url: '/playground.css' });
       expect(styles.statusCode).toBe(200);
       expect(styles.headers['content-type']).toContain('text/css');
       expect(styles.body).toContain('@media (max-width: 600px)');
+      expect(styles.body).toContain('.detail-hero');
+      expect(styles.body).toContain('.detail-metadata-grid');
+      expect(styles.body).toContain('.detail-timeline');
+      expect(styles.body).toContain('.detail-source');
 
       const script = await app.inject({ method: 'GET', url: '/playground.js' });
       expect(script.statusCode).toBe(200);
@@ -30,6 +41,9 @@ describe('API playground static assets', () => {
       expect(script.body).toContain('URLSearchParams');
       expect(script.body).toContain('Not provided by VSQI');
       expect(script.body).toContain('navigator.clipboard.writeText(result.raw)');
+      expect(script.body).toContain('buildDetailViewModel');
+      expect(script.body).toContain('__vsqiDetailModel');
+      expect(script.body).toContain('detail-status-badge');
     } finally {
       await app.close();
     }
