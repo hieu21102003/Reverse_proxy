@@ -1,6 +1,6 @@
 # VSQI Proxy API
 
-A standalone Node.js, TypeScript, and Fastify service that retrieves public standard metadata from VSQI on demand. It does not mirror the VSQI database or fetch full standards documents.
+A standalone Node.js, TypeScript, and Fastify service that retrieves public standard metadata on demand from three sources and returns one merged list: VSQI (`tieuchuan.vsqi.gov.vn`, scraped HTML) and tracuu.tcvn.vn (Vietnamese and international standards, JSON API). It does not mirror any upstream database or fetch full standards documents.
 
 The detail URL and metadata fields have been checked against a live VSQI detail page. Search and detail HTML can change; confirm VSQI's terms, request frequency, and reuse permissions before deployment.
 
@@ -10,12 +10,14 @@ The detail URL and metadata fields have been checked against a live VSQI detail 
 Fastify routes
   -> input validation and rate limiting
   -> CachedStandardProvider (bounded in-memory TTL cache + in-flight deduplication)
-  -> VsqiProvider
-  -> shared HttpClient (HTTPS, timeout, bounded retry)
-  -> Cheerio search/detail parsers
+  -> MergedStandardProvider (Promise.allSettled fan-out, partial-failure tolerant)
+       -> VsqiProvider -> shared HttpClient (HTTPS, timeout, bounded retry)
+       -> Cheerio search/detail parsers
+       -> TcvnVnProvider -> TcvnJsonClient (HTTP, TCVN origin only)
+       -> TcvnQtProvider -> TcvnJsonClient (HTTP, TCVN origin only)
 ```
 
-The `StandardProvider` interface keeps the upstream integration replaceable. The cache and rate limiter are process-local; they do not require Redis or share state between replicas.
+The `StandardProvider` interface keeps each upstream integration replaceable. The cache and rate limiter are process-local; they do not require Redis or share state between replicas.
 
 ## Requirements and installation
 
@@ -43,6 +45,11 @@ Copy-Item .env.example .env
 | `VSQI_SEARCH_PATH` | `/tim-kiem` | VSQI search path |
 | `VSQI_DETAIL_PATH` | `/tieuchuan/view` | VSQI detail path |
 | `VSQI_ENABLED` | `true` | Set to `false` to disable upstream calls |
+| `TCVN_BASE_URL` | `http://tracuu.tcvn.vn/sdomain/front-api` | TCVN JSON API base URL (HTTP-only; the host resets HTTPS). Must stay on `tracuu.tcvn.vn` |
+| `TCVN_ENABLED` | `true` | Set to `false` to disable TCVN calls |
+| `TCVN_SEARCH_LIMIT` | `20` | Records per TCVN search call (per title field / per organisation), 1–100 |
+| `TCVN_QT_MAX_ORGS` | `11` | Max organisations fanned out to for an international title query, 1–20 |
+| `TCVN_ORG_LIST_TTL_SECONDS` | `3600` | How long the fetched international organisation list is cached; `0` refetches every time |
 | `HTTP_TIMEOUT_MS` | `10000` | Upstream timeout, 100–120000 ms |
 | `HTTP_MAX_RETRIES` | `1` | Bounded retries for network failures, 0–3 |
 | `VSQI_TLS_SUPPLEMENTAL_CA` | `true` | Add the bundled VSQI intermediate only for HTTPS requests to `tieuchuan.vsqi.gov.vn:443`; set `false` after VSQI fixes its served chain |
@@ -120,9 +127,75 @@ The configuration emits only `src/vercel.ts` as a Function; `src/app.ts` remains
 
 ## API
 
+### Merged search
+
+One search call searches all three sources and returns one list. Each item
+carries a `source` field: `VSQI`, `TCVN_VN` (Vietnamese standards from
+tracuu.tcvn.vn), or `TCVN_QT` (international standards from tracuu.tcvn.vn).
+The top-level `source` is `MULTI` for merged results.
+
+- **Order:** VSQI first, then TCVN_VN, then TCVN_QT; each source's own
+  order is preserved. The same code may legitimately appear in two sources
+  and is kept once per source.
+- **Paging:** `page` applies per source (page N of each source).
+  `pagination.totalResults` is the sum of the per-source totals, and the
+  per-source breakdown is in `sources`. There is no combined `totalPages`:
+  a single page count would imply one sorted list, which a merged fan-out
+  is not. Fanned-out totals (a TCVN title search, or an international title
+  search across organisations) may double-count records listed under
+  several fields/organisations; the returned page itself is deduplicated.
+- **Partial failure:** one source failing (or disabled via
+  `VSQI_ENABLED`/`TCVN_ENABLED`) never fails the whole search. Its records
+  are absent, it is listed in `partialFailures` and in `sources` with
+  `ok: false`, and the failure is logged. Only when every source fails
+  does search return `502`.
+- **Detail:** `GET /api/v1/standards/:code` accepts TCVN, QCVN, ISO, IEC,
+  ASTM, BS, DIN, EN, JIS, UL, ANSI, AS and GB codes, with or without a
+  year. Without `?source=`, sources are tried in merge order (VSQI, then
+  TCVN_VN, then TCVN_QT) and the first hit wins; `?source=VSQI|TCVN_VN|
+  TCVN_QT` pins one source. An invalid `source` returns `400`
+  (`INVALID_SOURCE`).
+
+### TCVN (tracuu.tcvn.vn)
+
+The TCVN sources use the site's JSON front-api at
+`http://tracuu.tcvn.vn/sdomain/front-api` — **HTTP only**; the host resets
+HTTPS connections, so the client never uses HTTPS for it, and it refuses
+any URL outside that exact origin (including redirects). No login is needed
+for search/detail.
+
+- Vietnamese: `GET /vs-standard/search?...` and `GET /vs-standard/<key>`.
+- International: `GET /is-standard/search?...`,
+  `GET /is-standard/<key>`, and `GET /is-standard/is-organization/all`
+  for the organisation list.
+- Search parameters are the site's form controls. `status=A` (still
+  effective) is always sent — without it the backend returns zero results.
+  Vietnamese searches use `di` (code), or `tn` (Vietnamese title) and `ti`
+  (English title) as two parallel calls, because the backend ANDs
+  parameters (sending `tn` and `ti` together returns nothing).
+  International searches always send a real `orgCode`: a code query uses
+  the organisation from its prefix (`ISO 9001` → `ISO`, `EN ISO 9001` →
+  `EN`, `GB/T 19001` → `TCTQ/GB`); a title query fans out across the
+  enabled organisations (`orgCode=ALL` is not a wildcard — it returns
+  nothing). International title search uses `ti` only: the `tn` field on
+  international records is a non-English title, never a Vietnamese name.
+- Field mapping: `di` = code, `ti` = English title, `tn` = Vietnamese
+  title (Vietnamese records only), `dp` = publication date
+  (international), `pi` = issue date + decision (Vietnamese), `up` =
+  `A` effective / `H` expired, `fm` = pages, `ca` = ICS codes
+  (`*`-separated), `rz` = replaces, `rx` = replaced by, `ii` =
+  equivalents. TCVN `detailUrl` values point at the front-api JSON record:
+  the site has no public per-record HTML detail page in this integration.
+- **Security:** TCVN detail responses embed a staff-user object
+  (`updatedBy`) containing a password hash. The mapper whitelists only the
+  fields listed above; the raw record is never stored, logged, or returned,
+  and no file-download field (`vb`, `fileUrl`) is ever exposed. This
+  service returns metadata only — it never downloads full standard
+  documents.
+
 ### `GET /api/v1/standards/search`
 
-Searches VSQI. Query parameters:
+Searches all three sources (see "Merged search"). Query parameters:
 
 | Name | Required | Constraints | Description |
 |---|---:|---|---|
@@ -148,12 +221,30 @@ Success response:
       "status": "Active",
       "detailUrl": "https://tieuchuan.vsqi.gov.vn/tieuchuan/view?sohieu=TCVN+9143%3A2022",
       "source": "VSQI"
+    },
+    {
+      "code": "TCVN 9143:2022",
+      "name": "Công trình thủy lợi. Tính toán thấm dưới đáy và vai công trình trên nền không phải là đá",
+      "englishName": "Hydraulic structures - Seepage analysis through non-rock foundation and around abutments of hydraulic structures",
+      "year": 2022,
+      "status": "Active",
+      "detailUrl": "http://tracuu.tcvn.vn/sdomain/front-api/vs-standard/39000c60-b330-11ed-a08f-d37f51aafcd9",
+      "source": "TCVN_VN"
     }
   ],
-  "pagination": { "currentPage": 1, "totalPages": 1, "totalResults": 2 },
-  "source": "VSQI"
+  "pagination": { "currentPage": 1, "totalResults": 3 },
+  "source": "MULTI",
+  "sources": [
+    { "source": "VSQI", "ok": true, "totalResults": 2, "totalPages": 1 },
+    { "source": "TCVN_VN", "ok": true, "totalResults": 1, "totalPages": 1 },
+    { "source": "TCVN_QT", "ok": true, "totalResults": 0 }
+  ]
 }
 ```
+
+The same code can appear twice with different `source` values — that is
+one record per source, not a duplicate. `pagination` has no `totalPages`
+for merged results; use `sources[].totalPages` per source.
 
 ### `GET /api/v1/standards/:code`
 
@@ -161,6 +252,7 @@ Looks up an exact code and returns detail metadata. Encode spaces and reserved c
 
 ```sh
 curl "http://localhost:3100/api/v1/standards/TCVN%209143%3A2022"
+curl "http://localhost:3100/api/v1/standards/ISO%209001?source=TCVN_QT"
 ```
 
 Success response:
@@ -184,11 +276,11 @@ Success response:
 }
 ```
 
-Detail fields are present as `null` when not found in the detail page. The API does not infer dates or an issuing agency from other fields.
+Detail fields are present as `null` when not found in the detail page. The API does not infer dates or an issuing agency from other fields. For TCVN records, `attributes` are the whitelisted metadata fields (see "TCVN"), and `raw` carries only the record key and detail URL — never the upstream JSON.
 
 ### Errors
 
-Validation errors return `400`; missing standards return `404`; upstream failures return `502`; upstream timeouts return `504`; rate limits return `429`. Error responses do not include upstream HTML or stack traces.
+Validation errors return `400`; missing standards return `404`; upstream failures return `502`; upstream timeouts return `504`; rate limits return `429`. Error responses do not include upstream HTML, upstream JSON, or stack traces.
 
 ```json
 {
@@ -196,11 +288,16 @@ Validation errors return `400`; missing standards return `404`; upstream failure
     "code": "UPSTREAM_TIMEOUT",
     "message": "VSQI request timed out"
   },
-  "source": "VSQI"
+  "source": "MULTI"
 }
 ```
 
-Other error codes include `INVALID_QUERY`, `INVALID_CODE`, `NOT_FOUND`, `UPSTREAM_HTTP_ERROR`, `UPSTREAM_UNAVAILABLE`, `INVALID_UPSTREAM_HTML`, and `RATE_LIMIT_EXCEEDED`. Validation and rate-limit errors omit `source` because they are not upstream errors.
+Error responses carry `source: "MULTI"` for merged search/detail, or the
+requested source when `?source=` was given. Other error codes include
+`INVALID_QUERY`, `INVALID_CODE`, `INVALID_SOURCE`, `NOT_FOUND`,
+`UPSTREAM_HTTP_ERROR`, `UPSTREAM_UNAVAILABLE`, `INVALID_UPSTREAM_HTML`,
+and `RATE_LIMIT_EXCEEDED`. Validation and rate-limit errors omit `source`
+because they are not upstream errors.
 
 ### Cache and rate limits
 
@@ -235,7 +332,7 @@ console.log(standard.name, standard.status);
 npm test
 ```
 
-Tests use local fixtures and mocked providers/HTTP responses; they do not depend on VSQI availability. To manually test a running local API against the live provider:
+Tests use local fixtures and mocked providers/HTTP responses; they do not depend on VSQI or TCVN availability. TCVN fixtures are small, hand-trimmed copies of live responses — they never contain the staff-user object or any other non-whitelisted field. To manually test a running local API against the live providers:
 
 ```sh
 node scripts/live-test.mjs "TCVN 9143:2022"

@@ -1,6 +1,8 @@
 import { config } from '../config.js';
 import { VsqiError } from '../errors.js';
-import type { SearchInput, SearchResult, StandardDetail, StandardProvider } from '../types.js';
+import type { SearchInput, SearchResult, StandardDetail, StandardProvider, StandardSource } from '../types.js';
+
+const STANDARD_SOURCES: readonly string[] = ['VSQI', 'TCVN_VN', 'TCVN_QT'];
 
 interface CacheEntry<T> {
   value: T;
@@ -60,7 +62,7 @@ function normalizeCode(code: string): string {
 function isSearchResult(value: SearchResult): boolean {
   return value !== null
     && typeof value === 'object'
-    && value.source === 'VSQI'
+    && (value.source === 'VSQI' || value.source === 'MULTI')
     && Array.isArray(value.data)
     && value.pagination !== null
     && typeof value.pagination === 'object'
@@ -78,14 +80,14 @@ function isSearchResult(value: SearchResult): boolean {
       && (item.year === undefined || Number.isInteger(item.year))
       && (item.status === undefined || typeof item.status === 'string')
       && (item.detailUrl === undefined || typeof item.detailUrl === 'string')
-      && item.source === 'VSQI'
+      && STANDARD_SOURCES.includes(item.source)
     );
 }
 
 function isStandardDetail(value: StandardDetail, requestedCode: string): boolean {
   return Boolean(value)
     && typeof value === 'object'
-    && value.source === 'VSQI'
+    && STANDARD_SOURCES.includes(value.source)
     && typeof value.code === 'string'
     && normalizeCode(value.code) === normalizeCode(requestedCode)
     && (typeof value.name === 'string' || value.name === null)
@@ -118,11 +120,16 @@ export class CachedStandardProvider implements StandardProvider {
     });
   }
 
-  getDetail(code: string): Promise<StandardDetail | null> {
+  getDetail(code: string, source?: StandardSource): Promise<StandardDetail | null> {
     const normalizedCode = normalizeCode(code);
-    const key = `detail:${normalizedCode}`;
+    const key = `detail:${normalizedCode}:${source ?? 'ALL'}`;
     return this.cache.getOrLoad(key, async () => {
-      const result = await this.provider.getDetail(normalizedCode);
+      // Pass no second argument when no source was pinned, so providers
+      // that inspect their arguments (and existing callers) see the
+      // original one-argument call.
+      const result = source === undefined
+        ? await this.provider.getDetail(normalizedCode)
+        : await this.provider.getDetail(normalizedCode, source);
       if (result !== null && !isStandardDetail(result, normalizedCode)) {
         throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
       }

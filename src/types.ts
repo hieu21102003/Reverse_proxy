@@ -1,3 +1,8 @@
+/** Where a standard record came from. VSQI is the original HTML-scraped
+ *  source; TCVN_VN / TCVN_QT are the tracuu.tcvn.vn JSON API (Vietnamese /
+ *  international standards). */
+export type StandardSource = 'VSQI' | 'TCVN_VN' | 'TCVN_QT';
+
 export interface Standard {
   code: string;
   name: string;
@@ -5,7 +10,7 @@ export interface Standard {
   year?: number;
   status?: string;
   detailUrl?: string;
-  source: 'VSQI';
+  source: StandardSource;
 }
 
 export type AttributeSourceStrategy =
@@ -233,7 +238,7 @@ export interface StandardDetail {
   replacedBy: string | null;
   replaces: string | null;
   detailUrl: string;
-  source: 'VSQI';
+  source: StandardSource;
 
   // Original label/value pairs, in DOM order, duplicates preserved.
   attributes: DetailAttribute[];
@@ -245,14 +250,37 @@ export interface StandardDetail {
   raw: RawDetail;
 }
 
+export interface SearchSourceSummary {
+  /** The upstream source this summary describes. */
+  source: StandardSource;
+  /** False when this source failed (or was disabled); its records are absent. */
+  ok: boolean;
+  /** Total matching records reported by this source, if known. */
+  totalResults?: number;
+  /** Total pages at this source's page size, if known. */
+  totalPages?: number;
+  /** Machine-readable error code when ok is false; no internal details. */
+  error?: string;
+}
+
 export interface SearchResult {
   data: Standard[];
   pagination: {
     currentPage: number;
+    /** Omitted for merged results: paging is per source, see `sources`. */
     totalPages?: number;
+    /** Sum of the per-source totals of the sources that succeeded. */
     totalResults?: number;
   };
-  source: 'VSQI';
+  /** A single source's id for a single-source result, 'MULTI' for a
+   *  merged 3-source result. */
+  source: StandardSource | 'MULTI';
+  /** Per-source outcome, in merge order (VSQI, TCVN_VN, TCVN_QT). Present on
+   *  merged results; use it for per-source totals and partial failures. */
+  sources?: SearchSourceSummary[];
+  /** Sources that failed or were disabled during this search, if any. Their
+   *  records are absent from `data`; the other sources still returned. */
+  partialFailures?: StandardSource[];
 }
 
 export interface SearchInput {
@@ -262,5 +290,11 @@ export interface SearchInput {
 
 export interface StandardProvider {
   search(input: SearchInput): Promise<SearchResult>;
-  getDetail(code: string): Promise<StandardDetail | null>;
+  /**
+   * Look up one standard by code. When `source` is given, only that source
+   * is consulted; otherwise providers are tried in merge order (VSQI, then
+   * TCVN_VN, then TCVN_QT) and the first hit wins. Single-source providers
+   * may ignore `source`.
+   */
+  getDetail(code: string, source?: StandardSource): Promise<StandardDetail | null>;
 }
