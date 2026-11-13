@@ -4,16 +4,50 @@ import rateLimit from '@fastify/rate-limit';
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { config } from './config.js';
-import { VsqiProvider } from './providers/vsqi.provider.js';
+import { MergedStandardProvider } from './providers/merged.provider.js';
 import { VsqiError } from './errors.js';
 import { CachedStandardProvider } from './services/response-cache.js';
-import type { StandardProvider } from './types.js';
+import type { StandardProvider, StandardSource } from './types.js';
+
+/** Organisation words that may start a standard code. */
+const KNOWN_CODE_ORGS = new Set([
+  'TCVN', 'QCVN', 'ISO', 'IEC', 'ASTM', 'BS', 'DIN', 'EN', 'JIS', 'UL',
+  'ANSI', 'AS', 'GB'
+]);
+
+/**
+ * Normalise a user-supplied standard code, or return null when it is not a
+ * plausible code. Accepts multi-organisation codes ("EN ISO 9001",
+ * "DIN EN ISO 9001", "GB/T 19001", "ASTM E8/E8M", "JIS Q 9001"), codes
+ * with or without a year ("ISO 9001", "TCVN 9143:2022"), and the old
+ * TCVN|QCVN-only shapes. Rejects anything without a digit, without a known
+ * leading organisation, or with characters outside the code alphabet.
+ */
+export function normalizeStandardCode(raw: string): string | null {
+  const code = raw.trim().replace(/\s+/g, ' ').replace(/\s*:\s*/, ':');
+  if (code.length < 3 || code.length > 80) return null;
+  if (!/[0-9]/.test(code)) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9 ./:+\/-]*$/.test(code)) return null;
+  const firstToken = code.split(' ')[0]?.split('/')[0]?.toUpperCase();
+  if (!firstToken || !KNOWN_CODE_ORGS.has(firstToken)) return null;
+  // Upper-case the leading organisation tokens ("en iso 9001" -> "EN ISO 9001").
+  const tokens = code.split(' ');
+  let index = 0;
+  while (index < tokens.length) {
+    const token = tokens[index] as string;
+    const head = token.split('/')[0]?.toUpperCase();
+    if (!head || !KNOWN_CODE_ORGS.has(head)) break;
+    tokens[index] = token.toUpperCase();
+    index++;
+  }
+  return tokens.join(' ');
+}
 
 const standardCodeSchema = z.string()
-  .trim()
-  .transform(code => code.replace(/\s+/g, ' ').replace(/\s*:\s*/, ':'))
-  .transform(code => code.replace(/^(tcvn|qcvn)/i, prefix => prefix.toUpperCase()))
-  .pipe(z.string().regex(/^(?:TCVN|QCVN)\s+\d[\d./-]*:\d{4}(?:\/[A-Z0-9.-]+)?$/i));
+  .transform((raw) => normalizeStandardCode(raw))
+  .refine((code): code is string => code !== null, { message: 'Invalid standard code' });
+
+const sourceSchema = z.enum(['VSQI', 'TCVN_VN', 'TCVN_QT']);
 
 export async function createApp(provider?: StandardProvider) {
   const app = Fastify({
@@ -27,7 +61,9 @@ export async function createApp(provider?: StandardProvider) {
     },
     bodyLimit: 16 * 1024
   });
-  const cachedProvider = new CachedStandardProvider(provider ?? new VsqiProvider(undefined, app.log));
+  const cachedProvider = new CachedStandardProvider(
+    provider ?? new MergedStandardProvider(undefined, app.log)
+  );
 
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -118,16 +154,16 @@ export async function createApp(provider?: StandardProvider) {
       const result = await cachedProvider.search({ query: parsed.data.q, page: parsed.data.page });
       return reply.send(result);
     } catch (error) {
-      request.log.error({ err: error }, 'VSQI search failed');
+      request.log.error({ err: error }, 'Merged search failed');
       if (error instanceof VsqiError) {
         return reply.code(error.statusCode).send({
           error: { code: error.code, message: error.message },
-          source: 'VSQI'
+          source: 'MULTI'
         });
       }
       return reply.code(502).send({
-        error: { code: 'UPSTREAM_ERROR', message: 'Unable to retrieve standards from upstream source' },
-        source: 'VSQI'
+        error: { code: 'UPSTREAM_ERROR', message: 'Unable to retrieve standards from upstream sources' },
+        source: 'MULTI'
       });
     }
   });
@@ -135,31 +171,43 @@ export async function createApp(provider?: StandardProvider) {
   app.get('/api/v1/standards/:code', {
     config: { rateLimit: { max: config.RATE_LIMIT_MAX, timeWindow: config.RATE_LIMIT_WINDOW } }
   }, async (request, reply) => {
-    const parsed = z.object({ code: standardCodeSchema }).safeParse(request.params);
-    if (!parsed.success) {
+    const codeParsed = standardCodeSchema.safeParse(
+      (request.params as { code: string }).code
+    );
+    if (!codeParsed.success) {
       return reply.code(400).send({ error: { code: 'INVALID_CODE', message: 'Invalid standard code' } });
     }
+    const sourceParsed = sourceSchema.optional().safeParse(
+      (request.query as { source?: string }).source
+    );
+    if (!sourceParsed.success) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_SOURCE', message: 'source must be VSQI, TCVN_VN or TCVN_QT' }
+      });
+    }
+    const requestedSource: StandardSource | undefined = sourceParsed.data;
+    const errorSource: StandardSource | 'MULTI' = requestedSource ?? 'MULTI';
 
     try {
-      const result = await cachedProvider.getDetail(parsed.data.code);
+      const result = await cachedProvider.getDetail(codeParsed.data, requestedSource);
       if (!result) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: 'Standard not found' },
-          source: 'VSQI'
+          source: errorSource
         });
       }
       return reply.send({ data: result });
     } catch (error) {
-      request.log.error({ err: error }, 'VSQI detail lookup failed');
+      request.log.error({ err: error }, 'Detail lookup failed');
       if (error instanceof VsqiError) {
         return reply.code(error.statusCode).send({
           error: { code: error.code, message: error.message },
-          source: 'VSQI'
+          source: errorSource
         });
       }
       return reply.code(502).send({
         error: { code: 'UPSTREAM_ERROR', message: 'Unable to retrieve standard detail' },
-        source: 'VSQI'
+        source: errorSource
       });
     }
   });

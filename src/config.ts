@@ -29,7 +29,28 @@ const envSchema = z.object({
       return false;
     }
   }, { message: 'CORS_ORIGIN must be a single HTTPS origin (or localhost for development)' }),
-  VSQI_ENABLED: z.string().default('true')
+  VSQI_ENABLED: z.string().default('true'),
+  /**
+   * tracuu.tcvn.vn JSON API. HTTP-only: the host currently resets HTTPS
+   * connections, so the default is http:. Only this host is ever contacted
+   * (enforced below and again in TcvnJsonClient); never point it at another
+   * host — the client refuses any other origin.
+   */
+  TCVN_BASE_URL: z.string().url().refine(value => {
+    const url = new URL(value);
+    return url.hostname === 'tracuu.tcvn.vn'
+      && (url.protocol === 'http:' || url.protocol === 'https:')
+      && !url.username && !url.password;
+  }, {
+    message: 'TCVN_BASE_URL must be http(s)://tracuu.tcvn.vn/sdomain/front-api'
+  }).default('http://tracuu.tcvn.vn/sdomain/front-api'),
+  TCVN_ENABLED: z.string().default('true'),
+  /** Records requested per TCVN search call (per field / per organisation). */
+  TCVN_SEARCH_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
+  /** Max organisations fanned out to for a QT title query without an org prefix. */
+  TCVN_QT_MAX_ORGS: z.coerce.number().int().min(1).max(20).default(11),
+  /** How long the fetched QT organisation list is cached (seconds). */
+  TCVN_ORG_LIST_TTL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600)
 });
 
 export const config = envSchema.parse(process.env);
