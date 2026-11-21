@@ -148,38 +148,44 @@ Reverse_proxy chuyển tiếp `/api/elib/*` sang dịch vụ elib (Fastify + Pos
 
 ### Thứ tự chạy
 
-1. **PostgreSQL** chạy trước (elib cần DB để migrate/đăng nhập/upload).
-2. **Elib** (chỉ nội bộ, không mở ra Internet):
+**Mạng dùng chung `elib-net`:** khi cả hai chạy Docker, Reverse_proxy và elib nối nhau qua Docker network tên cố định `elib-net` (khai báo trong `docker-compose.yml` của Reverse_proxy — compose tự tạo khi `docker compose up`; hoặc tạo tay trước bằng `docker network create elib-net`). Compose của elib tham gia mạng này bằng external network cùng tên (chỉ service `elib`, không phải PostgreSQL). Nhờ đó Reverse_proxy gọi elib bằng `http://elib-service:3200` (tên container của elib), không qua cổng host — cách cũ `host.docker.internal:3200` không dùng được vì elib chỉ bind `127.0.0.1:3200` trên host, còn `host.docker.internal` là IP bridge gateway.
+
+1. **Reverse_proxy** chạy trước để tạo mạng `elib-net` (hoặc `docker network create elib-net`).
+2. **PostgreSQL + Elib** (chỉ nội bộ, không mở ra Internet) — khuyến nghị chạy bằng docker-compose của elib (gồm sẵn PostgreSQL):
 
 ```bash
 cd elib-service   # thư mục code elib trên server
-npm install
 cp .env.example .env
-# Điền .env: DATABASE_URL, STORAGE_ROOT (ổ đĩa lưu file, ví dụ /data/elib-storage),
-# SESSION_SECRET (chuỗi ngẫu nhiên dài), COOKIE_SECURE=true (khi chạy sau HTTPS),
-# HOST=127.0.0.1, PORT=3200
-npm run migrate
-npm run seed:categories
-npm run create-admin -- --email admin@congty.vn --password 'MatKhauManh'
-npm run build && npm start   # hoặc chạy bằng systemd tương tự Reverse_proxy
+# Điền .env: POSTGRES_PASSWORD, SESSION_SECRET (chuỗi ngẫu nhiên dài),
+# COOKIE_SECURE=true (khi chạy sau HTTPS)
+docker compose up -d --build
+docker compose exec elib npm run migrate
+docker compose exec elib npm run seed:categories
+docker compose exec elib npm run create-admin -- --email admin@congty.vn --password 'MatKhauManh'
 ```
 
-3. **Reverse_proxy** (Docker hoặc Node như trên) với `.env` có:
+   (Chạy elib bằng Node trực tiếp thay vì Docker vẫn được: `npm install` → điền `.env` với `DATABASE_URL`, `STORAGE_ROOT`, `HOST=127.0.0.1`, `PORT=3200` → `npm run migrate` → `seed:categories` → `create-admin` → `npm run build && npm start`. Khi đó Reverse_proxy cũng nên chạy Node trực tiếp, hoặc elib phải tham gia mạng `elib-net` bằng cách khác.)
+
+3. **Reverse_proxy** với `.env` có:
 
 ```bash
-ELIB_BASE_URL=http://127.0.0.1:3200
+# Docker (mạng elib-net):
+ELIB_BASE_URL=http://elib-service:3200
+# Node trực tiếp trên cùng máy với elib:
+# ELIB_BASE_URL=http://127.0.0.1:3200
 ELIB_ENABLED=true
 ELIB_TIMEOUT_MS=300000
 ```
 
-Thứ tự 2–3 đổi cho nhau cũng được: elib chưa chạy thì mục Tài liệu hiện banner lỗi 502, các chức năng tra cứu tiêu chuẩn vẫn chạy bình thường.
+Thứ tự 2–3 đổi cho nhau cũng được (miễn mạng `elib-net` đã tồn tại trước khi elib khởi động): elib chưa chạy thì mục Tài liệu hiện banner lỗi 502, các chức năng tra cứu tiêu chuẩn vẫn chạy bình thường.
 
-> **Lưu ý mạng Docker:** nếu Reverse_proxy chạy trong Docker còn elib chạy trên host, `127.0.0.1` trong container là chính container đó — không tới được elib. Khi đó đặt `ELIB_BASE_URL=http://host.docker.internal:3200` (kèm `extra_hosts: ["host.docker.internal:host-gateway"]` trong compose nếu cần) hoặc chạy Reverse_proxy bằng Node trực tiếp. Elib hiện chưa có image Docker riêng nên compose của Reverse_proxy không chứa service elib.
+> **Lưu ý mạng Docker:** nếu Reverse_proxy chạy trong Docker còn elib chạy trên host, `127.0.0.1` trong container là chính container đó — không tới được elib. Dùng mạng dùng chung `elib-net` như trên là cách sạch nhất và giữ elib không lộ ra LAN. Compose của Reverse_proxy không chứa service elib (elib có compose riêng).
 
 ### Kiểm tra elib qua proxy (bắt buộc)
 
 ```bash
-curl http://127.0.0.1:3200/health                 # elib trực tiếp (nội bộ)
+docker exec reverse-proxy wget -qO- http://elib-service:3200/health   # elib qua mạng elib-net (Docker)
+curl http://127.0.0.1:3200/health                 # elib trực tiếp trên host (nội bộ)
 curl http://127.0.0.1:3100/api/elib/auth/me        # qua Reverse_proxy: chưa đăng nhập -> 401 JSON tiếng Việt
 curl https://your-domain.example/api/elib/auth/me  # qua nginx + HTTPS: vẫn 401 là đúng (chưa đăng nhập)
 ```
