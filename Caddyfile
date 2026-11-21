@@ -1,0 +1,35 @@
+{
+	auto_https disable_redirects
+}
+
+:8443 {
+	tls /etc/caddy/certs/server.crt /etc/caddy/certs/server.key
+
+	header {
+		-Server
+	}
+
+	handle /api/elib/* {
+		request_body {
+			max_size 220MB
+		}
+		reverse_proxy reverse-proxy:3100 {
+			flush_interval -1
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 300s
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy reverse-proxy:3100 {
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 60s
+			}
+		}
+	}
+}
