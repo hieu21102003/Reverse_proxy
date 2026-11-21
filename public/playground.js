@@ -311,8 +311,48 @@
     valueText
   };
 
+  // Pure helpers for elib file cards (also exercised by tests without a DOM).
+  function fileKindFromName(filename, mimeType) {
+    const name = String(filename || '').toLowerCase();
+    const mime = String(mimeType || '').toLowerCase();
+    const ext = name.includes('.') ? name.split('.').pop() : '';
+    if (ext === 'pdf' || mime === 'application/pdf') return 'pdf';
+    if (['doc', 'docx', 'odt', 'rtf'].includes(ext) || mime.includes('word') || mime.includes('officedocument.wordprocessing')) return 'doc';
+    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext) || mime.includes('spreadsheet') || mime.includes('excel') || mime === 'text/csv') return 'xls';
+    if (['ppt', 'pptx', 'odp'].includes(ext) || mime.includes('presentation') || mime.includes('powerpoint')) return 'ppt';
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext) || mime.startsWith('image/')) return 'img';
+    if (['txt', 'md', 'log'].includes(ext) || mime === 'text/plain') return 'txt';
+    if (ext === 'dwg' || mime.includes('dwg') || mime.includes('autocad')) return 'dwg';
+    return 'other';
+  }
+
+  function needsLoginForDoc(doc, user) {
+    if (user) return false;
+    if (!doc || typeof doc !== 'object') return true;
+    return doc.visibility !== 'public' || doc.status !== 'published';
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === null || bytes === undefined || bytes === '') return '—';
+    const value = Number(bytes);
+    if (!Number.isFinite(value) || value < 0) return '—';
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  function elibDownloadPath(doc) {
+    const file = doc?.file;
+    if (!doc?.id || !file?.id) return null;
+    return `/api/elib/documents/${encodeURIComponent(doc.id)}/files/${encodeURIComponent(file.id)}/download`;
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath };
+
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
+    globalThis.__smartrailFileHelpers = fileHelpers;
     return;
   }
 
@@ -328,13 +368,13 @@
 
     const I18N = {
       vi: {
-        navHome: 'Trang chủ', navSearch: 'Tìm kiếm', navCategories: 'Danh mục', navDocuments: 'Tài liệu', navLibrary: 'Thư viện cá nhân', navDocs: 'API',
-        apiBase: 'API BASE URL', login: 'Đăng nhập', loginNote: 'Đăng nhập tại mục Tài liệu để tải lên và quản lý tài liệu của thư viện.',
+        navHome: 'Trang chủ', navSearch: 'Tìm kiếm', navCategories: 'Danh mục', navDocuments: 'Tài liệu', navLibrary: 'Thư viện cá nhân',
+        login: 'Đăng nhập', loginNote: 'Đăng nhập tại mục Tài liệu để tải lên và quản lý tài liệu của thư viện.',
         heroTitle: 'Thư viện tri thức Đường sắt & TOD', heroSubtitle: 'Khám phá, tra cứu và khai thác nguồn tài liệu chuyên ngành.',
         heroSearchLabel: 'Tìm kiếm tài liệu', heroPlaceholder: 'Tìm kiếm tài liệu, tiêu chuẩn, dự án...', search: 'Tìm kiếm',
         heroHint: 'Tìm theo tên, mã tiêu chuẩn hoặc từ khóa. Dữ liệu được tra cứu trực tiếp từ VSQI và tracuu.tcvn.vn.',
         disciplines: 'Danh mục chuyên ngành', discRail: 'Đường sắt', discWorks: 'Công trình', discElectric: 'Điện – Điện tử', discSignal: 'Tín hiệu', discDigital: 'Công nghệ số', discTod: 'TOD & Mobility',
-        recentDocs: 'Tài liệu mới cập nhật', seeAll: 'Xem tất cả', recentNote: 'Danh sách dưới đây được tải trực tiếp từ API tìm kiếm và sắp xếp theo năm giảm dần.',
+        recentDocs: 'Tài liệu mới cập nhật', seeAll: 'Xem tất cả', recentNote: 'Các file mới nhất được tải lên thư viện số (elib), mới nhất trước.',
         featuredCollections: 'Bộ sưu tập nổi bật', collectionsNote: 'Các bộ sưu tập là lối tắt tìm kiếm theo chủ đề; kết quả luôn được tra cứu trực tiếp từ API.',
         colRail: 'Tiêu chuẩn đường sắt', colRailDesc: 'Tra cứu tiêu chuẩn, quy chuẩn về đường sắt', colSafety: 'An toàn đường sắt', colSafetyDesc: 'Tài liệu về an toàn vận hành và khai thác',
         colBim: 'BIM & công nghệ số', colBimDesc: 'Mô hình thông tin và chuyển đổi số', colTod: 'TOD & quy hoạch', colTodDesc: 'Phát triển đô thị gắn với giao thông công cộng',
@@ -361,17 +401,6 @@
         libraryTitle: 'Thư viện cá nhân', librarySubtitle: 'Tài liệu đã lưu và đã xem gần đây trên trình duyệt này (lưu bằng localStorage, chưa đồng bộ theo tài khoản).',
         favorites: 'Tài liệu đã lưu', favEmptyTitle: 'Chưa có tài liệu đã lưu', favEmptyText: 'Dùng nút “Lưu vào My Library” ở trang chi tiết hoặc kết quả tìm kiếm.',
         recentlyViewed: 'Đã xem gần đây', clearRecent: 'Xóa lịch sử xem', recentEmptyTitle: 'Chưa xem tài liệu nào', recentEmptyText: 'Các tài liệu bạn mở sẽ xuất hiện tại đây.',
-        docsTitle: 'Tài liệu API', docsSubtitle: 'Các endpoint, tham số và trường dữ liệu của API tra cứu tiêu chuẩn (v1).',
-        docsSearchDesc: 'Tìm kiếm đồng thời trên VSQI, TCVN Việt Nam và TCVN Quốc tế, trả về một danh sách gộp; mỗi kết quả có trường source cho biết nguồn.',
-        queryParams: 'Tham số truy vấn', docsQ: 'Từ khóa tìm kiếm (2–120 ký tự).', docsPage: 'Số trang từ 1 đến 1000, áp dụng riêng cho từng nguồn. Mặc định 1.',
-        exampleRequest: 'YÊU CẦU MẪU', exampleResponse: 'Phản hồi mẫu',
-        docsDetailDesc: 'Lấy thông tin chi tiết của một tiêu chuẩn theo số hiệu. Chấp nhận các tổ chức TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB (có hoặc không có năm).',
-        pathParams: 'Tham số đường dẫn và truy vấn', docsCode: 'Số hiệu tiêu chuẩn, đã mã hóa URL (ví dụ TCVN 9143:2022).',
-        docsSource: 'VSQI | TCVN_VN | TCVN_QT. Nếu bỏ trống, hệ thống thử VSQI → TCVN_VN → TCVN_QT và lấy kết quả đầu tiên tìm thấy.',
-        searchFields: 'Trường kết quả tìm kiếm', fData: 'Danh sách tiêu chuẩn', fSources: 'Tổng kết quả theo từng nguồn', fPartial: 'Các nguồn bị lỗi trong lần tìm kiếm này',
-        fNames: 'Số hiệu, tên tiếng Việt, tên tiếng Anh', fMeta: 'Năm, tình trạng, liên kết nguồn gốc, nguồn dữ liệu',
-        detailFields: 'Trường chi tiết', fYearStatus: 'Năm ban hành, tình trạng', fDates: 'Ngày ban hành, ngày hiệu lực (có thể null)', fAgency: 'Cơ quan ban hành (có thể null)',
-        fReplace: 'Thay thế cho / được thay thế bởi', fAttrs: 'Thuộc tính, quan hệ và dữ liệu gốc từ nguồn', errorCodes: 'Mã phản hồi và lỗi', health: 'Trạng thái dịch vụ',
         institute: 'Viện Công nghệ Đường sắt & TOD', footerTagline: 'Smart.Rail – Kết nối tri thức, kiến tạo tương lai',
         resultsFound: 'Tìm thấy {n} kết quả', showingPage: 'Hiển thị {n} kết quả trên trang này', loading: 'Đang tải...', requestFailed: 'Yêu cầu thất bại',
         noResults: 'Không có kết quả phù hợp', noResultsHint: 'Thử từ khóa khác hoặc bỏ bớt bộ lọc.', filteredOut: 'Không có kết quả nào khớp bộ lọc hiện tại.',
@@ -381,9 +410,9 @@
         issuingAgency: 'Cơ quan ban hành', issuedDate: 'Ngày ban hành', effectiveDate: 'Ngày hiệu lực', replaces: 'Thay thế cho', replacedBy: 'Được thay thế bởi',
         notProvided: '—', enterQuery: 'Nhập ít nhất 2 ký tự để tìm kiếm', enterCode: 'Nhập số hiệu tiêu chuẩn',
         copied: 'Đã sao chép', copyFailed: 'Trình duyệt không cho phép sao chép', savedToast: 'Đã lưu vào My Library', removedToast: 'Đã xóa khỏi My Library',
-        recentLoadError: 'Không tải được tài liệu mới cập nhật từ API. Kiểm tra API BASE URL rồi thử lại.', openCategory: 'Mở danh mục', documents: 'tài liệu',
+        openCategory: 'Mở danh mục', documents: 'tài liệu',
         countUnavailable: 'Chưa tra cứu được số lượng', remove: 'Xóa', open: 'Mở', clearRecentDone: 'Đã xóa lịch sử xem',
-        networkError: 'Không kết nối được tới API. Kiểm tra API BASE URL, mạng và CORS.', yearPrefix: 'Năm ban hành',
+        networkError: 'Không kết nối được tới máy chủ. Kiểm tra kết nối mạng rồi thử lại.', yearPrefix: 'Năm ban hành',
         documentsTitle: 'Tài liệu thư viện', documentsSubtitle: 'Tải tài liệu lên thư viện số của Viện (dịch vụ elib). Chỉ tài khoản admin hoặc editor mới được tải lên.',
         elibLoginTitle: 'Đăng nhập thư viện', elibLoginNote: 'Dùng tài khoản do quản trị thư viện cấp. Hệ thống chưa có trang đăng ký.',
         elibEmail: 'Email', elibPassword: 'Mật khẩu', elibLogout: 'Đăng xuất', elibSignedInAs: 'Đã đăng nhập: {email} (quyền: {role})',
@@ -398,20 +427,29 @@
         elibUploadOk: 'Đã tải lên thành công: {title}', elibDownload: 'Tải xuống', elibNeedFileTitle: 'Vui lòng chọn file và nhập tiêu đề tài liệu.',
         elibSessionTitle: 'Vừa tải lên trong phiên này', elibSessionNote: 'Danh sách này chỉ gồm các file bạn vừa tải lên trong phiên làm việc hiện tại (không lưu lại khi tải lại trang).',
         elibSessionEmptyTitle: 'Chưa tải lên tài liệu nào trong phiên này', elibSessionEmptyText: 'Tài liệu tải lên thành công sẽ xuất hiện tại đây kèm liên kết tải xuống.',
-        elibPhase4Note: 'Duyệt và quản lý danh sách tài liệu (lọc, sửa, ẩn/xóa, phiên bản mới) sẽ có ở Giai đoạn 4. Hiện tại elib chưa có API danh sách tài liệu.',
+        elibPhase4Note: 'Tìm và tải xuống tài liệu đã tải lên tại mục Tìm kiếm → File tài liệu. Quản lý chi tiết (sửa, ẩn/xóa, phiên bản mới) sẽ có ở Giai đoạn 4.',
         elibDown: 'Không kết nối được tới dịch vụ tài liệu (elib). Các chức năng tra cứu tiêu chuẩn vẫn dùng bình thường.',
         elibDisabled: 'Tính năng tài liệu (elib) hiện đang tắt trên máy chủ này.',
         elibLoginFailed: 'Đăng nhập không thành công. Kiểm tra lại email và mật khẩu.', elibLoggedOut: 'Đã đăng xuất',
-        elibCategoriesFailed: 'Không tải được danh mục từ elib; bạn vẫn có thể tải lên mà không chọn danh mục.'
+        elibCategoriesFailed: 'Không tải được danh mục từ elib; bạn vẫn có thể tải lên mà không chọn danh mục.',
+        headerUpload: 'Tải lên', headerSignedInAs: '{email} · {role}',
+        tabStandards: 'Tiêu chuẩn', tabFiles: 'File tài liệu',
+        fileSearchLabel: 'Tìm file tài liệu', fileSearchPlaceholder: 'Tìm theo tiêu đề, mô tả, thẻ', fileSearchHint: 'Tìm theo tiêu đề, mô tả, thẻ',
+        allCategories: 'Tất cả danh mục', fileEmptyTitle: 'Chưa có file nào', fileEmptyText: 'Nhập từ khóa ở trên để tìm file tài liệu trong thư viện.',
+        fileNoResults: 'Không tìm thấy file phù hợp', fileNoResultsHint: 'Thử từ khóa khác hoặc chọn danh mục khác.',
+        fileSearchError: 'Không tải được danh sách file. Dịch vụ tài liệu (elib) có thể đang bảo trì hoặc chưa sẵn sàng.',
+        loadMore: 'Xem thêm', loginToDownload: 'Đăng nhập để tải', fileResultsFound: 'Tìm thấy {n} file',
+        uploadedOn: 'Ngày tải lên', recentEmpty: 'Chưa có tài liệu nào được tải lên.',
+        recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.'
       },
       en: {
-        navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navDocuments: 'Documents', navLibrary: 'My Library', navDocs: 'API',
-        apiBase: 'API BASE URL', login: 'Sign in', loginNote: 'Sign in under Documents to upload and manage library documents.',
+        navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navDocuments: 'Documents', navLibrary: 'My Library',
+        login: 'Sign in', loginNote: 'Sign in under Documents to upload and manage library documents.',
         heroTitle: 'Railway & TOD Knowledge Library', heroSubtitle: 'Discover, search and use specialist documents.',
         heroSearchLabel: 'Search documents', heroPlaceholder: 'Search documents, standards, projects...', search: 'Search',
         heroHint: 'Search by title, standard code or keyword. Data is queried live from VSQI and tracuu.tcvn.vn.',
         disciplines: 'Browse by discipline', discRail: 'Railway', discWorks: 'Structures', discElectric: 'Electrical – Electronics', discSignal: 'Signalling', discDigital: 'Digital Technology', discTod: 'TOD & Mobility',
-        recentDocs: 'Recently updated', seeAll: 'See all', recentNote: 'Loaded live from the search API and sorted by year, newest first.',
+        recentDocs: 'Recently updated', seeAll: 'See all', recentNote: 'The newest files uploaded to the digital library (elib), newest first.',
         featuredCollections: 'Featured collections', collectionsNote: 'Collections are topic search shortcuts; results are always queried live from the API.',
         colRail: 'Railway standards', colRailDesc: 'Standards and regulations for railways', colSafety: 'Railway safety', colSafetyDesc: 'Documents on safe operation',
         colBim: 'BIM & digital', colBimDesc: 'Information modelling and digital transformation', colTod: 'TOD & planning', colTodDesc: 'Transit-oriented development',
@@ -438,17 +476,6 @@
         libraryTitle: 'My Library', librarySubtitle: 'Saved and recently viewed documents in this browser (localStorage, not synced per account).',
         favorites: 'Saved documents', favEmptyTitle: 'No saved documents yet', favEmptyText: 'Use “Save to My Library” on the detail page or in search results.',
         recentlyViewed: 'Recently viewed', clearRecent: 'Clear viewing history', recentEmptyTitle: 'Nothing viewed yet', recentEmptyText: 'Documents you open will appear here.',
-        docsTitle: 'API reference', docsSubtitle: 'Endpoints, parameters and fields of the standards API (v1).',
-        docsSearchDesc: 'Searches VSQI, TCVN Vietnam and TCVN International at once and returns one merged list; each result carries its source.',
-        queryParams: 'Query parameters', docsQ: 'Search text (2–120 characters).', docsPage: 'Page from 1 to 1000, applied per source. Defaults to 1.',
-        exampleRequest: 'EXAMPLE REQUEST', exampleResponse: 'Example response',
-        docsDetailDesc: 'Fetch one standard by code. Accepts TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB codes, with or without a year.',
-        pathParams: 'Path and query parameters', docsCode: 'Standard code, URL-encoded (e.g. TCVN 9143:2022).',
-        docsSource: 'VSQI | TCVN_VN | TCVN_QT. When omitted, VSQI → TCVN_VN → TCVN_QT are tried in order, first hit wins.',
-        searchFields: 'Search result fields', fData: 'Array of standards', fSources: 'Per-source totals', fPartial: 'Sources that failed in this search',
-        fNames: 'Code, Vietnamese title, English title', fMeta: 'Year, status, source URL, data source',
-        detailFields: 'Detail fields', fYearStatus: 'Year, status', fDates: 'Issued / effective dates (may be null)', fAgency: 'Issuing agency (may be null)',
-        fReplace: 'Replaces / replaced by', fAttrs: 'Attributes, relations and raw source data', errorCodes: 'Response and error codes', health: 'Service health',
         institute: 'Institute of Railway Technology & TOD', footerTagline: 'Smart.Rail – Connecting knowledge, shaping the future',
         resultsFound: 'Found {n} results', showingPage: 'Showing {n} results on this page', loading: 'Loading...', requestFailed: 'Request failed',
         noResults: 'No matching results', noResultsHint: 'Try another keyword or remove filters.', filteredOut: 'No results match the current filters.',
@@ -458,9 +485,9 @@
         issuingAgency: 'Issuing agency', issuedDate: 'Issued date', effectiveDate: 'Effective date', replaces: 'Replaces', replacedBy: 'Replaced by',
         notProvided: '—', enterQuery: 'Enter at least 2 characters to search', enterCode: 'Enter a standard code',
         copied: 'Copied', copyFailed: 'Clipboard is unavailable in this browser', savedToast: 'Saved to My Library', removedToast: 'Removed from My Library',
-        recentLoadError: 'Could not load recent documents from the API. Check the API BASE URL and retry.', openCategory: 'Open category', documents: 'documents',
+        openCategory: 'Open category', documents: 'documents',
         countUnavailable: 'Count unavailable', remove: 'Remove', open: 'Open', clearRecentDone: 'Viewing history cleared',
-        networkError: 'Unable to reach the API. Check the API base URL, network and CORS.', yearPrefix: 'Year',
+        networkError: 'Unable to reach the server. Check your network connection and retry.', yearPrefix: 'Year',
         documentsTitle: 'Library documents', documentsSubtitle: 'Upload documents to the Institute digital library (elib service). Only admin or editor accounts may upload.',
         elibLoginTitle: 'Library sign-in', elibLoginNote: 'Use the account issued by the library administrator. There is no registration page yet.',
         elibEmail: 'Email', elibPassword: 'Password', elibLogout: 'Sign out', elibSignedInAs: 'Signed in: {email} (role: {role})',
@@ -475,11 +502,20 @@
         elibUploadOk: 'Uploaded successfully: {title}', elibDownload: 'Download', elibNeedFileTitle: 'Please choose a file and enter a document title.',
         elibSessionTitle: 'Uploaded in this session', elibSessionNote: 'This list only contains files you uploaded in the current session (it is not kept after a page reload).',
         elibSessionEmptyTitle: 'Nothing uploaded in this session yet', elibSessionEmptyText: 'Successfully uploaded documents will appear here with a download link.',
-        elibPhase4Note: 'Browsing and managing the document list (filter, edit, hide/delete, new versions) arrives in Phase 4. Elib has no document-list API yet.',
+        elibPhase4Note: 'Find and download uploaded documents under Search → Document files. Detailed management (edit, hide/delete, new versions) arrives in Phase 4.',
         elibDown: 'Unable to reach the document service (elib). Standards search keeps working as usual.',
         elibDisabled: 'The document feature (elib) is currently disabled on this server.',
         elibLoginFailed: 'Sign-in failed. Check your email and password.', elibLoggedOut: 'Signed out',
-        elibCategoriesFailed: 'Could not load categories from elib; you can still upload without a category.'
+        elibCategoriesFailed: 'Could not load categories from elib; you can still upload without a category.',
+        headerUpload: 'Upload', headerSignedInAs: '{email} · {role}',
+        tabStandards: 'Standards', tabFiles: 'Document files',
+        fileSearchLabel: 'Search document files', fileSearchPlaceholder: 'Search by title, description, tags', fileSearchHint: 'Search by title, description, tags',
+        allCategories: 'All categories', fileEmptyTitle: 'No files yet', fileEmptyText: 'Enter a keyword above to search document files in the library.',
+        fileNoResults: 'No matching files', fileNoResultsHint: 'Try another keyword or a different category.',
+        fileSearchError: 'Could not load the file list. The document service (elib) may be under maintenance or not ready yet.',
+        loadMore: 'Load more', loginToDownload: 'Sign in to download', fileResultsFound: 'Found {n} files',
+        uploadedOn: 'Uploaded', recentEmpty: 'No documents have been uploaded yet.',
+        recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.'
       }
     };
     const t = (key, vars = {}) => {
@@ -530,27 +566,8 @@
     const searchPage = $('#search-page');
     const detailInput = $('#detail-code-input');
     const detailSourceSelect = $('#detail-source-select');
-    const apiBaseInput = $('#api-base-url');
-    const cleanBase = value => String(value || '').trim().replace(/\/+$/, '');
-    let savedBase = '';
-    try { savedBase = localStorage.getItem('vsqi-api-base-url') || ''; } catch { savedBase = ''; }
-    apiBaseInput.value = cleanBase(new URLSearchParams(location.search).get('apiBaseUrl') || savedBase || location.origin);
-
-    function getBaseUrl() {
-      const value = cleanBase(apiBaseInput.value || location.origin);
-      try {
-        const url = new URL(value);
-        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported protocol');
-        if (url.username || url.password || url.search || url.hash) throw new Error('The API base URL cannot contain credentials, a query, or a fragment');
-        if (location.protocol === 'https:' && url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname)) {
-          throw new Error('An HTTPS page cannot call an insecure HTTP API');
-        }
-        return cleanBase(url.href);
-      } catch (error) {
-        throw new Error(['An HTTPS page cannot call an insecure HTTP API', 'The API base URL cannot contain credentials, a query, or a fragment'].includes(error.message)
-          ? error.message : 'Enter a valid API base URL, such as https://api.example.com');
-      }
-    }
+    // All API calls are same-origin relative paths (the UI is always served
+    // by the same Fastify app that hosts /api/* and the /api/elib proxy).
 
     function showToast(message) {
       const toast = $('#toast');
@@ -584,10 +601,7 @@
     async function fetchApi(path) {
       const started = performance.now();
       const timestamp = new Date().toLocaleString();
-      let url;
-      try { url = `${getBaseUrl()}${path}`; } catch (error) {
-        return { raw: '', payload: undefined, duration: 0, timestamp, status: null, statusText: '', ok: false, errorMessage: error.message, url: path };
-      }
+      const url = path;
       try {
         const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
         const raw = await response.text();
@@ -672,43 +686,80 @@
       searchInput.value = query;
       searchPage.value = String(page);
       showView('search', false);
+      showSearchTab('standards');
       void searchStandards();
     }
 
-    // ---- Home: recently updated (live) ----
+    // ---- Home: recently updated (elib files, newest first) ----
+    function formatDocDate(value) {
+      if (!value) return DASH;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      return date.toLocaleDateString(currentLang === 'en' ? 'en-GB' : 'vi-VN');
+    }
+
+    function fileBadge(kind) {
+      const badge = document.createElement('span');
+      badge.className = `file-badge file-badge-${kind}`;
+      badge.textContent = { pdf: 'PDF', doc: 'DOC', xls: 'XLS', ppt: 'PPT', img: 'IMG', txt: 'TXT', dwg: 'DWG', other: 'FILE' }[kind] || 'FILE';
+      badge.setAttribute('aria-hidden', 'true');
+      return badge;
+    }
+
+    function appendDownloadAffordance(container, doc) {
+      const path = elibDownloadPath(doc);
+      if (!path) return;
+      if (needsLoginForDoc(doc, elibUser)) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button-secondary button-small';
+        btn.textContent = t('loginToDownload');
+        btn.addEventListener('click', () => showView('documents'));
+        container.append(btn);
+        return;
+      }
+      const link = document.createElement('a');
+      link.className = 'button button-secondary button-small';
+      link.href = path;
+      link.textContent = t('elibDownload');
+      container.append(link);
+    }
+
     async function loadHomeRecent() {
       const list = $('#home-recent-list');
       const state = $('#home-recent-state');
+      if (!list || !state) return;
       state.hidden = false;
       state.textContent = t('loading');
-      const result = await fetchApi(`/api/v1/standards/search?${new URLSearchParams({ q: 'đường sắt', page: '1' })}`);
       list.replaceChildren();
-      if (!result.ok || !Array.isArray(result.payload?.data)) {
-        state.textContent = t('recentLoadError');
+      const result = await elibFetchJson('/documents?limit=6&offset=0');
+      if (result.status !== 200 || !result.payload || !Array.isArray(result.payload.data)) {
+        state.hidden = false;
+        state.textContent = t('recentError');
+        return;
+      }
+      const records = result.payload.data;
+      if (records.length === 0) {
+        state.hidden = false;
+        state.textContent = t('recentEmpty');
         return;
       }
       state.hidden = true;
-      const records = [...result.payload.data].sort((a, b) => (b.year || 0) - (a.year || 0)).slice(0, 6);
-      if (records.length === 0) { state.hidden = false; state.textContent = t('noResults'); return; }
-      for (const record of records) {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'recent-row';
+      for (const doc of records) {
+        const row = document.createElement('div');
+        row.className = 'recent-row recent-file-row';
+        const kind = fileKindFromName(doc.file?.original_filename, doc.file?.mime_type);
         const main = document.createElement('span');
         main.className = 'recent-main';
         const strong = document.createElement('strong');
-        strong.textContent = dash(record.code);
+        strong.textContent = dash(doc.title);
         const small = document.createElement('small');
-        small.textContent = [record.name, record.englishName].filter(Boolean).join(' · ');
+        small.textContent = [doc.file?.original_filename, formatDocDate(doc.created_at), doc.file ? formatBytes(doc.file.file_size) : ''].filter(Boolean).join(' · ');
         main.append(strong, small);
-        const chips = document.createElement('span');
-        chips.className = 'meta-chips';
-        if (record.year) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = String(record.year); chips.append(c); }
-        if (record.source) { const c = document.createElement('span'); c.className = 'chip chip-source'; c.textContent = record.source; chips.append(c); }
-        const arrow = document.createElement('span');
-        arrow.textContent = '›';
-        row.append(main, chips, arrow);
-        row.addEventListener('click', () => openDetail(record.code, record.source));
+        const actions = document.createElement('span');
+        actions.className = 'recent-file-actions';
+        appendDownloadAffordance(actions, doc);
+        row.append(fileBadge(kind), main, actions);
         list.append(row);
       }
     }
@@ -1326,6 +1377,7 @@
       $$('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
       $$('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
       if (lastSearchPayload) applyFiltersAndRender();
+      renderHeaderAuth();
       renderCategories();
       void loadHomeRecent();
       if (currentDetail && memory.detail) renderDetailResult(memory.detail);
@@ -1340,23 +1392,24 @@
     let elibPendingUpload = null;
 
     function elibUrl(path) {
-      return `${getBaseUrl()}/api/elib${path}`;
+      return `/api/elib${path}`;
     }
 
     async function elibFetchJson(path, options = {}) {
-      let url;
-      try { url = elibUrl(path); } catch (error) {
-        return { status: null, payload: undefined, errorMessage: error.message };
-      }
+      const url = elibUrl(path);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
       try {
-        const response = await fetch(url, { credentials: 'same-origin', ...options });
+        const response = await fetch(url, { credentials: 'same-origin', signal: controller.signal, ...options });
         const raw = await response.text();
         let payload;
         try { payload = JSON.parse(raw); } catch { payload = undefined; }
         const errorMessage = !response.ok ? (payload?.error?.message || `HTTP ${response.status}`) : '';
         return { status: response.status, payload, errorMessage, errorCode: payload?.error?.code || '' };
       } catch (error) {
-        return { status: null, payload: undefined, errorMessage: error instanceof TypeError ? t('networkError') : error.message, errorCode: '' };
+        return { status: null, payload: undefined, errorMessage: error instanceof TypeError || error?.name === 'AbortError' ? t('networkError') : error.message, errorCode: '' };
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -1373,12 +1426,49 @@
       $('#elib-user-text').textContent = t('elibSignedInAs', { email: elibUser.email || '', role: elibUser.role || '' });
     }
 
+    // Single source of truth for elib auth, shared by the header menu and
+    // the Tài liệu view: 'ok' | 'anon' | 'disabled' | 'down'.
+    let elibAuthStatus = 'anon';
+
+    function renderHeaderAuth() {
+      const loginBtn = $('#header-login-btn');
+      const logoutBtn = $('#header-logout-btn');
+      const uploadBtn = $('#header-upload-btn');
+      const userInfo = $('#header-user-info');
+      if (!loginBtn) return;
+      const loggedIn = elibAuthStatus === 'ok' && Boolean(elibUser);
+      loginBtn.hidden = loggedIn;
+      logoutBtn.hidden = !loggedIn;
+      userInfo.hidden = !loggedIn;
+      if (loggedIn) userInfo.textContent = t('headerSignedInAs', { email: elibUser.email || '', role: elibUser.role || '' });
+      uploadBtn.hidden = !(loggedIn && (elibUser.role === 'editor' || elibUser.role === 'admin'));
+      // When elib is down/disabled, keep Đăng nhập visible (it opens the
+      // Tài liệu view, which explains the state) and hide Tải lên.
+      loginBtn.disabled = false;
+    }
+
+    async function refreshElibAuth() {
+      const result = await elibFetchJson('/auth/me');
+      if (result.status === 200 && result.payload?.user) {
+        elibUser = result.payload.user;
+        elibAuthStatus = 'ok';
+      } else if (result.status === 401) {
+        elibUser = null;
+        elibAuthStatus = 'anon';
+      } else if (result.status === 503 || result.errorCode === 'ELIB_DISABLED') {
+        elibUser = null;
+        elibAuthStatus = 'disabled';
+      } else {
+        elibUser = null;
+        elibAuthStatus = 'down';
+      }
+      renderHeaderAuth();
+      renderElibUserBar();
+      return { status: elibAuthStatus, result };
+    }
+
     function formatBytes(bytes) {
-      const value = Number(bytes);
-      if (!Number.isFinite(value)) return DASH;
-      if (value < 1024) return `${value} B`;
-      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+      return formatFileSize(bytes);
     }
 
     function renderElibSession() {
@@ -1397,8 +1487,7 @@
         main.append(strong, small);
         row.append(main);
         if (item.documentId && item.fileId) {
-          let href = '#';
-          try { href = elibUrl(`/documents/${encodeURIComponent(item.documentId)}/files/${encodeURIComponent(item.fileId)}/download`); } catch { href = '#'; }
+          const href = elibUrl(`/documents/${encodeURIComponent(item.documentId)}/files/${encodeURIComponent(item.fileId)}/download`);
           const link = document.createElement('a');
           link.className = 'button button-secondary button-small';
           link.href = href;
@@ -1445,10 +1534,9 @@
       $('#elib-no-permission').hidden = true;
       $('#elib-upload-form').hidden = true;
       renderElibSession();
-      const result = await elibFetchJson('/auth/me');
+      const { status, result } = await refreshElibAuth();
       $('#elib-loading').hidden = true;
-      if (result.status === 200 && result.payload?.user) {
-        elibUser = result.payload.user;
+      if (status === 'ok' && elibUser) {
         renderElibUserBar();
         if (elibUser.role === 'admin' || elibUser.role === 'editor') {
           $('#elib-upload-form').hidden = false;
@@ -1458,12 +1546,11 @@
         }
         return;
       }
-      elibUser = null;
-      if (result.status === 401) {
+      if (status === 'anon') {
         $('#elib-login-box').hidden = false;
         return;
       }
-      if (result.status === 503 || result.errorCode === 'ELIB_DISABLED') {
+      if (status === 'disabled') {
         setElibBanner(t('elibDisabled'));
         return;
       }
@@ -1504,15 +1591,7 @@
       submit.disabled = true;
       submit.classList.add('is-loading');
 
-      let url;
-      try { url = elibUrl('/documents'); } catch (error) {
-        progress.hidden = true;
-        submit.disabled = false;
-        submit.classList.remove('is-loading');
-        errorBox.hidden = false;
-        errorBox.textContent = error.message;
-        return;
-      }
+      const url = elibUrl('/documents');
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
@@ -1568,6 +1647,149 @@
         errorBox.textContent = t('networkError');
       });
       xhr.send(buildElibFormData(force));
+    }
+
+    // ---- Search tabs: standards | files ----
+    let activeSearchTab = 'standards';
+
+    function showSearchTab(tab) {
+      activeSearchTab = tab === 'files' ? 'files' : 'standards';
+      $('#search-tab-standards').hidden = activeSearchTab !== 'standards';
+      $('#search-tab-files').hidden = activeSearchTab !== 'files';
+      const stdBtn = $('#search-tab-btn-standards');
+      const fileBtn = $('#search-tab-btn-files');
+      stdBtn.classList.toggle('is-active', activeSearchTab === 'standards');
+      fileBtn.classList.toggle('is-active', activeSearchTab === 'files');
+      stdBtn.setAttribute('aria-selected', String(activeSearchTab === 'standards'));
+      fileBtn.setAttribute('aria-selected', String(activeSearchTab === 'files'));
+      if (activeSearchTab === 'files') void loadFileCategories();
+    }
+
+    function goFileSearch(query = '') {
+      showView('search', false);
+      showSearchTab('files');
+      $('#file-search-query').value = query;
+      void searchFiles(true);
+    }
+
+    // ---- File search (elib GET /api/elib/documents) ----
+    const FILE_PAGE_SIZE = 20;
+    const fileSearchState = { offset: 0, total: 0, loading: false, loaded: 0 };
+    let fileCategoriesLoaded = false;
+
+    async function loadFileCategories() {
+      if (fileCategoriesLoaded) return;
+      const select = $('#file-category-select');
+      if (!select) return;
+      const result = await elibFetchJson('/categories');
+      if (result.status !== 200 || !result.payload) return;
+      fileCategoriesLoaded = true;
+      const flat = Array.isArray(result.payload.data) && result.payload.data.length > 0
+        ? flattenElibCategories(result.payload.data)
+        : (result.payload.flat || []).map(row => ({ id: row.id, name: row.name, depth: 0 }));
+      for (const item of flat) {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = `${'\u00A0\u00A0'.repeat(item.depth)}${item.name}`;
+        select.append(option);
+      }
+    }
+
+    function renderFileCard(doc) {
+      const card = document.createElement('article');
+      card.className = 'file-card';
+      const kind = fileKindFromName(doc.file?.original_filename, doc.file?.mime_type);
+      const body = document.createElement('div');
+      body.className = 'file-card-body';
+      const title = document.createElement('p');
+      title.className = 'file-card-title';
+      title.textContent = dash(doc.title);
+      body.append(title);
+      if (doc.file?.original_filename) {
+        const name = document.createElement('p');
+        name.className = 'file-card-name';
+        name.textContent = doc.file.original_filename;
+        body.append(name);
+      }
+      if (doc.description) {
+        const desc = document.createElement('p');
+        desc.className = 'file-card-desc';
+        desc.textContent = doc.description;
+        body.append(desc);
+      }
+      const chips = document.createElement('div');
+      chips.className = 'meta-chips';
+      if (doc.file) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = formatBytes(doc.file.file_size); chips.append(c); }
+      const dateChip = document.createElement('span');
+      dateChip.className = 'chip';
+      dateChip.textContent = `${t('uploadedOn')}: ${formatDocDate(doc.created_at)}`;
+      chips.append(dateChip);
+      if (doc.category?.name) { const c = document.createElement('span'); c.className = 'chip chip-source'; c.textContent = doc.category.name; chips.append(c); }
+      body.append(chips);
+      if (Array.isArray(doc.tags) && doc.tags.length > 0) {
+        const tags = document.createElement('div');
+        tags.className = 'file-tags';
+        for (const tag of doc.tags) {
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          chip.textContent = tag;
+          tags.append(chip);
+        }
+        body.append(tags);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'file-card-actions';
+      appendDownloadAffordance(actions, doc);
+      card.append(fileBadge(kind), body, actions);
+      return card;
+    }
+
+    async function searchFiles(reset) {
+      if (fileSearchState.loading) return;
+      const query = $('#file-search-query').value.trim();
+      const categoryId = $('#file-category-select').value;
+      if (reset) {
+        fileSearchState.offset = 0;
+        fileSearchState.loaded = 0;
+        $('#file-results').replaceChildren();
+      }
+      fileSearchState.loading = true;
+      $('#file-search-error').hidden = true;
+      $('#file-search-skeleton').hidden = false;
+      $('#file-load-more-wrap').hidden = true;
+      const params = new URLSearchParams({ limit: String(FILE_PAGE_SIZE), offset: String(fileSearchState.offset) });
+      if (query) params.set('q', query);
+      if (categoryId) params.set('category_id', categoryId);
+      const result = await elibFetchJson(`/documents?${params}`);
+      fileSearchState.loading = false;
+      $('#file-search-skeleton').hidden = true;
+      const empty = $('#file-search-empty');
+      const countEl = $('#file-result-count');
+      if (result.status !== 200 || !result.payload || !Array.isArray(result.payload.data)) {
+        const errorBox = $('#file-search-error');
+        errorBox.hidden = false;
+        errorBox.textContent = t('fileSearchError');
+        countEl.textContent = '';
+        empty.hidden = fileSearchState.loaded !== 0;
+        if (fileSearchState.loaded === 0) {
+          empty.querySelector('strong').textContent = t('fileSearchError');
+          empty.querySelector('p').textContent = t('fileNoResultsHint');
+        }
+        return;
+      }
+      const data = result.payload.data;
+      fileSearchState.total = Number.isInteger(result.payload.total) ? result.payload.total : data.length;
+      fileSearchState.offset += data.length;
+      fileSearchState.loaded += data.length;
+      const container = $('#file-results');
+      for (const doc of data) container.append(renderFileCard(doc));
+      countEl.textContent = t('fileResultsFound', { n: fileSearchState.total.toLocaleString() });
+      empty.hidden = fileSearchState.loaded !== 0;
+      if (fileSearchState.loaded === 0) {
+        empty.querySelector('strong').textContent = t('fileNoResults');
+        empty.querySelector('p').textContent = t('fileNoResultsHint');
+      }
+      $('#file-load-more-wrap').hidden = !(fileSearchState.loaded < fileSearchState.total);
     }
 
     // ---- Events ----
@@ -1641,18 +1863,23 @@
     $('#preview-close').addEventListener('click', () => { $('#preview-modal').hidden = true; });
     $('#preview-modal').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.hidden = true; });
     $('#library-clear-recent').addEventListener('click', () => { writeList('smartrail-recent', []); renderLibrary(); showToast(t('clearRecentDone')); });
-    apiBaseInput.addEventListener('change', () => {
-      try {
-        const base = getBaseUrl();
-        apiBaseInput.value = base;
-        try { localStorage.setItem('vsqi-api-base-url', base); } catch { /* session only */ }
-        showToast(t('copied'));
-        void loadHomeRecent();
-        void loadCategoryCounts();
-      } catch (error) { showToast(error.message); }
-    });
-    apiBaseInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); apiBaseInput.dispatchEvent(new Event('change')); } });
     $('#header-login-btn').addEventListener('click', () => showView('documents'));
+    $('#header-upload-btn').addEventListener('click', () => showView('documents'));
+    $('#header-logout-btn').addEventListener('click', async () => {
+      await elibFetchJson('/auth/logout', { method: 'POST' });
+      elibUser = null;
+      elibAuthStatus = 'anon';
+      renderHeaderAuth();
+      showToast(t('elibLoggedOut'));
+      if (!$('#view-documents').hidden) void loadDocumentsView();
+      void loadHomeRecent();
+    });
+    $('#search-tab-btn-standards').addEventListener('click', () => showSearchTab('standards'));
+    $('#search-tab-btn-files').addEventListener('click', () => { showSearchTab('files'); if (fileSearchState.loaded === 0 && !fileSearchState.loading) void searchFiles(true); });
+    $('#file-search-form').addEventListener('submit', event => { event.preventDefault(); void searchFiles(true); });
+    $('#file-category-select').addEventListener('change', () => void searchFiles(true));
+    $('#file-load-more').addEventListener('click', () => void searchFiles(false));
+    $$('[data-goto-file-search]').forEach(button => button.addEventListener('click', () => goFileSearch('')));
     $('#elib-login-form').addEventListener('submit', async event => {
       event.preventDefault();
       const errorBox = $('#elib-login-error');
@@ -1668,6 +1895,7 @@
       if (result.status === 200) {
         $('#elib-password').value = '';
         void loadDocumentsView();
+        void loadHomeRecent();
         return;
       }
       errorBox.hidden = false;
@@ -1676,8 +1904,11 @@
     $('#elib-logout-btn').addEventListener('click', async () => {
       await elibFetchJson('/auth/logout', { method: 'POST' });
       elibUser = null;
+      elibAuthStatus = 'anon';
+      renderHeaderAuth();
       showToast(t('elibLoggedOut'));
       void loadDocumentsView();
+      void loadHomeRecent();
     });
     $('#elib-upload-form').addEventListener('submit', event => {
       event.preventDefault();
@@ -1698,6 +1929,7 @@
 
     // ---- Init from URL ----
     applyLanguage(currentLang);
+    void refreshElibAuth();
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
     if (view === 'detail' && params.get('code')) {
@@ -1708,7 +1940,7 @@
       searchPage.value = params.get('page') || '1';
       showView('search', false);
       void searchStandards();
-    } else if (['categories', 'documents', 'library', 'docs', 'search', 'detail'].includes(view)) {
+    } else if (['categories', 'documents', 'library', 'search', 'detail'].includes(view)) {
       showView(view, false);
     } else {
       showView('home', false);
