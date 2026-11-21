@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=4">
-    <script src="/playground.js?v=4" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=5">
+    <script src="/playground.js?v=5" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -28,15 +28,18 @@
           <button class="nav-item" data-view="categories" type="button"><span data-i18n="navCategories">Danh mục</span></button>
           <button class="nav-item" data-view="documents" type="button"><span data-i18n="navDocuments">Tài liệu</span></button>
           <button class="nav-item" data-view="library" type="button"><span data-i18n="navLibrary">Thư viện cá nhân</span></button>
-          <button class="nav-item" data-view="docs" type="button"><span data-i18n="navDocs">API</span></button>
         </nav>
         <div class="header-tools">
-          <label class="base-url-control"><span data-i18n="apiBase">API BASE URL</span><input id="api-base-url" type="url" aria-label="API base URL" placeholder="http://localhost:3100"></label>
           <div class="lang-toggle" role="group" aria-label="Ngôn ngữ / Language">
             <button type="button" id="lang-vi" class="lang-btn is-active">VI</button>
             <button type="button" id="lang-en" class="lang-btn">EN</button>
           </div>
-          <button class="login-btn" id="header-login-btn" type="button"><span data-i18n="login">Đăng nhập</span></button>
+          <div class="header-auth" id="header-auth">
+            <button class="header-upload-btn" id="header-upload-btn" type="button" hidden><span data-i18n="headerUpload">Tải lên</span></button>
+            <span class="header-user" id="header-user-info" hidden></span>
+            <button class="login-btn" id="header-login-btn" type="button"><span data-i18n="login">Đăng nhập</span></button>
+            <button class="logout-btn" id="header-logout-btn" type="button" hidden><span data-i18n="elibLogout">Đăng xuất</span></button>
+          </div>
         </div>
       </div>
       <p class="login-note" data-i18n="loginNote">Đăng nhập tại mục Tài liệu để tải lên và quản lý tài liệu của thư viện.</p>
@@ -81,7 +84,7 @@
           <button class="discipline-card" type="button" data-discipline-query="TOD"><span class="discipline-icon" aria-hidden="true">🏙</span><span data-i18n="discTod">TOD &amp; Mobility</span></button>
         </div>
 
-        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="recentDocs">Tài liệu mới cập nhật</h2><button class="see-all" type="button" data-goto-search="đường sắt"><span data-i18n="seeAll">Xem tất cả</span> →</button></div>
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="recentDocs">Tài liệu mới cập nhật</h2><button class="see-all" type="button" data-goto-file-search="1"><span data-i18n="seeAll">Xem tất cả</span> →</button></div>
         <p class="section-note" data-i18n="recentNote">Danh sách dưới đây được tải trực tiếp từ API tìm kiếm và sắp xếp theo năm giảm dần.</p>
         <div class="home-recent" id="home-recent-list"></div>
         <div class="state-box" id="home-recent-state" hidden></div>
@@ -108,6 +111,12 @@
           <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
         </div>
 
+        <div class="search-tabs" role="tablist" aria-label="Loại tìm kiếm">
+          <button class="search-tab is-active" id="search-tab-btn-standards" type="button" role="tab" aria-selected="true"><span data-i18n="tabStandards">Tiêu chuẩn</span></button>
+          <button class="search-tab" id="search-tab-btn-files" type="button" role="tab" aria-selected="false"><span data-i18n="tabFiles">File tài liệu</span></button>
+        </div>
+
+        <div id="search-tab-standards">
         <form id="search-form" class="search-card" role="search">
           <div class="search-row">
             <label class="sr-only" for="search-query" data-i18n="keyword">Từ khóa</label>
@@ -188,6 +197,25 @@
               </div>
             </div>
           </div>
+        </div>
+        </div>
+
+        <div id="search-tab-files" hidden>
+          <form id="file-search-form" class="search-card" role="search">
+            <div class="search-row">
+              <label class="sr-only" for="file-search-query" data-i18n="fileSearchLabel">Tìm file tài liệu</label>
+              <span class="input-shell"><span class="input-search-icon" aria-hidden="true">⌕</span><input id="file-search-query" type="search" maxlength="120" data-i18n-placeholder="fileSearchPlaceholder" placeholder="Tìm theo tiêu đề, mô tả, thẻ" autocomplete="off"></span>
+              <label class="field file-category-field"><span class="sr-only" data-i18n="elibCategory">Danh mục</span><select id="file-category-select"><option value="" data-i18n="allCategories">Tất cả danh mục</option></select></label>
+              <button class="button button-terracotta" id="file-search-submit" type="submit"><span data-i18n="search">Tìm kiếm</span></button>
+            </div>
+            <p class="file-search-hint" data-i18n="fileSearchHint">Tìm theo tiêu đề, mô tả, thẻ</p>
+          </form>
+          <p class="result-count file-result-count" id="file-result-count"></p>
+          <div class="error-banner" id="file-search-error" hidden></div>
+          <div class="loading-skeleton" id="file-search-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+          <div class="empty-state" id="file-search-empty"><strong data-i18n="fileEmptyTitle">Chưa có file nào</strong><p data-i18n="fileEmptyText">Nhập từ khóa ở trên để tìm file tài liệu trong thư viện.</p></div>
+          <div class="file-results" id="file-results"></div>
+          <div class="file-load-more" id="file-load-more-wrap" hidden><button class="button button-secondary" id="file-load-more" type="button"><span data-i18n="loadMore">Xem thêm</span></button></div>
         </div>
       </section>
 
@@ -382,76 +410,6 @@
         <div class="empty-state" id="library-recent-empty"><strong data-i18n="recentEmptyTitle">Chưa xem tài liệu nào</strong><p data-i18n="recentEmptyText">Các tài liệu bạn mở sẽ xuất hiện tại đây.</p></div>
       </section>
 
-      <!-- API reference -->
-      <section class="view-panel" id="view-docs" aria-labelledby="docs-title" hidden>
-        <h1 id="docs-title" data-i18n="docsTitle">Tài liệu API</h1>
-        <p class="page-subtitle" data-i18n="docsSubtitle">Các endpoint, tham số và trường dữ liệu của API tra cứu tiêu chuẩn (v1).</p>
-        <div class="docs-grid">
-          <article class="docs-card docs-wide">
-            <div class="docs-card-heading"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
-            <p data-i18n="docsSearchDesc">Tìm kiếm đồng thời trên VSQI, TCVN Việt Nam và TCVN Quốc tế, trả về một danh sách gộp; mỗi kết quả có trường source cho biết nguồn.</p>
-            <h3 data-i18n="queryParams">Tham số truy vấn</h3>
-            <div class="parameter-row"><code>q</code><span>string · required</span><span data-i18n="docsQ">Từ khóa tìm kiếm (2–120 ký tự).</span></div>
-            <div class="parameter-row"><code>page</code><span>integer · optional</span><span data-i18n="docsPage">Số trang từ 1 đến 1000, áp dụng riêng cho từng nguồn. Mặc định 1.</span></div>
-            <div class="code-example"><span data-i18n="exampleRequest">YÊU CẦU MẪU</span><code>GET /api/v1/standards/search?q=ISO%209001&amp;page=1</code></div>
-            <details class="docs-example"><summary data-i18n="exampleResponse">Phản hồi mẫu</summary><pre><code>{
-  "data": [{
-    "code": "&lt;mã tiêu chuẩn&gt;",
-    "name": "&lt;tên tiếng Việt&gt;",
-    "englishName": "&lt;tên tiếng Anh, nếu có&gt;",
-    "year": 2015,
-    "status": "Active",
-    "detailUrl": "&lt;URL tại nguồn gốc&gt;",
-    "source": "TCVN_QT"
-  }],
-  "pagination": { "currentPage": 1, "totalResults": 20 },
-  "source": "MULTI",
-  "sources": [
-    { "source": "VSQI", "ok": true, "totalResults": 0 },
-    { "source": "TCVN_VN", "ok": true, "totalResults": 18 },
-    { "source": "TCVN_QT", "ok": true, "totalResults": 2 }
-  ],
-  "partialFailures": []
-}</code></pre></details>
-          </article>
-          <article class="docs-card docs-wide">
-            <div class="docs-card-heading"><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div>
-            <p data-i18n="docsDetailDesc">Lấy thông tin chi tiết của một tiêu chuẩn theo số hiệu. Chấp nhận các tổ chức TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB (có hoặc không có năm).</p>
-            <h3 data-i18n="pathParams">Tham số đường dẫn và truy vấn</h3>
-            <div class="parameter-row"><code>code</code><span>string · required</span><span data-i18n="docsCode">Số hiệu tiêu chuẩn, đã mã hóa URL (ví dụ TCVN 9143:2022).</span></div>
-            <div class="parameter-row"><code>source</code><span>enum · optional</span><span data-i18n="docsSource">VSQI | TCVN_VN | TCVN_QT. Nếu bỏ trống, hệ thống thử VSQI → TCVN_VN → TCVN_QT và lấy kết quả đầu tiên tìm thấy.</span></div>
-            <div class="code-example"><span data-i18n="exampleRequest">YÊU CẦU MẪU</span><code>GET /api/v1/standards/TCVN%209143%3A2022?source=TCVN_VN</code></div>
-          </article>
-          <article class="docs-card">
-            <div class="docs-card-heading"><h2 data-i18n="searchFields">Trường kết quả tìm kiếm</h2></div>
-            <div class="schema-list">
-              <div><code>data</code><span data-i18n="fData">Danh sách tiêu chuẩn</span></div>
-              <div><code>pagination</code><span>currentPage, totalResults (totalPages bị bỏ qua với kết quả gộp)</span></div>
-              <div><code>source</code><span>MULTI</span></div>
-              <div><code>sources</code><span data-i18n="fSources">Tổng kết quả theo từng nguồn</span></div>
-              <div><code>partialFailures</code><span data-i18n="fPartial">Các nguồn bị lỗi trong lần tìm kiếm này</span></div>
-              <div><code>code / name / englishName</code><span data-i18n="fNames">Số hiệu, tên tiếng Việt, tên tiếng Anh</span></div>
-              <div><code>year / status / detailUrl / source</code><span data-i18n="fMeta">Năm, tình trạng, liên kết nguồn gốc, nguồn dữ liệu</span></div>
-            </div>
-          </article>
-          <article class="docs-card">
-            <div class="docs-card-heading"><h2 data-i18n="detailFields">Trường chi tiết</h2></div>
-            <div class="schema-list">
-              <div><code>code / name / englishName</code><span data-i18n="fNames">Số hiệu, tên tiếng Việt, tên tiếng Anh</span></div>
-              <div><code>year / status</code><span data-i18n="fYearStatus">Năm ban hành, tình trạng</span></div>
-              <div><code>issuedDate / effectiveDate</code><span data-i18n="fDates">Ngày ban hành, ngày hiệu lực (có thể null)</span></div>
-              <div><code>issuingAgency</code><span data-i18n="fAgency">Cơ quan ban hành (có thể null)</span></div>
-              <div><code>replaces / replacedBy</code><span data-i18n="fReplace">Thay thế cho / được thay thế bởi</span></div>
-              <div><code>attributes / relations / raw</code><span data-i18n="fAttrs">Thuộc tính, quan hệ và dữ liệu gốc từ nguồn</span></div>
-            </div>
-          </article>
-          <article class="docs-card docs-wide">
-            <div class="docs-card-heading"><h2 data-i18n="errorCodes">Mã phản hồi và lỗi</h2></div>
-            <div class="error-code-grid"><span><b>200</b> Success</span><span><b>400</b> Invalid input</span><span><b>404</b> Not found</span><span><b>429</b> Rate limit</span><span><b>502</b> Upstream error</span><span><b>504</b> Upstream timeout</span></div>
-            <p><a href="/health" target="_blank" rel="noreferrer"><span data-i18n="health">Kiểm tra trạng thái dịch vụ</span> ↗</a></p>
-          </article>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
