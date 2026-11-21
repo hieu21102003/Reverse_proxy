@@ -1,263 +1,396 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f5f7fb">
-    <meta name="description" content="Explore the VSQI Standards API and inspect live responses.">
-    <title>VSQI API Playground</title>
-    <link rel="stylesheet" href="/playground.css?v=2">
-    <script src="/playground.js?v=2" defer></script>
+    <meta name="theme-color" content="#0b4f3a">
+    <meta name="description" content="Smart.Rail Digital Library — tra cứu tiêu chuẩn và tài liệu chuyên ngành đường sắt & TOD từ VSQI và tracuu.tcvn.vn.">
+    <title>Smart.Rail Digital Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/playground.css?v=3">
+    <script src="/playground.js?v=3" defer></script>
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <a class="brand" href="/" aria-label="VSQI Playground home">
-          <span class="brand-mark">V</span>
-          <span class="brand-name">vsqi<span>api</span></span>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="Smart.Rail Digital Library">
+          <span class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 48 32" role="img" focusable="false"><path d="M4 24c8-12 18-18 30-19l-2 4C21 11 13 16 8 25z" fill="#0b4f3a"/><path d="M10 27c7-8 15-12 26-13l-1 3C25 18 18 21 13 28z" fill="#c2410c"/><path d="M26 10h16l-2 3H25zM25 16h17l-2 3H24zM24 22h18l-2 3H23z" fill="#c2410c"/></svg>
+          </span>
+          <span class="brand-text"><strong>Smart<span class="brand-dot">.</span>Rail</strong><small>DIGITAL LIBRARY</small></span>
         </a>
-        <div class="workspace-label">WORKSPACE</div>
-        <nav class="side-nav" aria-label="Main navigation">
-          <button class="nav-item is-active" data-view="search" type="button">
-            <span class="nav-icon">⌕</span><span>Search standards</span>
-          </button>
-          <button class="nav-item" data-view="detail" type="button">
-            <span class="nav-icon">◈</span><span>Standard detail</span>
-          </button>
-          <button class="nav-item" data-view="docs" type="button">
-            <span class="nav-icon">⌘</span><span>API reference</span>
-          </button>
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Mở menu" aria-expanded="false">☰</button>
+        <nav class="main-nav" id="main-nav" aria-label="Điều hướng chính">
+          <button class="nav-item is-active" data-view="home" type="button"><span data-i18n="navHome">Trang chủ</span></button>
+          <button class="nav-item" data-view="search" type="button"><span data-i18n="navSearch">Tìm kiếm</span></button>
+          <button class="nav-item" data-view="categories" type="button"><span data-i18n="navCategories">Danh mục</span></button>
+          <button class="nav-item" data-view="library" type="button"><span data-i18n="navLibrary">Thư viện cá nhân</span></button>
+          <button class="nav-item" data-view="docs" type="button"><span data-i18n="navDocs">API</span></button>
         </nav>
-        <div class="sidebar-bottom">
-          <div class="connection-card">
-            <span class="connection-dot"></span>
-            <div><strong>API ready</strong><small>VSQI proxy service</small></div>
+        <div class="header-tools">
+          <label class="base-url-control"><span data-i18n="apiBase">API BASE URL</span><input id="api-base-url" type="url" aria-label="API base URL" placeholder="http://localhost:3100"></label>
+          <div class="lang-toggle" role="group" aria-label="Ngôn ngữ / Language">
+            <button type="button" id="lang-vi" class="lang-btn is-active">VI</button>
+            <button type="button" id="lang-en" class="lang-btn">EN</button>
           </div>
-          <a class="sidebar-link" href="/health" target="_blank" rel="noreferrer">Service health <span>↗</span></a>
-          <div class="sidebar-foot">Developer tools <span>·</span> v1</div>
+          <button class="login-btn" type="button" disabled title="Chưa có backend đăng nhập"><span data-i18n="login">Đăng nhập</span></button>
         </div>
-      </aside>
+      </div>
+      <p class="login-note" data-i18n="loginNote">Đăng nhập chưa khả dụng: hệ thống hiện chưa có backend xác thực người dùng.</p>
+    </header>
 
-      <main class="main-area">
-        <header class="topbar">
-          <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Toggle navigation">☰</button>
-          <div class="breadcrumbs"><span>VSQI API</span><span class="crumb-slash">/</span><strong id="breadcrumb-current">Search standards</strong></div>
-          <div class="topbar-right">
-            <label class="base-url-control"><span>API BASE URL</span><input id="api-base-url" type="url" aria-label="API base URL" placeholder="http://localhost:3100"></label>
-            <span class="environment-pill"><span></span> PLAYGROUND</span>
-            <a class="docs-link" href="https://tieuchuan.vsqi.gov.vn" target="_blank" rel="noreferrer">VSQI source ↗</a>
+    <main class="main-area">
+      <!-- 01 Library Home -->
+      <section class="view-panel is-visible" id="view-home" aria-labelledby="home-title">
+        <div class="hero">
+          <div class="hero-copy">
+            <h1 id="home-title" data-i18n="heroTitle">Thư viện tri thức Đường sắt &amp; TOD</h1>
+            <p class="hero-subtitle" data-i18n="heroSubtitle">Khám phá, tra cứu và khai thác nguồn tài liệu chuyên ngành.</p>
+            <form id="hero-search-form" class="hero-search" role="search">
+              <label class="sr-only" for="hero-query" data-i18n="heroSearchLabel">Tìm kiếm tài liệu</label>
+              <span class="hero-search-icon" aria-hidden="true">⌕</span>
+              <input id="hero-query" type="search" minlength="2" maxlength="120" data-i18n-placeholder="heroPlaceholder" placeholder="Tìm kiếm tài liệu, tiêu chuẩn, dự án..." autocomplete="off">
+              <button class="button button-terracotta" type="submit"><span data-i18n="search">Tìm kiếm</span></button>
+            </form>
+            <p class="hero-hint" data-i18n="heroHint">Tìm theo tên, mã tiêu chuẩn hoặc từ khóa. Dữ liệu được tra cứu trực tiếp từ VSQI và tracuu.tcvn.vn.</p>
           </div>
-        </header>
+          <div class="hero-art" aria-hidden="true">
+            <svg viewBox="0 0 520 220" focusable="false">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dcefe6"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+              </defs>
+              <rect width="520" height="220" fill="url(#sky)"/>
+              <g fill="#b9d4c7"><rect x="330" y="40" width="18" height="110"/><rect x="355" y="65" width="14" height="85"/><rect x="375" y="25" width="20" height="125"/><rect x="405" y="55" width="15" height="95"/><rect x="430" y="80" width="26" height="70"/></g>
+              <path d="M0 170h520" stroke="#0b4f3a" stroke-width="3"/>
+              <path d="M0 182h520M0 196h520" stroke="#8fb8a6" stroke-width="2"/>
+              <g><path d="M60 150c30-28 70-36 120-34l150 6c42 2 62 12 66 28-60 8-220 8-336 0z" fill="#0b4f3a"/><path d="M70 148c70 6 230 6 318-2l-4 8c-90 8-230 6-310 2z" fill="#c2410c"/><g fill="#eaf4ef"><rect x="110" y="126" width="34" height="12" rx="3"/><rect x="150" y="124" width="34" height="12" rx="3"/><rect x="194" y="124" width="34" height="12" rx="3"/><rect x="236" y="126" width="34" height="12" rx="3"/><rect x="278" y="128" width="34" height="12" rx="3"/></g><path d="M330 122c24 2 40 8 48 18l-46 2z" fill="#dcefe6"/></g>
+            </svg>
+          </div>
+        </div>
 
-        <div class="content-wrap">
-          <section class="view-panel is-visible" id="view-search" aria-labelledby="page-title">
-            <div class="page-heading">
-              <div>
-                <div class="eyebrow"><span class="eyebrow-line"></span> API EXPLORER</div>
-                <h1 id="page-title">Search standards</h1>
-                <p class="page-subtitle">Query the VSQI standards catalog and inspect the response in real time.</p>
-              </div>
-              <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="disciplines">Danh mục chuyên ngành</h2></div>
+        <div class="discipline-grid">
+          <button class="discipline-card" type="button" data-discipline-query="đường sắt"><span class="discipline-icon" aria-hidden="true">🚆</span><span data-i18n="discRail">Đường sắt</span></button>
+          <button class="discipline-card" type="button" data-discipline-query="công trình"><span class="discipline-icon" aria-hidden="true">🏗</span><span data-i18n="discWorks">Công trình</span></button>
+          <button class="discipline-card" type="button" data-discipline-query="điện tử"><span class="discipline-icon" aria-hidden="true">⚡</span><span data-i18n="discElectric">Điện – Điện tử</span></button>
+          <button class="discipline-card" type="button" data-discipline-query="tín hiệu"><span class="discipline-icon" aria-hidden="true">📡</span><span data-i18n="discSignal">Tín hiệu</span></button>
+          <button class="discipline-card" type="button" data-discipline-query="công nghệ số"><span class="discipline-icon" aria-hidden="true">💻</span><span data-i18n="discDigital">Công nghệ số</span></button>
+          <button class="discipline-card" type="button" data-discipline-query="TOD"><span class="discipline-icon" aria-hidden="true">🏙</span><span data-i18n="discTod">TOD &amp; Mobility</span></button>
+        </div>
+
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="recentDocs">Tài liệu mới cập nhật</h2><button class="see-all" type="button" data-goto-search="đường sắt"><span data-i18n="seeAll">Xem tất cả</span> →</button></div>
+        <p class="section-note" data-i18n="recentNote">Danh sách dưới đây được tải trực tiếp từ API tìm kiếm và sắp xếp theo năm giảm dần.</p>
+        <div class="home-recent" id="home-recent-list"></div>
+        <div class="state-box" id="home-recent-state" hidden></div>
+
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="featuredCollections">Bộ sưu tập nổi bật</h2></div>
+        <p class="section-note" data-i18n="collectionsNote">Các bộ sưu tập là lối tắt tìm kiếm theo chủ đề; kết quả luôn được tra cứu trực tiếp từ API.</p>
+        <div class="collection-grid">
+          <button class="collection-card" type="button" data-collection-query="đường sắt"><strong data-i18n="colRail">Tiêu chuẩn đường sắt</strong><span data-i18n="colRailDesc">Tra cứu tiêu chuẩn, quy chuẩn về đường sắt</span></button>
+          <button class="collection-card" type="button" data-collection-query="an toàn đường sắt"><strong data-i18n="colSafety">An toàn đường sắt</strong><span data-i18n="colSafetyDesc">Tài liệu về an toàn vận hành và khai thác</span></button>
+          <button class="collection-card" type="button" data-collection-query="BIM"><strong data-i18n="colBim">BIM &amp; công nghệ số</strong><span data-i18n="colBimDesc">Mô hình thông tin và chuyển đổi số</span></button>
+          <button class="collection-card" type="button" data-collection-query="TOD"><strong data-i18n="colTod">TOD &amp; quy hoạch</strong><span data-i18n="colTodDesc">Phát triển đô thị gắn với giao thông công cộng</span></button>
+          <button class="collection-card" type="button" data-collection-query="ISO 9001"><strong data-i18n="colQuality">Quản lý chất lượng</strong><span data-i18n="colQualityDesc">Hệ thống quản lý chất lượng ISO</span></button>
+          <button class="collection-card" type="button" data-collection-query="công trình thủy lợi"><strong data-i18n="colWater">Công trình thủy lợi</strong><span data-i18n="colWaterDesc">Tiêu chuẩn công trình thủy lợi</span></button>
+        </div>
+      </section>
+
+      <!-- 02 Document Search -->
+      <section class="view-panel" id="view-search" aria-labelledby="search-title" hidden>
+        <div class="page-heading">
+          <div>
+            <h1 id="search-title" data-i18n="searchTitle">Tìm kiếm tài liệu</h1>
+            <p class="page-subtitle" data-i18n="searchSubtitle">Tra cứu nhanh các tài liệu, tiêu chuẩn và ấn phẩm chuyên ngành từ VSQI và tracuu.tcvn.vn.</p>
+          </div>
+          <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
+        </div>
+
+        <form id="search-form" class="search-card" role="search">
+          <div class="search-row">
+            <label class="sr-only" for="search-query" data-i18n="keyword">Từ khóa</label>
+            <span class="input-shell"><span class="input-search-icon" aria-hidden="true">⌕</span><input id="search-query" name="q" type="search" minlength="2" maxlength="120" data-i18n-placeholder="searchPlaceholder" placeholder="Nhập từ khóa cần tìm (ví dụ: tiêu chuẩn đường sắt, BIM, TOD...)" autocomplete="off" required></span>
+            <button class="button button-terracotta" id="search-submit" type="submit"><span data-i18n="search">Tìm kiếm</span></button>
+          </div>
+          <div class="search-quick">
+            <span data-i18n="try">Thử:</span>
+            <button type="button" data-query="TCVN 9143">TCVN 9143</button>
+            <button type="button" data-query="ISO 9001">ISO 9001</button>
+            <button type="button" data-query="đường sắt">đường sắt</button>
+            <button type="button" id="advanced-toggle" aria-expanded="false"><span data-i18n="advanced">Tìm kiếm nâng cao</span> ▾</button>
+          </div>
+          <div class="advanced-panel" id="advanced-panel" hidden>
+            <label class="field"><span class="field-label" data-i18n="advSource">Nguồn dữ liệu</span>
+              <select id="adv-source"><option value="" data-i18n="allSources">Tất cả nguồn</option><option value="VSQI">VSQI</option><option value="TCVN_VN">TCVN Việt Nam</option><option value="TCVN_QT">TCVN Quốc tế</option></select>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="advYear">Năm phát hành</span><input id="adv-year" type="number" min="1900" max="2100" placeholder="—"></label>
+            <label class="field"><span class="field-label" data-i18n="advOrg">Tổ chức / loại tài liệu</span><input id="adv-org" type="text" data-i18n-placeholder="advOrgPlaceholder" placeholder="Ví dụ: ISO, TCVN, QCVN..."></label>
+            <p class="advanced-note" data-i18n="advancedNote">Tìm kiếm nâng cao bổ sung từ khóa vào truy vấn; nguồn và năm được lọc trên kết quả trả về (phía trình duyệt).</p>
+          </div>
+          <input id="search-page" name="page" type="hidden" value="1">
+        </form>
+
+        <div class="search-layout">
+          <aside class="filter-panel" aria-label="Bộ lọc kết quả">
+            <div class="filter-head"><strong data-i18n="filters">Bộ lọc kết quả</strong><button class="link-btn" id="filter-clear" type="button"><span data-i18n="clearFilters">Xóa tất cả</span></button></div>
+            <fieldset class="filter-group"><legend data-i18n="filterSource">Nguồn</legend>
+              <label><input type="checkbox" class="filter-source" value="VSQI" checked> VSQI</label>
+              <label><input type="checkbox" class="filter-source" value="TCVN_VN" checked> TCVN Việt Nam</label>
+              <label><input type="checkbox" class="filter-source" value="TCVN_QT" checked> TCVN Quốc tế</label>
+            </fieldset>
+            <div class="filter-group"><label class="filter-label" for="filter-year" data-i18n="filterYear">Năm</label><input id="filter-year" type="number" min="1900" max="2100" placeholder="—"></div>
+            <div class="filter-group"><label class="filter-label" for="filter-status" data-i18n="filterStatus">Tình trạng</label>
+              <select id="filter-status"><option value="" data-i18n="allStatuses">Tất cả</option><option value="active" data-i18n="statusActive">Còn hiệu lực</option><option value="withdrawn" data-i18n="statusWithdrawn">Hết hiệu lực</option></select>
             </div>
+            <p class="filter-note" data-i18n="filterNote">Bộ lọc áp dụng trên trang kết quả hiện tại (phía trình duyệt). API chỉ nhận từ khóa và số trang.</p>
+          </aside>
 
-            <div class="request-card">
-              <div class="card-title-row">
-                <div><span class="step-index">01</span><h2>Configure request</h2></div>
-                <span class="secure-label"><span>✓</span> No authentication required</span>
-              </div>
-              <form id="search-form">
-                <div class="form-grid">
-                  <label class="field search-field">
-                    <span class="field-label">Search query <span class="required">*</span></span>
-                    <span class="input-shell"><span class="input-search-icon">⌕</span><input id="search-query" name="q" type="search" minlength="2" maxlength="120" placeholder="e.g. TCVN 9143" autocomplete="off" required></span>
-                    <span class="field-hint">Search by standard code or title</span>
-                  </label>
-                  <label class="field page-field">
-                    <span class="field-label">Page</span>
-                    <input id="search-page" name="page" type="number" min="1" max="1000" value="1">
-                    <span class="field-hint">Results page (1–1000)</span>
-                  </label>
-                  <button class="button button-primary send-button" id="search-submit" type="submit"><span>Send request</span><span class="button-arrow">→</span></button>
+          <div class="results-area">
+            <div class="results-toolbar">
+              <p class="result-count" id="search-result-count" data-i18n="awaiting">Chưa có truy vấn</p>
+              <div class="toolbar-controls">
+                <label class="sort-control"><span data-i18n="sort">Sắp xếp:</span>
+                  <select id="sort-select"><option value="relevance" data-i18n="sortRelevance">Liên quan nhất</option><option value="newest" data-i18n="sortNewest">Mới nhất</option><option value="title" data-i18n="sortTitle">Tên A–Z</option></select>
+                </label>
+                <div class="view-toggle" role="group" aria-label="Kiểu hiển thị">
+                  <button type="button" id="view-toggle-list" class="is-active" data-i18n="listView">Danh sách</button>
+                  <button type="button" id="view-toggle-grid" data-i18n="gridView">Lưới</button>
                 </div>
-              </form>
-              <div class="quick-searches"><span>Try:</span><button type="button" data-query="TCVN 9143">TCVN 9143</button><button type="button" data-query="QCVN 16">QCVN 16</button><button type="button" data-query="cong trinh thuy loi">cong trinh thuy loi</button></div>
+              </div>
             </div>
-
-            <div class="request-inspector" id="search-inspector" hidden>
-              <div class="inspector-heading"><div><span class="step-index">02</span><h2>Request inspector</h2></div><span class="timestamp" id="search-timestamp"></span></div>
-              <div class="inspector-grid">
-                <div class="inspector-item"><span>METHOD</span><strong class="method-text">GET</strong></div>
-                <div class="inspector-item inspector-url"><span>REQUEST URL</span><div><code id="search-request-url">—</code><button class="icon-button copy-url" data-copy-url="search" type="button" aria-label="Copy request URL" title="Copy request URL">▢</button></div></div>
-                <div class="inspector-item"><span>HTTP STATUS</span><strong id="search-http-status" class="status-value">—</strong></div>
-                <div class="inspector-item"><span>RESPONSE TIME</span><strong id="search-response-time">—</strong></div>
-              </div>
-              <div class="error-banner" id="search-error" hidden></div>
+            <div class="sources-breakdown" id="search-sources-breakdown" hidden></div>
+            <div class="partial-banner" id="partial-failures" hidden></div>
+            <div class="error-banner" id="search-error" hidden></div>
+            <div class="loading-skeleton" id="search-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+            <div class="empty-state" id="search-empty">
+              <strong data-i18n="emptyTitle">Sẵn sàng tra cứu</strong>
+              <p data-i18n="emptyText">Nhập từ khóa ở trên để tìm tiêu chuẩn từ VSQI và tracuu.tcvn.vn.</p>
             </div>
-
-            <div class="results-card" id="search-results-card">
-              <div class="results-heading">
-                <div><span class="step-index">03</span><h2>Response data</h2><span class="result-count" id="search-result-count">Awaiting request</span></div>
-                <div class="response-tabs" role="tablist" aria-label="Search response view">
-                  <button class="response-tab is-active" data-response-tab="search-table" type="button" role="tab">Table</button>
-                  <button class="response-tab" data-response-tab="search-raw" type="button" role="tab">Raw JSON</button>
-                </div>
+            <div class="results-list" id="search-results"></div>
+            <div class="pagination-bar" id="pagination-bar" hidden>
+              <span id="pagination-summary"></span>
+              <div class="pagination-controls">
+                <button class="button button-secondary button-small" id="previous-page" type="button">← <span data-i18n="prevPage">Trang trước</span></button>
+                <span id="pagination-current"></span>
+                <button class="button button-secondary button-small" id="next-page" type="button"><span data-i18n="nextPage">Trang sau</span> →</button>
               </div>
-              <div class="response-pane is-active" id="search-table-pane">
-                <div class="empty-state" id="search-empty">
-                  <div class="empty-illustration"><span>⌕</span><i></i><i></i><i></i></div>
-                  <strong>Ready when you are</strong>
-                  <p>Enter a query above to explore standards from the VSQI catalog.</p>
-                </div>
-                <div class="loading-skeleton" id="search-skeleton" hidden>
-                  <div class="skeleton-row skeleton-head"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
-                </div>
-                <div class="table-scroll" id="search-table-wrap" hidden>
-                  <table class="data-table search-table">
-                    <thead><tr><th>CODE</th><th>NAME</th><th>ENGLISH NAME</th><th>YEAR</th><th>STATUS</th><th>DETAIL URL</th><th>SOURCE</th></tr></thead>
-                    <tbody id="search-table-body"></tbody>
-                  </table>
-                </div>
-                <div class="pagination-bar" id="pagination-bar" hidden>
-                  <span id="pagination-summary"></span>
-                  <div class="pagination-controls"><button class="button button-secondary button-small" id="previous-page" type="button">← Previous</button><span id="pagination-current"></span><button class="button button-secondary button-small" id="next-page" type="button">Next →</button></div>
-                </div>
-              </div>
-              <div class="response-pane raw-pane" id="search-raw-pane" hidden>
-                <div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="search" type="button">▢ Copy JSON</button></div>
+              <span class="pagination-note" data-i18n="pagingNote">Phân trang áp dụng riêng cho từng nguồn dữ liệu.</span>
+            </div>
+            <div class="inspector-box" id="search-inspector" hidden>
+              <div class="inspector-row"><span>GET</span><code id="search-request-url">—</code><button class="link-btn" data-copy-url="search" type="button" data-i18n="copyUrl">Sao chép URL</button></div>
+              <div class="inspector-row"><span data-i18n="httpStatus">HTTP</span><strong id="search-http-status">—</strong><span data-i18n="responseTime">Thời gian</span><strong id="search-response-time">—</strong><span id="search-timestamp"></span></div>
+              <button class="link-btn" id="search-raw-toggle" type="button" aria-expanded="false"><span data-i18n="rawJson">Raw JSON</span></button>
+              <div class="raw-pane" id="search-raw-pane" hidden>
+                <div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="search" type="button"><span data-i18n="copyJson">Sao chép JSON</span></button></div>
                 <pre class="json-viewer"><code id="search-raw-json" class="json-code"></code></pre>
               </div>
             </div>
-          </section>
-
-          <section class="view-panel" id="view-detail" aria-labelledby="detail-page-title" hidden>
-            <div class="page-heading">
-              <div><div class="eyebrow"><span class="eyebrow-line"></span> API EXPLORER <span class="eyebrow-separator">/</span> DETAIL</div><h1 id="detail-page-title">Standard detail</h1><p class="page-subtitle">Inspect every field returned for an individual standard.</p></div>
-              <div class="endpoint-chip"><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div>
-            </div>
-            <div class="request-card detail-request-card">
-              <div class="card-title-row"><div><span class="step-index">01</span><h2>Request a standard</h2></div><span class="secure-label"><span>✓</span> URL-encoded automatically</span></div>
-              <form id="detail-form"><div class="form-grid detail-form-grid">
-                <label class="field"><span class="field-label">Standard code <span class="required">*</span></span><span class="input-shell"><span class="input-search-icon">◈</span><input id="detail-code" name="code" type="text" placeholder="e.g. TCVN 9143:2022" required></span><span class="field-hint">Spaces and special characters are encoded for you</span></label>
-                <button class="button button-primary send-button" type="submit"><span>Get details</span><span class="button-arrow">→</span></button>
-              </div></form>
-            </div>
-            <div class="request-inspector" id="detail-inspector" hidden>
-              <div class="inspector-heading"><div><span class="step-index">02</span><h2>Request inspector</h2></div><span class="timestamp" id="detail-timestamp"></span></div>
-              <div class="inspector-grid">
-                <div class="inspector-item"><span>METHOD</span><strong class="method-text">GET</strong></div>
-                <div class="inspector-item inspector-url"><span>REQUEST URL</span><div><code id="detail-request-url">—</code><button class="icon-button copy-url" data-copy-url="detail" type="button" aria-label="Copy request URL" title="Copy request URL">▢</button></div></div>
-                <div class="inspector-item"><span>HTTP STATUS</span><strong id="detail-http-status" class="status-value">—</strong></div>
-                <div class="inspector-item"><span>RESPONSE TIME</span><strong id="detail-response-time">—</strong></div>
-              </div>
-              <div class="error-banner" id="detail-error" hidden></div>
-            </div>
-            <div class="detail-response-card" id="detail-response-card">
-              <div class="results-heading"><div><span class="step-index">03</span><h2>Standard information</h2></div><div class="response-tabs" role="tablist" aria-label="Detail response view"><button class="response-tab is-active" data-response-tab="detail-fields" type="button" role="tab">Fields</button><button class="response-tab" data-response-tab="detail-raw" type="button" role="tab">Raw JSON</button></div></div>
-              <div class="response-pane is-active" id="detail-fields-pane">
-                <div class="empty-state detail-empty" id="detail-empty"><div class="empty-illustration"><span>◈</span><i></i><i></i><i></i></div><strong>No standard selected</strong><p>Enter a standard code above or select one from the search results.</p></div>
-                <div class="loading-skeleton detail-skeleton" id="detail-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
-                <div class="standard-detail" id="detail-groups" hidden>
-                  <article class="detail-hero" id="detail-hero">
-                    <div class="detail-hero-body">
-                      <div class="detail-hero-kicker">
-                        <span class="detail-type" id="detail-type" hidden></span>
-                        <span class="detail-year" id="detail-year" hidden></span>
-                      </div>
-                      <h2 class="detail-code" id="detail-code"></h2>
-                      <p class="detail-title-vi" id="detail-title-vi"></p>
-                      <p class="detail-title-en" id="detail-title-en"></p>
-                    </div>
-                    <div class="detail-hero-status">
-                      <span class="detail-status-label">STATUS</span>
-                      <span class="badge" id="detail-status-badge" hidden></span>
-                    </div>
-                  </article>
-
-                  <section class="detail-section" id="detail-general-section" hidden>
-                    <div class="detail-section-heading"><span class="section-icon icon-blue">◈</span><div><h3>General Information</h3><p>Publication, agencies, classification, and dates</p></div></div>
-                    <div class="detail-metadata-grid" id="detail-general-grid"></div>
-                  </section>
-
-                  <section class="detail-section detail-section-scope" id="detail-scope-section" hidden>
-                    <div class="detail-section-heading"><span class="section-icon icon-violet">§</span><div><h3>Scope</h3><p>Application and subject matter</p></div></div>
-                    <div class="detail-scope-list" id="detail-scope-list"></div>
-                  </section>
-
-                  <section class="detail-section" id="detail-related-section" hidden>
-                    <div class="detail-section-heading"><span class="section-icon icon-amber">↔</span><div><h3>Related Standards</h3><p>Replacement, reference, and equivalent standards</p></div></div>
-                    <div class="detail-related-groups" id="detail-related-groups"></div>
-                  </section>
-
-                  <section class="detail-section" id="detail-history-section" hidden>
-                    <div class="detail-section-heading"><span class="section-icon icon-green">◷</span><div><h3>Revision History</h3><p>Version timeline and status changes</p></div></div>
-                    <ol class="detail-timeline" id="detail-timeline"></ol>
-                  </section>
-
-                  <section class="detail-section" id="detail-other-section" hidden>
-                    <div class="detail-section-heading"><span class="section-icon icon-slate">⋯</span><div><h3>Thông tin khác</h3><p>Additional metadata supplied by the source</p></div></div>
-                    <div class="detail-metadata-grid" id="detail-other-grid"></div>
-                  </section>
-
-                  <details class="detail-source" id="detail-source" hidden>
-                    <summary>
-                      <span class="section-icon icon-slate">↗</span>
-                      <span class="detail-source-heading"><strong>Source information</strong><small>Origin of this record</small></span>
-                      <span class="detail-source-chevron" aria-hidden="true">⌄</span>
-                    </summary>
-                    <div class="detail-source-body" id="detail-source-body"></div>
-                  </details>
-                </div>
-              </div>
-              <div class="response-pane raw-pane" id="detail-raw-pane" hidden><div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="detail" type="button">▢ Copy JSON</button></div><pre class="json-viewer"><code id="detail-raw-json" class="json-code"></code></pre></div>
-            </div>
-          </section>
-
-          <section class="view-panel" id="view-docs" aria-labelledby="docs-title" hidden>
-            <div class="page-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> REFERENCE</div><h1 id="docs-title">API reference</h1><p class="page-subtitle">Endpoints, parameters, and response fields at a glance.</p></div><span class="docs-version">API VERSION <strong>v1</strong></span></div>
-            <div class="docs-grid">
-              <article class="docs-card docs-wide"><div class="docs-card-heading"><div><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div><button class="try-link" data-doc-action="search" type="button">Try it →</button></div><p>Search the VSQI catalog by standard code or text.</p><h3>Query parameters</h3><div class="parameter-row"><code>q</code><span class="parameter-type">string · required</span><span>Search text (2–120 characters).</span></div><div class="parameter-row"><code>page</code><span class="parameter-type">integer · optional</span><span>Page number from 1 to 1000. Defaults to 1.</span></div><div class="code-example"><span>EXAMPLE REQUEST</span><code>GET /api/v1/standards/search?q=TCVN%209143&amp;page=1</code></div><details class="docs-example"><summary>Example success response</summary><pre><code>{
-  "data": [{
-    "code": "&lt;standard code&gt;",
-    "name": "&lt;Vietnamese title&gt;",
-    "englishName": "&lt;English title, when available&gt;",
-    "year": 2022,
-    "status": "Active",
-    "detailUrl": "&lt;VSQI detail URL&gt;",
-    "source": "VSQI"
-  }],
-  "pagination": {
-    "currentPage": 1,
-    "totalPages": 1,
-    "totalResults": 1
-  },
-  "source": "VSQI"
-}</code></pre></details></article>
-              <article class="docs-card docs-wide"><div class="docs-card-heading"><div><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div><button class="try-link" data-doc-action="detail" type="button">Try it →</button></div><p>Retrieve the detail record for an exact standard code.</p><h3>Path parameter</h3><div class="parameter-row"><code>code</code><span class="parameter-type">string · required</span><span>Standard code, URL-encoded (e.g. TCVN 9143:2022).</span></div><div class="code-example"><span>EXAMPLE REQUEST</span><code>GET /api/v1/standards/TCVN%209143%3A2022</code></div><details class="docs-example"><summary>Example success response</summary><pre><code>{
-  "data": {
-    "code": "&lt;standard code&gt;",
-    "name": "&lt;Vietnamese title, or null&gt;",
-    "englishName": "&lt;English title, or null&gt;",
-    "year": null,
-    "status": null,
-    "issuedDate": null,
-    "effectiveDate": null,
-    "issuingAgency": null,
-    "replacedBy": null,
-    "replaces": null,
-    "detailUrl": "&lt;VSQI detail URL&gt;",
-    "source": "VSQI"
-  }
-}</code></pre></details></article>
-              <article class="docs-card"><div class="docs-card-heading"><h2>Search result fields</h2></div><div class="schema-list"><div><code>data</code><span>Array of standard records</span></div><div><code>pagination</code><span>currentPage, totalPages, totalResults</span></div><div><code>source</code><span>Upstream provider identifier</span></div><div><code>code</code><span>Standard number</span></div><div><code>name</code><span>Vietnamese title</span></div><div><code>englishName</code><span>English title, when available</span></div><div><code>year</code><span>Publication year, when available</span></div><div><code>status</code><span>Active or Withdrawn</span></div><div><code>detailUrl</code><span>VSQI standard page URL</span></div></div></article>
-              <article class="docs-card"><div class="docs-card-heading"><h2>Detail response fields</h2></div><div class="schema-list"><div><code>code</code><span>Standard number</span></div><div><code>name</code><span>Vietnamese title</span></div><div><code>englishName</code><span>English title</span></div><div><code>year</code><span>Publication year</span></div><div><code>status</code><span>Standard status</span></div><div><code>issuedDate</code><span>Issue date, or null</span></div><div><code>effectiveDate</code><span>Effective date, or null</span></div><div><code>issuingAgency</code><span>Issuing agency, or null</span></div><div><code>replacedBy</code><span>Newer standard, or null</span></div><div><code>replaces</code><span>Previous standard, or null</span></div><div><code>detailUrl</code><span>VSQI detail page</span></div><div><code>source</code><span>VSQI</span></div></div></article>
-              <article class="docs-card docs-wide response-docs"><div class="docs-card-heading"><h2>Response and error codes</h2></div><p>Successful search responses contain <code>data</code>, <code>pagination</code>, and <code>source</code>. Detail responses contain <code>data</code> with all fields, including null values.</p><div class="error-code-grid"><span><b>200</b> Success</span><span><b>400</b> Invalid input</span><span><b>404</b> Standard not found</span><span><b>429</b> Rate limit exceeded</span><span><b>502</b> Upstream error</span><span><b>504</b> Upstream timeout</span></div><div class="code-example"><span>GENERIC ERROR SHAPE</span><code>{ "error": { "code": "UPSTREAM_TIMEOUT", "message": "VSQI request timed out" }, "source": "VSQI" }</code></div></article>
-            </div>
-          </section>
-
-          <footer class="page-footer"><span>VSQI Standards API Playground</span><span>Responses are fetched live from your configured API endpoint.</span><a href="https://tieuchuan.vsqi.gov.vn" target="_blank" rel="noreferrer">VSQI source ↗</a></footer>
+          </div>
         </div>
-      </main>
-      <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    </div>
+      </section>
+
+      <!-- 03 Categories -->
+      <section class="view-panel" id="view-categories" aria-labelledby="categories-title" hidden>
+        <h1 id="categories-title" data-i18n="categoriesTitle">Danh mục chuyên ngành</h1>
+        <p class="page-subtitle" data-i18n="categoriesSubtitle">Khám phá kho tri thức theo lĩnh vực chuyên môn. Số lượng tài liệu được tra cứu trực tiếp từ API theo từ khóa của từng danh mục.</p>
+        <div class="categories-grid" id="categories-grid"></div>
+        <p class="section-note" data-i18n="categoriesNote">Hệ thống hiện chưa có taxonomy riêng; mỗi danh mục là một truy vấn tìm kiếm theo chủ đề trên API hiện có.</p>
+      </section>
+
+      <!-- 04 Detail -->
+      <section class="view-panel" id="view-detail" aria-labelledby="detail-page-title" hidden>
+        <nav class="breadcrumb" id="detail-breadcrumb" aria-label="Breadcrumb"><button type="button" data-goto-view="home" data-i18n="navHome">Trang chủ</button> <span>›</span> <button type="button" data-goto-view="categories" data-i18n="navCategories">Danh mục</button> <span>›</span> <strong id="detail-breadcrumb-code">—</strong></nav>
+        <div class="detail-lookup">
+          <form id="detail-form" class="detail-lookup-form">
+            <label class="field"><span class="field-label"><span data-i18n="detailCodeLabel">Số hiệu tiêu chuẩn</span> <span class="required">*</span></span><input id="detail-code-input" type="text" placeholder="TCVN 9143:2022" required></label>
+            <label class="field"><span class="field-label" data-i18n="detailSourceLabel">Nguồn</span>
+              <select id="detail-source-select"><option value="" data-i18n="autoSource">Tự động (VSQI → VN → QT)</option><option value="VSQI">VSQI</option><option value="TCVN_VN">TCVN Việt Nam</option><option value="TCVN_QT">TCVN Quốc tế</option></select>
+            </label>
+            <button class="button button-terracotta" type="submit"><span data-i18n="getDetail">Xem chi tiết</span></button>
+          </form>
+        </div>
+        <div class="error-banner" id="detail-error" hidden></div>
+        <div class="loading-skeleton" id="detail-skeleton" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        <div class="empty-state" id="detail-empty"><strong data-i18n="detailEmptyTitle">Chưa chọn tài liệu</strong><p data-i18n="detailEmptyText">Nhập số hiệu ở trên hoặc chọn một kết quả từ tìm kiếm.</p></div>
+
+        <div class="standard-detail" id="detail-groups" hidden>
+          <div class="detail-layout">
+            <aside class="detail-cover" aria-label="Bìa tài liệu">
+              <div class="cover-org" id="detail-cover-org">—</div>
+              <div class="cover-kind" data-i18n="coverKind">TIÊU CHUẨN</div>
+              <div class="cover-code" id="detail-cover-code">—</div>
+              <div class="cover-art" aria-hidden="true"><svg viewBox="0 0 200 70"><path d="M0 52h200M0 60h200" stroke="#0b4f3a" stroke-width="2"/><path d="M20 46c14-12 32-16 54-15l66 3c18 1 27 5 29 12-26 4-96 4-149 0z" fill="#0b4f3a"/><path d="M24 45c30 3 100 3 140-1l-2 4c-40 3-100 3-134 1z" fill="#c2410c"/></svg></div>
+              <div class="cover-name" id="detail-cover-name"></div>
+            </aside>
+            <div class="detail-main">
+              <article class="detail-hero" id="detail-hero">
+                <div class="detail-badges">
+                  <span class="detail-type badge badge-neutral" id="detail-type" hidden></span>
+                  <span class="badge" id="detail-status-badge" hidden></span>
+                  <span class="badge badge-source" id="detail-source-badge" hidden></span>
+                  <span class="detail-year badge badge-neutral" id="detail-year" hidden></span>
+                </div>
+                <h2 class="detail-code" id="detail-page-title"></h2>
+                <p class="detail-title-vi" id="detail-title-vi"></p>
+                <p class="detail-title-en" id="detail-title-en"></p>
+              </article>
+              <dl class="detail-meta-rows" id="detail-meta-rows"></dl>
+              <div class="detail-actions">
+                <a class="button button-terracotta" id="detail-source-link" href="#" target="_blank" rel="noreferrer" hidden><span data-i18n="viewAtSource">Xem tại nguồn gốc</span></a>
+                <button class="button button-secondary" id="detail-preview-btn" type="button"><span data-i18n="preview">Xem trước thông tin</span></button>
+                <button class="button button-secondary" id="detail-save-btn" type="button"><span data-i18n="saveLibrary">Lưu vào My Library</span></button>
+                <button class="button button-secondary" id="detail-copy-btn" type="button"><span data-i18n="copyLink">Sao chép liên kết</span></button>
+              </div>
+              <p class="detail-note" data-i18n="noPdfNote">API hiện chỉ cung cấp metadata của tiêu chuẩn; chưa có file PDF để xem trực tuyến hoặc tải xuống trong hệ thống này.</p>
+              <div class="response-tabs" role="tablist" aria-label="Chi tiết">
+                <button class="response-tab is-active" data-response-tab="detail-fields" type="button" role="tab"><span data-i18n="fieldsTab">Thông tin</span></button>
+                <button class="response-tab" data-response-tab="detail-raw" type="button" role="tab"><span data-i18n="rawJson">Raw JSON</span></button>
+              </div>
+              <div class="response-pane is-active" id="detail-fields-pane">
+                <section class="detail-section" id="detail-general-section" hidden>
+                  <div class="detail-section-heading"><h3 data-i18n="generalInfo">Thông tin chung</h3></div>
+                  <div class="detail-metadata-grid" id="detail-general-grid"></div>
+                </section>
+                <section class="detail-section" id="detail-scope-section" hidden>
+                  <div class="detail-section-heading"><h3 data-i18n="scope">Phạm vi áp dụng</h3></div>
+                  <div class="detail-scope-list" id="detail-scope-list"></div>
+                </section>
+                <section class="detail-section" id="detail-related-section" hidden>
+                  <div class="detail-section-heading"><h3 data-i18n="related">Tài liệu liên quan</h3></div>
+                  <div class="detail-related-groups" id="detail-related-groups"></div>
+                </section>
+                <section class="detail-section" id="detail-history-section" hidden>
+                  <div class="detail-section-heading"><h3 data-i18n="history">Lịch sử soát xét</h3></div>
+                  <ol class="detail-timeline" id="detail-timeline"></ol>
+                </section>
+                <section class="detail-section" id="detail-other-section" hidden>
+                  <div class="detail-section-heading"><h3>Thông tin khác</h3></div>
+                  <div class="detail-metadata-grid" id="detail-other-grid"></div>
+                </section>
+                <details class="detail-source" id="detail-source" hidden>
+                  <summary><strong data-i18n="sourceInfo">Thông tin nguồn</strong></summary>
+                  <div class="detail-source-body" id="detail-source-body"></div>
+                </details>
+              </div>
+              <div class="response-pane raw-pane" id="detail-raw-pane" hidden>
+                <div class="raw-toolbar"><span>Response body <small>application/json</small></span><button class="button button-secondary button-small copy-json" data-raw="detail" type="button"><span data-i18n="copyJson">Sao chép JSON</span></button></div>
+                <pre class="json-viewer"><code id="detail-raw-json" class="json-code"></code></pre>
+              </div>
+              <div class="inspector-box" id="detail-inspector" hidden>
+                <div class="inspector-row"><span>GET</span><code id="detail-request-url">—</code><button class="link-btn" data-copy-url="detail" type="button" data-i18n="copyUrl">Sao chép URL</button></div>
+                <div class="inspector-row"><span data-i18n="httpStatus">HTTP</span><strong id="detail-http-status">—</strong><span data-i18n="responseTime">Thời gian</span><strong id="detail-response-time">—</strong><span id="detail-timestamp"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-modal" id="preview-modal" hidden role="dialog" aria-modal="true" aria-labelledby="preview-title">
+          <div class="preview-card">
+            <div class="preview-head"><h3 id="preview-title" data-i18n="previewTitle">Xem trước thông tin tài liệu</h3><button class="icon-button" id="preview-close" type="button" aria-label="Đóng">✕</button></div>
+            <p class="detail-note" data-i18n="previewNote">Đây là bản tóm tắt metadata từ API. Hệ thống chưa có trình xem PDF trực tuyến; vui lòng mở tài liệu tại nguồn gốc.</p>
+            <div id="preview-body"></div>
+            <a class="button button-terracotta" id="preview-source-link" href="#" target="_blank" rel="noreferrer" hidden><span data-i18n="viewAtSource">Xem tại nguồn gốc</span></a>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06 My Library -->
+      <section class="view-panel" id="view-library" aria-labelledby="library-title" hidden>
+        <h1 id="library-title" data-i18n="libraryTitle">Thư viện cá nhân</h1>
+        <p class="page-subtitle" data-i18n="librarySubtitle">Tài liệu đã lưu và đã xem gần đây trên trình duyệt này (lưu bằng localStorage, chưa đồng bộ theo tài khoản).</p>
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="favorites">Tài liệu đã lưu</h2></div>
+        <div class="library-list" id="library-favorites"></div>
+        <div class="empty-state" id="library-favorites-empty"><strong data-i18n="favEmptyTitle">Chưa có tài liệu đã lưu</strong><p data-i18n="favEmptyText">Dùng nút “Lưu vào My Library” ở trang chi tiết hoặc kết quả tìm kiếm.</p></div>
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="recentlyViewed">Đã xem gần đây</h2><button class="link-btn" id="library-clear-recent" type="button"><span data-i18n="clearRecent">Xóa lịch sử xem</span></button></div>
+        <div class="library-list" id="library-recent"></div>
+        <div class="empty-state" id="library-recent-empty"><strong data-i18n="recentEmptyTitle">Chưa xem tài liệu nào</strong><p data-i18n="recentEmptyText">Các tài liệu bạn mở sẽ xuất hiện tại đây.</p></div>
+      </section>
+
+      <!-- API reference -->
+      <section class="view-panel" id="view-docs" aria-labelledby="docs-title" hidden>
+        <h1 id="docs-title" data-i18n="docsTitle">Tài liệu API</h1>
+        <p class="page-subtitle" data-i18n="docsSubtitle">Các endpoint, tham số và trường dữ liệu của API tra cứu tiêu chuẩn (v1).</p>
+        <div class="docs-grid">
+          <article class="docs-card docs-wide">
+            <div class="docs-card-heading"><span class="method method-get">GET</span><code>/api/v1/standards/search</code></div>
+            <p data-i18n="docsSearchDesc">Tìm kiếm đồng thời trên VSQI, TCVN Việt Nam và TCVN Quốc tế, trả về một danh sách gộp; mỗi kết quả có trường source cho biết nguồn.</p>
+            <h3 data-i18n="queryParams">Tham số truy vấn</h3>
+            <div class="parameter-row"><code>q</code><span>string · required</span><span data-i18n="docsQ">Từ khóa tìm kiếm (2–120 ký tự).</span></div>
+            <div class="parameter-row"><code>page</code><span>integer · optional</span><span data-i18n="docsPage">Số trang từ 1 đến 1000, áp dụng riêng cho từng nguồn. Mặc định 1.</span></div>
+            <div class="code-example"><span data-i18n="exampleRequest">YÊU CẦU MẪU</span><code>GET /api/v1/standards/search?q=ISO%209001&amp;page=1</code></div>
+            <details class="docs-example"><summary data-i18n="exampleResponse">Phản hồi mẫu</summary><pre><code>{
+  "data": [{
+    "code": "&lt;mã tiêu chuẩn&gt;",
+    "name": "&lt;tên tiếng Việt&gt;",
+    "englishName": "&lt;tên tiếng Anh, nếu có&gt;",
+    "year": 2015,
+    "status": "Active",
+    "detailUrl": "&lt;URL tại nguồn gốc&gt;",
+    "source": "TCVN_QT"
+  }],
+  "pagination": { "currentPage": 1, "totalResults": 20 },
+  "source": "MULTI",
+  "sources": [
+    { "source": "VSQI", "ok": true, "totalResults": 0 },
+    { "source": "TCVN_VN", "ok": true, "totalResults": 18 },
+    { "source": "TCVN_QT", "ok": true, "totalResults": 2 }
+  ],
+  "partialFailures": []
+}</code></pre></details>
+          </article>
+          <article class="docs-card docs-wide">
+            <div class="docs-card-heading"><span class="method method-get">GET</span><code>/api/v1/standards/:code</code></div>
+            <p data-i18n="docsDetailDesc">Lấy thông tin chi tiết của một tiêu chuẩn theo số hiệu. Chấp nhận các tổ chức TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB (có hoặc không có năm).</p>
+            <h3 data-i18n="pathParams">Tham số đường dẫn và truy vấn</h3>
+            <div class="parameter-row"><code>code</code><span>string · required</span><span data-i18n="docsCode">Số hiệu tiêu chuẩn, đã mã hóa URL (ví dụ TCVN 9143:2022).</span></div>
+            <div class="parameter-row"><code>source</code><span>enum · optional</span><span data-i18n="docsSource">VSQI | TCVN_VN | TCVN_QT. Nếu bỏ trống, hệ thống thử VSQI → TCVN_VN → TCVN_QT và lấy kết quả đầu tiên tìm thấy.</span></div>
+            <div class="code-example"><span data-i18n="exampleRequest">YÊU CẦU MẪU</span><code>GET /api/v1/standards/TCVN%209143%3A2022?source=TCVN_VN</code></div>
+          </article>
+          <article class="docs-card">
+            <div class="docs-card-heading"><h2 data-i18n="searchFields">Trường kết quả tìm kiếm</h2></div>
+            <div class="schema-list">
+              <div><code>data</code><span data-i18n="fData">Danh sách tiêu chuẩn</span></div>
+              <div><code>pagination</code><span>currentPage, totalResults (totalPages bị bỏ qua với kết quả gộp)</span></div>
+              <div><code>source</code><span>MULTI</span></div>
+              <div><code>sources</code><span data-i18n="fSources">Tổng kết quả theo từng nguồn</span></div>
+              <div><code>partialFailures</code><span data-i18n="fPartial">Các nguồn bị lỗi trong lần tìm kiếm này</span></div>
+              <div><code>code / name / englishName</code><span data-i18n="fNames">Số hiệu, tên tiếng Việt, tên tiếng Anh</span></div>
+              <div><code>year / status / detailUrl / source</code><span data-i18n="fMeta">Năm, tình trạng, liên kết nguồn gốc, nguồn dữ liệu</span></div>
+            </div>
+          </article>
+          <article class="docs-card">
+            <div class="docs-card-heading"><h2 data-i18n="detailFields">Trường chi tiết</h2></div>
+            <div class="schema-list">
+              <div><code>code / name / englishName</code><span data-i18n="fNames">Số hiệu, tên tiếng Việt, tên tiếng Anh</span></div>
+              <div><code>year / status</code><span data-i18n="fYearStatus">Năm ban hành, tình trạng</span></div>
+              <div><code>issuedDate / effectiveDate</code><span data-i18n="fDates">Ngày ban hành, ngày hiệu lực (có thể null)</span></div>
+              <div><code>issuingAgency</code><span data-i18n="fAgency">Cơ quan ban hành (có thể null)</span></div>
+              <div><code>replaces / replacedBy</code><span data-i18n="fReplace">Thay thế cho / được thay thế bởi</span></div>
+              <div><code>attributes / relations / raw</code><span data-i18n="fAttrs">Thuộc tính, quan hệ và dữ liệu gốc từ nguồn</span></div>
+            </div>
+          </article>
+          <article class="docs-card docs-wide">
+            <div class="docs-card-heading"><h2 data-i18n="errorCodes">Mã phản hồi và lỗi</h2></div>
+            <div class="error-code-grid"><span><b>200</b> Success</span><span><b>400</b> Invalid input</span><span><b>404</b> Not found</span><span><b>429</b> Rate limit</span><span><b>502</b> Upstream error</span><span><b>504</b> Upstream timeout</span></div>
+            <p><a href="/health" target="_blank" rel="noreferrer"><span data-i18n="health">Kiểm tra trạng thái dịch vụ</span> ↗</a></p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-brand"><strong>Smart.Rail</strong><small>DIGITAL LIBRARY</small></div>
+        <div class="footer-org"><strong data-i18n="institute">Viện Công nghệ Đường sắt &amp; TOD</strong><span data-i18n="footerTagline">Smart.Rail – Kết nối tri thức, kiến tạo tương lai</span></div>
+        <nav class="footer-links" aria-label="Liên kết cuối trang">
+          <a href="https://tieuchuan.vsqi.gov.vn" target="_blank" rel="noreferrer">VSQI ↗</a>
+          <a href="http://tracuu.tcvn.vn/sdomain/front/" target="_blank" rel="noreferrer">TCVN ↗</a>
+          <a href="/health" target="_blank" rel="noreferrer"><span data-i18n="health">Trạng thái dịch vụ</span></a>
+        </nav>
+        <button class="to-top" id="to-top" type="button" aria-label="Về đầu trang">↑</button>
+      </div>
+    </footer>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </body>
 </html>

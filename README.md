@@ -88,7 +88,24 @@ npm start
 
 `npm start` runs the compiled `dist/server.js`; it does not start the development watcher. The server closes gracefully on `SIGINT` and `SIGTERM`.
 
-Open `http://localhost:3100/` for the browser-based API playground. The API base URL field defaults to the current origin and can be changed to another service origin. For a separate frontend/API origin, configure `CORS_ORIGIN` on the API server to match the playground origin.
+Open `http://localhost:3100/` for the Smart.Rail Digital Library web UI. The API base URL field (header) defaults to the current origin and can be changed to another service origin. For a separate frontend/API origin, configure `CORS_ORIGIN` on the API server to match the UI origin.
+
+## Web UI (Smart.Rail Digital Library)
+
+The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specification (Deep Green + Terracotta, Be Vietnam Pro / Inter, VI/EN toggle, desktop-first responsive). It is a thin client over the existing merged-search API — no backend behavior changed. The static assets keep their historical filenames (`public/index.html`, `public/playground.css`, `public/playground.js`) so the Fastify routes and `vercel.json` are unchanged.
+
+| Spec screen | Status | Notes |
+| --- | --- | --- |
+| 01 Library Home | Implemented | Hero search, 6 discipline cards, "Tài liệu mới cập nhật" loaded live from the search API (sorted by year desc), featured collections as labelled search shortcuts. No hard-coded counts or dates. |
+| 02 Document Search | Implemented | One merged list from VSQI + TCVN_VN + TCVN_QT with per-item `source`, per-source totals from `sources[]`, `partialFailures` banner, shareable `?view=search&q=&page=` URLs, Raw JSON toggle. Filters (source/year/status), sort (relevance/newest/title) and list/grid are **client-side** on the returned page — the API only accepts `q` + `page`, and paging applies per source. |
+| 03 Document Categories | Implemented (as search topics) | CAT01–CAT06 cards with subcategory shortcuts. Counts are live `totalResults` per category keyword (or "—"/unavailable on failure); there is no taxonomy backend, so each category is a topic search. |
+| 04 Document Detail | Implemented | Breadcrumb, CSS-generated cover (organisation + code), badges, metadata rows (`issuingAgency`, dates, year, status, source — "—" when null, e.g. TCVN issuing agency), scope/related/history/other sections via the existing `buildDetailViewModel`, "Xem tại nguồn gốc" (`detailUrl`, new tab), save to My Library, copy `?view=detail&code=&source=` link. No Download button: the API serves metadata only, there is no file. |
+| 05 Online Viewer | Partial (metadata preview) | "Xem trước thông tin" opens a modal summarizing the record with a link to the source. There is no PDF preview, thumbnails, or zoom — the API has no document files. |
+| 06 My Library | Implemented (client-side) | Favorites + recently viewed in `localStorage` (`smartrail-favorites`, `smartrail-recent`). Not synced per account. |
+| 07 Login & Profile | Not implemented | The "Đăng nhập" button is disabled with an explanatory note; there is no authentication backend. |
+| 08–10 Admin (Dashboard / Document Management / Metadata & Access) | Not implemented | No admin nav, dashboards, KPIs, upload forms, or view counts — the backend has no documents, users, or admin endpoints. Nothing is faked. |
+
+Language: VI by default; the VI/EN toggle switches all UI chrome labels via a dictionary (document titles use the API's `name`/`englishName` as-is). Fonts load from Google Fonts (allowed by the Helmet CSP `style-src https:` / `font-src https:`) with a system font-stack fallback. The API reference view documents the merged response (`source: "MULTI"`, `sources[]`, `partialFailures`), `?source=` detail pinning, and the accepted code organisations (TCVN/QCVN/ISO/IEC/ASTM/BS/DIN/EN/JIS/UL/ANSI/AS/GB).
 
 Health check:
 
