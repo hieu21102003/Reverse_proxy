@@ -36,9 +36,20 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(page.body).toContain('detail-source');
       expect(page.body).toContain('Thông tin khác');
       expect(page.body).toContain('issuedDate');
-      // VI/EN toggle + honest login state (screen 07 has no backend)
+      // VI/EN toggle + elib login via Documents view (screen 07 via elib backend)
       expect(page.body).toContain('lang-vi');
-      expect(page.body).toContain('Chưa có backend đăng nhập');
+      expect(page.body).toContain('Đăng nhập tại mục Tài liệu');
+      expect(page.body).toContain('header-login-btn');
+      // Documents / elib integration (upload via /api/elib/* proxy)
+      expect(page.body).toContain('data-view="documents"');
+      expect(page.body).toContain('id="view-documents"');
+      expect(page.body).toContain('Tài liệu thư viện');
+      expect(page.body).toContain('elib-login-form');
+      expect(page.body).toContain('elib-upload-form');
+      expect(page.body).toContain('elib-session-list');
+      expect(page.body).toContain('/api/elib/*');
+      expect(page.body).toContain('playground.css?v=4');
+      expect(page.body).toContain('playground.js?v=4');
       // No fake mockup numbers may leak into the UI
       expect(page.body).not.toContain('12,480');
       expect(page.body).not.toContain('2.5 MB');
@@ -56,6 +67,9 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(styles.body).toContain('.detail-metadata-grid');
       expect(styles.body).toContain('.detail-timeline');
       expect(styles.body).toContain('.detail-source');
+      expect(styles.body).toContain('.elib-card');
+      expect(styles.body).toContain('.elib-progress-bar');
+      expect(styles.body).toContain('.elib-session-row');
 
       const script = await app.inject({ method: 'GET', url: '/playground.js' });
       expect(script.statusCode).toBe(200);
@@ -69,6 +83,10 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(script.body).toContain('smartrail-favorites');
       expect(script.body).toContain('smartrail-recent');
       expect(script.body).toContain('applyLanguage');
+      expect(script.body).toContain('loadDocumentsView');
+      expect(script.body).toContain('/api/elib');
+      expect(script.body).toContain('XMLHttpRequest');
+      expect(script.body).toContain('DUPLICATE_FILE');
       expect(script.body).not.toContain('12480');
     } finally {
       await app.close();

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { config } from './config.js';
 import { MergedStandardProvider } from './providers/merged.provider.js';
+import { registerElibProxy, type ElibProxyOptions } from './elib-proxy.js';
 import { VsqiError } from './errors.js';
 import { CachedStandardProvider } from './services/response-cache.js';
 import type { StandardProvider, StandardSource } from './types.js';
@@ -49,7 +50,7 @@ const standardCodeSchema = z.string()
 
 const sourceSchema = z.enum(['VSQI', 'TCVN_VN', 'TCVN_QT']);
 
-export async function createApp(provider?: StandardProvider) {
+export async function createApp(provider?: StandardProvider, options?: { elib?: Partial<ElibProxyOptions> }) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
     logger: {
@@ -122,6 +123,11 @@ export async function createApp(provider?: StandardProvider) {
     service: 'vsqi-proxy-api',
     timestamp: new Date().toISOString()
   }));
+
+  // Elib document service proxy: /api/elib/* -> {ELIB_BASE_URL}/api/*
+  // (streaming; see src/elib-proxy.ts). Registered before the standards
+  // routes so /api/elib/* never collides with /api/v1/*.
+  registerElibProxy(app, options?.elib ?? {});
 
   app.get('/', async (_request, reply) => {
     reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-cache');

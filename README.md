@@ -60,6 +60,9 @@ Copy-Item .env.example .env
 | `RATE_LIMIT_WINDOW` | `1 minute` | Rate-limit window understood by `@fastify/rate-limit` |
 | `TRUST_PROXY` | `false` | Trust forwarded client IP headers only behind a trusted proxy |
 | `CORS_ORIGIN` | empty | Optional single allowed browser origin; empty disables CORS |
+| `ELIB_BASE_URL` | `http://127.0.0.1:3200` | Elib document service base URL for the `/api/elib/*` proxy (see Elib integration). In Docker, `127.0.0.1` is the container itself — use the host gateway (e.g. `http://host.docker.internal:3200`) or run bare-Node |
+| `ELIB_ENABLED` | `true` | Set to `false` to disable the elib proxy (`/api/elib/*` returns 503, Tài liệu view shows a disabled state) |
+| `ELIB_TIMEOUT_MS` | `300000` | Elib proxy timeout for uploads/downloads, 5000–3600000 ms (generous on purpose; not the 10 s VSQI timeout) |
 
 Configuration is validated at startup. `VSQI_BASE_URL` must use HTTPS. TLS certificate verification remains enabled. Do not commit `.env` or put credentials in the upstream URL.
 
@@ -92,7 +95,7 @@ Open `http://localhost:3100/` for the Smart.Rail Digital Library web UI. The API
 
 ## Web UI (Smart.Rail Digital Library)
 
-The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specification (Deep Green + Terracotta, Be Vietnam Pro / Inter, VI/EN toggle, desktop-first responsive). It is a thin client over the existing merged-search API — no backend behavior changed. The static assets keep their historical filenames (`public/index.html`, `public/playground.css`, `public/playground.js`) so the Fastify routes and `vercel.json` are unchanged.
+The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specification (Deep Green + Terracotta, Be Vietnam Pro / Inter, VI/EN toggle, desktop-first responsive). Standards screens are a thin client over the merged-search API; the **Tài liệu** view talks to the separate elib service through the `/api/elib/*` proxy (see Elib integration below). The static assets keep their historical filenames (`public/index.html`, `public/playground.css`, `public/playground.js`) so the Fastify routes and `vercel.json` are unchanged.
 
 | Spec screen | Status | Notes |
 | --- | --- | --- |
@@ -102,8 +105,8 @@ The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specific
 | 04 Document Detail | Implemented | Breadcrumb, CSS-generated cover (organisation + code), badges, metadata rows (`issuingAgency`, dates, year, status, source — "—" when null, e.g. TCVN issuing agency), scope/related/history/other sections via the existing `buildDetailViewModel`, "Xem tại nguồn gốc" (`detailUrl`, new tab), save to My Library, copy `?view=detail&code=&source=` link. No Download button: the API serves metadata only, there is no file. |
 | 05 Online Viewer | Partial (metadata preview) | "Xem trước thông tin" opens a modal summarizing the record with a link to the source. There is no PDF preview, thumbnails, or zoom — the API has no document files. |
 | 06 My Library | Implemented (client-side) | Favorites + recently viewed in `localStorage` (`smartrail-favorites`, `smartrail-recent`). Not synced per account. |
-| 07 Login & Profile | Not implemented | The "Đăng nhập" button is disabled with an explanatory note; there is no authentication backend. |
-| 08–10 Admin (Dashboard / Document Management / Metadata & Access) | Not implemented | No admin nav, dashboards, KPIs, upload forms, or view counts — the backend has no documents, users, or admin endpoints. Nothing is faked. |
+| 07 Login & Profile | Implemented via elib (Documents view) | Sign-in happens in the **Tài liệu** view against the elib service (`/api/elib/auth/*` through the proxy). There is no registration page; accounts are created by the library admin (elib `create-admin` script). Profile editing is not implemented. |
+| 08–10 Admin (Dashboard / Document Management / Metadata & Access) | Partial (upload only) | The **Tài liệu** view provides elib Phase 1 upload (single file + metadata, progress, duplicate handling) for admin/editor accounts. Dashboards, document list/management, and metadata/access admin are **not** implemented — elib has no list/management API yet (Phase 4). Nothing is faked. |
 
 Language: VI by default; the VI/EN toggle switches all UI chrome labels via a dictionary (document titles use the API's `name`/`englishName` as-is). Fonts load from Google Fonts (allowed by the Helmet CSP `style-src https:` / `font-src https:`) with a system font-stack fallback. The API reference view documents the merged response (`source: "MULTI"`, `sources[]`, `partialFailures`), `?source=` detail pinning, and the accepted code organisations (TCVN/QCVN/ISO/IEC/ASTM/BS/DIN/EN/JIS/UL/ANSI/AS/GB).
 
@@ -112,6 +115,20 @@ Health check:
 ```sh
 curl http://localhost:3100/health
 ```
+
+## Elib integration (Tài liệu)
+
+The **Tài liệu** view integrates the separate **elib** document service (Fastify + TypeScript + PostgreSQL, Phase 1: single-file upload with metadata, magic-byte validation, SHA-256 dedup, permission-checked download). Elib is a different codebase/service with its own database and on-disk storage; Reverse_proxy holds **no** documents, users, or files — it only proxies.
+
+```
+Browser ──> nginx (HTTPS) ──> Reverse_proxy :3100 ──/api/elib/*──> elib :3200 (internal only)
+                                   └──/api/v1/*──> VSQI + tracuu.tcvn.vn
+```
+
+- Proxy: all methods on `/api/elib/*` are forwarded to `{ELIB_BASE_URL}/api/*` (query preserved) with **streaming** request/response bodies (undici `request()` + `reply.hijack()`, see `src/elib-proxy.ts`) — 200 MB uploads and downloads are never buffered in memory. `Cookie` is forwarded and every `Set-Cookie` is passed through, so elib's httpOnly session cookie (`path=/`) works same-origin. Elib unreachable → `502 ELIB_UNAVAILABLE` (Vietnamese JSON); `ELIB_ENABLED=false` → `503 ELIB_DISABLED`. Standards search keeps working either way. Proxy routes are exempt from the standards rate limit (a 30/min cap would break large transfers); elib enforces auth and file-size limits itself.
+- UI flow: opening **Tài liệu** calls `GET /api/elib/auth/me`. Signed out → login form (`POST /api/elib/auth/login`). Viewer role → "Bạn không có quyền upload". Admin/editor → upload form (file, title, description, category from `GET /api/elib/categories`, doc_type, language, tags, visibility, status) sent with `XMLHttpRequest` for real progress; `409 DUPLICATE_FILE` offers "Bỏ qua / Vẫn tạo mới" (resubmit with `force=true`). Successful uploads appear in a session-only list with download links (`GET /api/elib/documents/:id/files/:fileId/download`). There is **no document list** yet — elib Phase 1 has no list/search endpoint; browsing/management is Phase 4. The UI says so instead of faking a list.
+- Same-origin requirement: the session cookie only flows when the UI and `/api/elib/*` share an origin (the normal nginx setup). If the header **API BASE URL** points at a different origin, elib login will not persist without CORS credentials — keep the default (current origin) for elib use.
+- Deploying elib: run it separately on the same server, bound to `127.0.0.1:3200` (never public), with its own PostgreSQL and `STORAGE_ROOT`. Steps (from the elib-service README): `npm install` → fill `.env` (`DATABASE_URL`, `STORAGE_ROOT`, `SESSION_SECRET`, `COOKIE_SECURE=true` behind HTTPS, `PORT=3200`) → `npm run migrate` → `npm run seed:categories` → `npm run create-admin` → `npm run build && npm start`. Start elib before or after Reverse_proxy — the proxy tolerates elib being down (502 banner in the Tài liệu view only). Full runbook: [docs/deploy-server.md](docs/deploy-server.md).
 
 ## Docker deployment
 

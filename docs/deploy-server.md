@@ -142,6 +142,48 @@ Mở `https://your-domain.example/` để xem giao diện Smart.Rail và thử t
 - **429 Too Many Requests:** giới hạn mặc định 30 request/phút (`RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW`), tăng trong `.env` nếu cần. Lưu ý cache + rate-limit là theo từng process.
 - **Trang mở được nhưng API bị chặn (CORS):** nếu giao diện và API khác origin, đặt `CORS_ORIGIN` đúng 1 origin HTTPS của giao diện. Qua nginx cùng domain thì để trống.
 
-## Ghi chú cho bước elib sau này
+## Elib (dịch vụ tài liệu) — chạy cùng server
 
-Khi tích hợp elib (dịch vụ elib riêng, cổng 3200), Reverse_proxy sẽ cần thêm proxy `/api/elib/*` → elib. Lúc đó elib nên chạy nội bộ (chỉ `127.0.0.1:3200`), người dùng chỉ vào qua nginx → Reverse_proxy. Chưa cần làm gì ở bước deploy này ngoài việc chừa cổng 3200 trống.
+Reverse_proxy chuyển tiếp `/api/elib/*` sang dịch vụ elib (Fastify + PostgreSQL, cổng 3200). Elib là dịch vụ riêng có DB và thư mục lưu file riêng; Reverse_proxy không giữ tài liệu/người dùng/file.
+
+### Thứ tự chạy
+
+1. **PostgreSQL** chạy trước (elib cần DB để migrate/đăng nhập/upload).
+2. **Elib** (chỉ nội bộ, không mở ra Internet):
+
+```bash
+cd elib-service   # thư mục code elib trên server
+npm install
+cp .env.example .env
+# Điền .env: DATABASE_URL, STORAGE_ROOT (ổ đĩa lưu file, ví dụ /data/elib-storage),
+# SESSION_SECRET (chuỗi ngẫu nhiên dài), COOKIE_SECURE=true (khi chạy sau HTTPS),
+# HOST=127.0.0.1, PORT=3200
+npm run migrate
+npm run seed:categories
+npm run create-admin -- --email admin@congty.vn --password 'MatKhauManh'
+npm run build && npm start   # hoặc chạy bằng systemd tương tự Reverse_proxy
+```
+
+3. **Reverse_proxy** (Docker hoặc Node như trên) với `.env` có:
+
+```bash
+ELIB_BASE_URL=http://127.0.0.1:3200
+ELIB_ENABLED=true
+ELIB_TIMEOUT_MS=300000
+```
+
+Thứ tự 2–3 đổi cho nhau cũng được: elib chưa chạy thì mục Tài liệu hiện banner lỗi 502, các chức năng tra cứu tiêu chuẩn vẫn chạy bình thường.
+
+> **Lưu ý mạng Docker:** nếu Reverse_proxy chạy trong Docker còn elib chạy trên host, `127.0.0.1` trong container là chính container đó — không tới được elib. Khi đó đặt `ELIB_BASE_URL=http://host.docker.internal:3200` (kèm `extra_hosts: ["host.docker.internal:host-gateway"]` trong compose nếu cần) hoặc chạy Reverse_proxy bằng Node trực tiếp. Elib hiện chưa có image Docker riêng nên compose của Reverse_proxy không chứa service elib.
+
+### Kiểm tra elib qua proxy (bắt buộc)
+
+```bash
+curl http://127.0.0.1:3200/health                 # elib trực tiếp (nội bộ)
+curl http://127.0.0.1:3100/api/elib/auth/me        # qua Reverse_proxy: chưa đăng nhập -> 401 JSON tiếng Việt
+curl https://your-domain.example/api/elib/auth/me  # qua nginx + HTTPS: vẫn 401 là đúng (chưa đăng nhập)
+```
+
+Sau đó mở `https://your-domain.example/`, vào mục **Tài liệu**, đăng nhập bằng tài khoản admin vừa tạo, thử upload 1 file thật rồi tải xuống lại. Kiểm tra thêm: file trùng sẽ báo 409 cho chọn bỏ qua/tạo mới; tài khoản viewer không thấy form upload. **VSQI vẫn phải kiểm tra như cũ** (kết quả VSQI xuất hiện thật, không nằm trong `partialFailures`).
+
+> Cookie phiên của elib là httpOnly `path=/` nên chạy cùng origin qua proxy/nginx là đúng. Khi đã có HTTPS, nhớ đặt `COOKIE_SECURE=true` trong `.env` của elib. Đừng mở cổng 3200 ra Internet (firewall chỉ mở 80/443 + SSH như trên).

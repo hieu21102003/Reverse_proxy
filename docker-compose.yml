@@ -20,3 +20,9 @@ services:
       # Chỉ localhost — nginx đứng trước, không mở thẳng 3100 ra Internet.
       - "127.0.0.1:3100:3100"
     # Healthcheck đã có trong Dockerfile (GET /health).
+    # Elib KHÔNG nằm trong compose này (chưa có image/repo riêng): chạy elib
+    # như tiến trình riêng trên host ở 127.0.0.1:3200. Lưu ý mạng Docker:
+    # 127.0.0.1 trong container là chính container, nên ELIB_BASE_URL trong
+    # .env phải trỏ tới host gateway, ví dụ http://host.docker.internal:3200
+    # (thêm extra_hosts: ["host.docker.internal:host-gateway"] nếu cần),
+    # hoặc chạy Reverse_proxy bằng Node trực tiếp. Xem docs/deploy-server.md.
