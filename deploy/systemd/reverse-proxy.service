@@ -1,0 +1,20 @@
+[Unit]
+Description=Reverse_proxy (VSQI/TCVN standards API + Smart.Rail UI)
+After=network.target
+
+[Service]
+Type=simple
+# Sửa User và WorkingDirectory cho đúng máy của bạn.
+User=www-data
+WorkingDirectory=/opt/reverse-proxy
+Environment=NODE_ENV=production
+# File .env nằm trong WorkingDirectory (app tự đọc qua dotenv).
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+# App tự xử lý SIGTERM/SIGINT để đóng sạch (xem src/server.ts).
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
