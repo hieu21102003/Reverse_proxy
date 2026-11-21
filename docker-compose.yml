@@ -1,0 +1,22 @@
+# Reverse_proxy — docker compose (server)
+# Chạy từ thư mục gốc repo:
+#   docker compose up -d --build
+# Cần file .env trong cùng thư mục (copy từ .env.example của repo).
+
+services:
+  reverse-proxy:
+    build: .
+    image: vsqi-proxy-api:latest
+    container_name: reverse-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Trong container luôn nghe mọi interface; việc giới hạn ra ngoài
+      # do dòng ports bên dưới (chỉ 127.0.0.1) + nginx đảm nhiệm.
+      HOST: 0.0.0.0
+      PORT: "3100"
+    ports:
+      # Chỉ localhost — nginx đứng trước, không mở thẳng 3100 ra Internet.
+      - "127.0.0.1:3100:3100"
+    # Healthcheck đã có trong Dockerfile (GET /health).
