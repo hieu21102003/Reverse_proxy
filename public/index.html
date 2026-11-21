@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=3">
-    <script src="/playground.js?v=3" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=4">
+    <script src="/playground.js?v=4" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -26,6 +26,7 @@
           <button class="nav-item is-active" data-view="home" type="button"><span data-i18n="navHome">Trang chủ</span></button>
           <button class="nav-item" data-view="search" type="button"><span data-i18n="navSearch">Tìm kiếm</span></button>
           <button class="nav-item" data-view="categories" type="button"><span data-i18n="navCategories">Danh mục</span></button>
+          <button class="nav-item" data-view="documents" type="button"><span data-i18n="navDocuments">Tài liệu</span></button>
           <button class="nav-item" data-view="library" type="button"><span data-i18n="navLibrary">Thư viện cá nhân</span></button>
           <button class="nav-item" data-view="docs" type="button"><span data-i18n="navDocs">API</span></button>
         </nav>
@@ -35,10 +36,10 @@
             <button type="button" id="lang-vi" class="lang-btn is-active">VI</button>
             <button type="button" id="lang-en" class="lang-btn">EN</button>
           </div>
-          <button class="login-btn" type="button" disabled title="Chưa có backend đăng nhập"><span data-i18n="login">Đăng nhập</span></button>
+          <button class="login-btn" id="header-login-btn" type="button"><span data-i18n="login">Đăng nhập</span></button>
         </div>
       </div>
-      <p class="login-note" data-i18n="loginNote">Đăng nhập chưa khả dụng: hệ thống hiện chưa có backend xác thực người dùng.</p>
+      <p class="login-note" data-i18n="loginNote">Đăng nhập tại mục Tài liệu để tải lên và quản lý tài liệu của thư viện.</p>
     </header>
 
     <main class="main-area">
@@ -293,6 +294,80 @@
             <a class="button button-terracotta" id="preview-source-link" href="#" target="_blank" rel="noreferrer" hidden><span data-i18n="viewAtSource">Xem tại nguồn gốc</span></a>
           </div>
         </div>
+      </section>
+
+      <!-- Tài liệu (elib) -->
+      <section class="view-panel" id="view-documents" aria-labelledby="documents-title" hidden>
+        <div class="page-heading">
+          <div>
+            <h1 id="documents-title" data-i18n="documentsTitle">Tài liệu thư viện</h1>
+            <p class="page-subtitle" data-i18n="documentsSubtitle">Tải tài liệu lên thư viện số của Viện (dịch vụ elib). Chỉ tài khoản admin hoặc editor mới được tải lên.</p>
+          </div>
+          <div class="endpoint-chip"><span class="method method-get">ELIB</span><code>/api/elib/*</code></div>
+        </div>
+
+        <div class="elib-banner" id="elib-banner" hidden role="alert"></div>
+        <div class="loading-skeleton" id="elib-loading" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+
+        <div class="elib-card" id="elib-login-box" hidden>
+          <h2 data-i18n="elibLoginTitle">Đăng nhập thư viện</h2>
+          <p class="section-note" data-i18n="elibLoginNote">Dùng tài khoản do quản trị thư viện cấp. Hệ thống chưa có trang đăng ký.</p>
+          <form id="elib-login-form" class="elib-login-form">
+            <label class="field"><span class="field-label" data-i18n="elibEmail">Email</span><input id="elib-email" type="email" autocomplete="username" required></label>
+            <label class="field"><span class="field-label" data-i18n="elibPassword">Mật khẩu</span><input id="elib-password" type="password" autocomplete="current-password" required></label>
+            <button class="button button-terracotta" id="elib-login-submit" type="submit"><span data-i18n="login">Đăng nhập</span></button>
+          </form>
+          <div class="error-banner" id="elib-login-error" hidden></div>
+        </div>
+
+        <div class="elib-userbar" id="elib-user-bar" hidden>
+          <span id="elib-user-text"></span>
+          <button class="button button-secondary button-small" id="elib-logout-btn" type="button"><span data-i18n="elibLogout">Đăng xuất</span></button>
+        </div>
+
+        <div class="empty-state" id="elib-no-permission" hidden>
+          <strong data-i18n="elibNoPermissionTitle">Bạn không có quyền upload</strong>
+          <p data-i18n="elibNoPermissionText">Chỉ tài khoản admin hoặc editor mới được tải tài liệu lên. Liên hệ quản trị thư viện nếu bạn cần quyền này.</p>
+        </div>
+
+        <form class="elib-card" id="elib-upload-form" hidden>
+          <h2 data-i18n="elibUploadTitle">Tải tài liệu lên</h2>
+          <div class="elib-form-grid">
+            <label class="field elib-span-2"><span class="field-label"><span data-i18n="elibFile">File tài liệu</span> <span class="required">*</span></span><input id="elib-file" type="file" required><span class="field-hint" data-i18n="elibFileHint">PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG/WEBP, TXT, DWG — tối đa 200 MB. Định dạng được kiểm tra theo nội dung file.</span></label>
+            <label class="field elib-span-2"><span class="field-label"><span data-i18n="elibTitle">Tiêu đề</span> <span class="required">*</span></span><input id="elib-title" type="text" maxlength="300" required></label>
+            <label class="field elib-span-2"><span class="field-label" data-i18n="elibDescription">Mô tả</span><textarea id="elib-description" rows="3" maxlength="5000"></textarea></label>
+            <label class="field"><span class="field-label" data-i18n="elibCategory">Danh mục</span><select id="elib-category"><option value="" data-i18n="elibNoCategory">— Chưa chọn danh mục —</option></select></label>
+            <label class="field"><span class="field-label" data-i18n="elibDocType">Loại tài liệu</span><input id="elib-doc-type" type="text" maxlength="100" data-i18n-placeholder="elibDocTypePlaceholder" placeholder="Ví dụ: Tiêu chuẩn, Báo cáo, Bản vẽ..."></label>
+            <label class="field"><span class="field-label" data-i18n="elibLanguage">Ngôn ngữ</span><input id="elib-language" type="text" maxlength="50" placeholder="vi / en"></label>
+            <label class="field"><span class="field-label" data-i18n="elibTags">Từ khóa (tag)</span><input id="elib-tags" type="text" data-i18n-placeholder="elibTagsPlaceholder" placeholder="Cách nhau bằng dấu phẩy"></label>
+            <label class="field"><span class="field-label" data-i18n="elibVisibility">Mức hiển thị</span>
+              <select id="elib-visibility"><option value="internal" data-i18n="visInternal">Nội bộ</option><option value="public" data-i18n="visPublic">Công khai</option><option value="private" data-i18n="visPrivate">Riêng tư</option></select>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="elibStatus">Trạng thái</span>
+              <select id="elib-status"><option value="draft" data-i18n="stDraft">Bản nháp</option><option value="published" data-i18n="stPublished">Đã xuất bản</option><option value="hidden" data-i18n="stHidden">Ẩn</option></select>
+            </label>
+          </div>
+          <div class="elib-progress" id="elib-progress" hidden>
+            <div class="elib-progress-track"><div class="elib-progress-bar" id="elib-progress-bar"></div></div>
+            <span id="elib-progress-text">0%</span>
+          </div>
+          <div class="error-banner" id="elib-upload-error" hidden></div>
+          <div class="elib-duplicate" id="elib-duplicate" hidden>
+            <p id="elib-duplicate-text"></p>
+            <div class="elib-duplicate-actions">
+              <button class="button button-secondary button-small" id="elib-duplicate-skip" type="button"><span data-i18n="elibSkip">Bỏ qua</span></button>
+              <button class="button button-terracotta button-small" id="elib-duplicate-force" type="button"><span data-i18n="elibForce">Vẫn tạo mới</span></button>
+            </div>
+          </div>
+          <div class="elib-success" id="elib-success" hidden></div>
+          <button class="button button-terracotta" id="elib-upload-submit" type="submit"><span data-i18n="elibUpload">Tải lên</span></button>
+        </form>
+
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="elibSessionTitle">Vừa tải lên trong phiên này</h2></div>
+        <p class="section-note" data-i18n="elibSessionNote">Danh sách này chỉ gồm các file bạn vừa tải lên trong phiên làm việc hiện tại (không lưu lại khi tải lại trang).</p>
+        <div class="elib-session-list" id="elib-session-list"></div>
+        <div class="empty-state" id="elib-session-empty"><strong data-i18n="elibSessionEmptyTitle">Chưa tải lên tài liệu nào trong phiên này</strong><p data-i18n="elibSessionEmptyText">Tài liệu tải lên thành công sẽ xuất hiện tại đây kèm liên kết tải xuống.</p></div>
+        <p class="section-note" data-i18n="elibPhase4Note">Duyệt và quản lý danh sách tài liệu (lọc, sửa, ẩn/xóa, phiên bản mới) sẽ có ở Giai đoạn 4. Hiện tại elib chưa có API danh sách tài liệu.</p>
       </section>
 
       <!-- 06 My Library -->

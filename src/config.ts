@@ -50,7 +50,26 @@ const envSchema = z.object({
   /** Max organisations fanned out to for a QT title query without an org prefix. */
   TCVN_QT_MAX_ORGS: z.coerce.number().int().min(1).max(20).default(11),
   /** How long the fetched QT organisation list is cached (seconds). */
-  TCVN_ORG_LIST_TTL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600)
+  TCVN_ORG_LIST_TTL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600),
+  /**
+   * Elib document service (separate Fastify + PostgreSQL backend, Phase 1).
+   * Reverse_proxy only proxies /api/elib/* to it; it holds no DB or files.
+   * In production elib binds 127.0.0.1:3200 behind Reverse_proxy.
+   * Docker caveat: inside a container 127.0.0.1 is the container itself —
+   * point this at the host gateway (e.g. http://host.docker.internal:3200)
+   * or run Reverse_proxy bare-Node. See docs/deploy-server.md.
+   */
+  ELIB_BASE_URL: z.string().url().refine(value => {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:')
+      && !url.username && !url.password;
+  }, {
+    message: 'ELIB_BASE_URL must be an http(s) URL without credentials'
+  }).default('http://127.0.0.1:3200'),
+  /** When false, /api/elib/* returns 503 and the Tài liệu view shows a disabled state. */
+  ELIB_ENABLED: z.enum(['true', 'false']).default('true').transform(value => value === 'true'),
+  /** Generous proxy timeout for elib uploads/downloads (not the 10s VSQI timeout). */
+  ELIB_TIMEOUT_MS: z.coerce.number().int().min(5000).max(3600000).default(300000)
 });
 
 export const config = envSchema.parse(process.env);

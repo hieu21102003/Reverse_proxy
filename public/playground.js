@@ -328,8 +328,8 @@
 
     const I18N = {
       vi: {
-        navHome: 'Trang chủ', navSearch: 'Tìm kiếm', navCategories: 'Danh mục', navLibrary: 'Thư viện cá nhân', navDocs: 'API',
-        apiBase: 'API BASE URL', login: 'Đăng nhập', loginNote: 'Đăng nhập chưa khả dụng: hệ thống hiện chưa có backend xác thực người dùng.',
+        navHome: 'Trang chủ', navSearch: 'Tìm kiếm', navCategories: 'Danh mục', navDocuments: 'Tài liệu', navLibrary: 'Thư viện cá nhân', navDocs: 'API',
+        apiBase: 'API BASE URL', login: 'Đăng nhập', loginNote: 'Đăng nhập tại mục Tài liệu để tải lên và quản lý tài liệu của thư viện.',
         heroTitle: 'Thư viện tri thức Đường sắt & TOD', heroSubtitle: 'Khám phá, tra cứu và khai thác nguồn tài liệu chuyên ngành.',
         heroSearchLabel: 'Tìm kiếm tài liệu', heroPlaceholder: 'Tìm kiếm tài liệu, tiêu chuẩn, dự án...', search: 'Tìm kiếm',
         heroHint: 'Tìm theo tên, mã tiêu chuẩn hoặc từ khóa. Dữ liệu được tra cứu trực tiếp từ VSQI và tracuu.tcvn.vn.',
@@ -383,11 +383,30 @@
         copied: 'Đã sao chép', copyFailed: 'Trình duyệt không cho phép sao chép', savedToast: 'Đã lưu vào My Library', removedToast: 'Đã xóa khỏi My Library',
         recentLoadError: 'Không tải được tài liệu mới cập nhật từ API. Kiểm tra API BASE URL rồi thử lại.', openCategory: 'Mở danh mục', documents: 'tài liệu',
         countUnavailable: 'Chưa tra cứu được số lượng', remove: 'Xóa', open: 'Mở', clearRecentDone: 'Đã xóa lịch sử xem',
-        networkError: 'Không kết nối được tới API. Kiểm tra API BASE URL, mạng và CORS.', yearPrefix: 'Năm ban hành'
+        networkError: 'Không kết nối được tới API. Kiểm tra API BASE URL, mạng và CORS.', yearPrefix: 'Năm ban hành',
+        documentsTitle: 'Tài liệu thư viện', documentsSubtitle: 'Tải tài liệu lên thư viện số của Viện (dịch vụ elib). Chỉ tài khoản admin hoặc editor mới được tải lên.',
+        elibLoginTitle: 'Đăng nhập thư viện', elibLoginNote: 'Dùng tài khoản do quản trị thư viện cấp. Hệ thống chưa có trang đăng ký.',
+        elibEmail: 'Email', elibPassword: 'Mật khẩu', elibLogout: 'Đăng xuất', elibSignedInAs: 'Đã đăng nhập: {email} (quyền: {role})',
+        elibNoPermissionTitle: 'Bạn không có quyền upload', elibNoPermissionText: 'Chỉ tài khoản admin hoặc editor mới được tải tài liệu lên. Liên hệ quản trị thư viện nếu bạn cần quyền này.',
+        elibUploadTitle: 'Tải tài liệu lên', elibFile: 'File tài liệu', elibFileHint: 'PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG/WEBP, TXT, DWG — tối đa 200 MB. Định dạng được kiểm tra theo nội dung file.',
+        elibTitle: 'Tiêu đề', elibDescription: 'Mô tả', elibCategory: 'Danh mục', elibNoCategory: '— Chưa chọn danh mục —',
+        elibDocType: 'Loại tài liệu', elibDocTypePlaceholder: 'Ví dụ: Tiêu chuẩn, Báo cáo, Bản vẽ...', elibLanguage: 'Ngôn ngữ',
+        elibTags: 'Từ khóa (tag)', elibTagsPlaceholder: 'Cách nhau bằng dấu phẩy', elibVisibility: 'Mức hiển thị',
+        visInternal: 'Nội bộ', visPublic: 'Công khai', visPrivate: 'Riêng tư', elibStatus: 'Trạng thái',
+        stDraft: 'Bản nháp', stPublished: 'Đã xuất bản', stHidden: 'Ẩn', elibUpload: 'Tải lên', elibUploading: 'Đang tải lên...',
+        elibSkip: 'Bỏ qua', elibForce: 'Vẫn tạo mới', elibDuplicateFallback: 'File này đã tồn tại trong thư viện. Bạn có thể bỏ qua hoặc vẫn tạo mới.',
+        elibUploadOk: 'Đã tải lên thành công: {title}', elibDownload: 'Tải xuống', elibNeedFileTitle: 'Vui lòng chọn file và nhập tiêu đề tài liệu.',
+        elibSessionTitle: 'Vừa tải lên trong phiên này', elibSessionNote: 'Danh sách này chỉ gồm các file bạn vừa tải lên trong phiên làm việc hiện tại (không lưu lại khi tải lại trang).',
+        elibSessionEmptyTitle: 'Chưa tải lên tài liệu nào trong phiên này', elibSessionEmptyText: 'Tài liệu tải lên thành công sẽ xuất hiện tại đây kèm liên kết tải xuống.',
+        elibPhase4Note: 'Duyệt và quản lý danh sách tài liệu (lọc, sửa, ẩn/xóa, phiên bản mới) sẽ có ở Giai đoạn 4. Hiện tại elib chưa có API danh sách tài liệu.',
+        elibDown: 'Không kết nối được tới dịch vụ tài liệu (elib). Các chức năng tra cứu tiêu chuẩn vẫn dùng bình thường.',
+        elibDisabled: 'Tính năng tài liệu (elib) hiện đang tắt trên máy chủ này.',
+        elibLoginFailed: 'Đăng nhập không thành công. Kiểm tra lại email và mật khẩu.', elibLoggedOut: 'Đã đăng xuất',
+        elibCategoriesFailed: 'Không tải được danh mục từ elib; bạn vẫn có thể tải lên mà không chọn danh mục.'
       },
       en: {
-        navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navLibrary: 'My Library', navDocs: 'API',
-        apiBase: 'API BASE URL', login: 'Sign in', loginNote: 'Sign-in is not available yet: there is no user authentication backend.',
+        navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navDocuments: 'Documents', navLibrary: 'My Library', navDocs: 'API',
+        apiBase: 'API BASE URL', login: 'Sign in', loginNote: 'Sign in under Documents to upload and manage library documents.',
         heroTitle: 'Railway & TOD Knowledge Library', heroSubtitle: 'Discover, search and use specialist documents.',
         heroSearchLabel: 'Search documents', heroPlaceholder: 'Search documents, standards, projects...', search: 'Search',
         heroHint: 'Search by title, standard code or keyword. Data is queried live from VSQI and tracuu.tcvn.vn.',
@@ -441,7 +460,26 @@
         copied: 'Copied', copyFailed: 'Clipboard is unavailable in this browser', savedToast: 'Saved to My Library', removedToast: 'Removed from My Library',
         recentLoadError: 'Could not load recent documents from the API. Check the API BASE URL and retry.', openCategory: 'Open category', documents: 'documents',
         countUnavailable: 'Count unavailable', remove: 'Remove', open: 'Open', clearRecentDone: 'Viewing history cleared',
-        networkError: 'Unable to reach the API. Check the API base URL, network and CORS.', yearPrefix: 'Year'
+        networkError: 'Unable to reach the API. Check the API base URL, network and CORS.', yearPrefix: 'Year',
+        documentsTitle: 'Library documents', documentsSubtitle: 'Upload documents to the Institute digital library (elib service). Only admin or editor accounts may upload.',
+        elibLoginTitle: 'Library sign-in', elibLoginNote: 'Use the account issued by the library administrator. There is no registration page yet.',
+        elibEmail: 'Email', elibPassword: 'Password', elibLogout: 'Sign out', elibSignedInAs: 'Signed in: {email} (role: {role})',
+        elibNoPermissionTitle: 'You do not have upload permission', elibNoPermissionText: 'Only admin or editor accounts may upload documents. Contact the library administrator if you need this permission.',
+        elibUploadTitle: 'Upload a document', elibFile: 'Document file', elibFileHint: 'PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG/WEBP, TXT, DWG — up to 200 MB. The real format is checked from file content.',
+        elibTitle: 'Title', elibDescription: 'Description', elibCategory: 'Category', elibNoCategory: '— No category selected —',
+        elibDocType: 'Document type', elibDocTypePlaceholder: 'E.g. Standard, Report, Drawing...', elibLanguage: 'Language',
+        elibTags: 'Tags', elibTagsPlaceholder: 'Comma-separated', elibVisibility: 'Visibility',
+        visInternal: 'Internal', visPublic: 'Public', visPrivate: 'Private', elibStatus: 'Status',
+        stDraft: 'Draft', stPublished: 'Published', stHidden: 'Hidden', elibUpload: 'Upload', elibUploading: 'Uploading...',
+        elibSkip: 'Skip', elibForce: 'Create anyway', elibDuplicateFallback: 'This file already exists in the library. You can skip it or create a new copy.',
+        elibUploadOk: 'Uploaded successfully: {title}', elibDownload: 'Download', elibNeedFileTitle: 'Please choose a file and enter a document title.',
+        elibSessionTitle: 'Uploaded in this session', elibSessionNote: 'This list only contains files you uploaded in the current session (it is not kept after a page reload).',
+        elibSessionEmptyTitle: 'Nothing uploaded in this session yet', elibSessionEmptyText: 'Successfully uploaded documents will appear here with a download link.',
+        elibPhase4Note: 'Browsing and managing the document list (filter, edit, hide/delete, new versions) arrives in Phase 4. Elib has no document-list API yet.',
+        elibDown: 'Unable to reach the document service (elib). Standards search keeps working as usual.',
+        elibDisabled: 'The document feature (elib) is currently disabled on this server.',
+        elibLoginFailed: 'Sign-in failed. Check your email and password.', elibLoggedOut: 'Signed out',
+        elibCategoriesFailed: 'Could not load categories from elib; you can still upload without a category.'
       }
     };
     const t = (key, vars = {}) => {
@@ -621,6 +659,7 @@
       $$('.nav-item').forEach(button => button.classList.toggle('is-active', button.dataset.view === name));
       $('#main-nav').classList.remove('is-open');
       if (name === 'library') renderLibrary();
+      if (name === 'documents') void loadDocumentsView();
       if (push) {
         const url = new URL(location.href);
         if (name === 'home') { url.search = ''; } else { url.searchParams.set('view', name); if (name !== 'search') { url.searchParams.delete('q'); url.searchParams.delete('page'); } if (name !== 'detail') { url.searchParams.delete('code'); url.searchParams.delete('source'); } }
@@ -1291,6 +1330,244 @@
       void loadHomeRecent();
       if (currentDetail && memory.detail) renderDetailResult(memory.detail);
       if (!$('#view-library').hidden) renderLibrary();
+      if (!$('#view-documents').hidden) { renderElibUserBar(); renderElibSession(); }
+    }
+
+    // ---- Tài liệu (elib via /api/elib/* proxy) ----
+    let elibUser = null;
+    let elibCategoriesLoaded = false;
+    const elibSessionUploads = [];
+    let elibPendingUpload = null;
+
+    function elibUrl(path) {
+      return `${getBaseUrl()}/api/elib${path}`;
+    }
+
+    async function elibFetchJson(path, options = {}) {
+      let url;
+      try { url = elibUrl(path); } catch (error) {
+        return { status: null, payload: undefined, errorMessage: error.message };
+      }
+      try {
+        const response = await fetch(url, { credentials: 'same-origin', ...options });
+        const raw = await response.text();
+        let payload;
+        try { payload = JSON.parse(raw); } catch { payload = undefined; }
+        const errorMessage = !response.ok ? (payload?.error?.message || `HTTP ${response.status}`) : '';
+        return { status: response.status, payload, errorMessage, errorCode: payload?.error?.code || '' };
+      } catch (error) {
+        return { status: null, payload: undefined, errorMessage: error instanceof TypeError ? t('networkError') : error.message, errorCode: '' };
+      }
+    }
+
+    function setElibBanner(message) {
+      const banner = $('#elib-banner');
+      banner.hidden = !message;
+      banner.textContent = message || '';
+    }
+
+    function renderElibUserBar() {
+      const bar = $('#elib-user-bar');
+      if (!elibUser) { bar.hidden = true; return; }
+      bar.hidden = false;
+      $('#elib-user-text').textContent = t('elibSignedInAs', { email: elibUser.email || '', role: elibUser.role || '' });
+    }
+
+    function formatBytes(bytes) {
+      const value = Number(bytes);
+      if (!Number.isFinite(value)) return DASH;
+      if (value < 1024) return `${value} B`;
+      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function renderElibSession() {
+      const list = $('#elib-session-list');
+      list.replaceChildren();
+      $('#elib-session-empty').hidden = elibSessionUploads.length !== 0;
+      for (const item of elibSessionUploads) {
+        const row = document.createElement('div');
+        row.className = 'elib-session-row';
+        const main = document.createElement('div');
+        main.className = 'lib-main';
+        const strong = document.createElement('strong');
+        strong.textContent = dash(item.title);
+        const small = document.createElement('small');
+        small.textContent = [item.originalFilename, formatBytes(item.fileSize), item.mimeType].filter(Boolean).join(' · ');
+        main.append(strong, small);
+        row.append(main);
+        if (item.documentId && item.fileId) {
+          let href = '#';
+          try { href = elibUrl(`/documents/${encodeURIComponent(item.documentId)}/files/${encodeURIComponent(item.fileId)}/download`); } catch { href = '#'; }
+          const link = document.createElement('a');
+          link.className = 'button button-secondary button-small';
+          link.href = href;
+          link.textContent = t('elibDownload');
+          row.append(link);
+        }
+        list.append(row);
+      }
+    }
+
+    function flattenElibCategories(nodes, depth = 0, out = []) {
+      for (const node of nodes || []) {
+        out.push({ id: node.id, name: node.name, depth });
+        flattenElibCategories(node.children, depth + 1, out);
+      }
+      return out;
+    }
+
+    async function loadElibCategories() {
+      if (elibCategoriesLoaded) return;
+      const result = await elibFetchJson('/categories');
+      const select = $('#elib-category');
+      if (result.status !== 200 || !result.payload) {
+        showToast(t('elibCategoriesFailed'));
+        return;
+      }
+      elibCategoriesLoaded = true;
+      const flat = Array.isArray(result.payload.data) && result.payload.data.length > 0
+        ? flattenElibCategories(result.payload.data)
+        : (result.payload.flat || []).map(row => ({ id: row.id, name: row.name, depth: 0 }));
+      for (const item of flat) {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = `${'\u00A0\u00A0'.repeat(item.depth)}${item.name}`;
+        select.append(option);
+      }
+    }
+
+    async function loadDocumentsView() {
+      setElibBanner('');
+      $('#elib-loading').hidden = false;
+      $('#elib-login-box').hidden = true;
+      $('#elib-user-bar').hidden = true;
+      $('#elib-no-permission').hidden = true;
+      $('#elib-upload-form').hidden = true;
+      renderElibSession();
+      const result = await elibFetchJson('/auth/me');
+      $('#elib-loading').hidden = true;
+      if (result.status === 200 && result.payload?.user) {
+        elibUser = result.payload.user;
+        renderElibUserBar();
+        if (elibUser.role === 'admin' || elibUser.role === 'editor') {
+          $('#elib-upload-form').hidden = false;
+          void loadElibCategories();
+        } else {
+          $('#elib-no-permission').hidden = false;
+        }
+        return;
+      }
+      elibUser = null;
+      if (result.status === 401) {
+        $('#elib-login-box').hidden = false;
+        return;
+      }
+      if (result.status === 503 || result.errorCode === 'ELIB_DISABLED') {
+        setElibBanner(t('elibDisabled'));
+        return;
+      }
+      setElibBanner(result.errorMessage || t('elibDown'));
+    }
+
+    function buildElibFormData(force) {
+      const formData = new FormData();
+      const file = $('#elib-file').files?.[0];
+      if (file) formData.append('file', file);
+      formData.append('title', $('#elib-title').value.trim());
+      formData.append('description', $('#elib-description').value.trim());
+      const categoryId = $('#elib-category').value;
+      if (categoryId) formData.append('category_id', categoryId);
+      formData.append('doc_type', $('#elib-doc-type').value.trim());
+      formData.append('language', $('#elib-language').value.trim());
+      formData.append('tags', $('#elib-tags').value.trim());
+      formData.append('visibility', $('#elib-visibility').value);
+      formData.append('status', $('#elib-status').value);
+      if (force) formData.append('force', 'true');
+      return formData;
+    }
+
+    function sendElibUpload(force) {
+      const errorBox = $('#elib-upload-error');
+      const duplicateBox = $('#elib-duplicate');
+      const successBox = $('#elib-success');
+      const progress = $('#elib-progress');
+      const bar = $('#elib-progress-bar');
+      const progressText = $('#elib-progress-text');
+      const submit = $('#elib-upload-submit');
+      errorBox.hidden = true;
+      successBox.hidden = true;
+      if (!force) duplicateBox.hidden = true;
+      progress.hidden = false;
+      bar.style.width = '0%';
+      progressText.textContent = '0%';
+      submit.disabled = true;
+      submit.classList.add('is-loading');
+
+      let url;
+      try { url = elibUrl('/documents'); } catch (error) {
+        progress.hidden = true;
+        submit.disabled = false;
+        submit.classList.remove('is-loading');
+        errorBox.hidden = false;
+        errorBox.textContent = error.message;
+        return;
+      }
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.withCredentials = true;
+      xhr.upload.addEventListener('progress', event => {
+        if (!event.lengthComputable) return;
+        const percent = Math.round((event.loaded / event.total) * 100);
+        bar.style.width = `${percent}%`;
+        progressText.textContent = `${percent}%`;
+      });
+      xhr.addEventListener('load', () => {
+        submit.disabled = false;
+        submit.classList.remove('is-loading');
+        progress.hidden = true;
+        let payload;
+        try { payload = JSON.parse(xhr.responseText); } catch { payload = undefined; }
+        if (xhr.status === 201 && payload?.document) {
+          duplicateBox.hidden = true;
+          elibPendingUpload = null;
+          const doc = payload.document;
+          const file = payload.file || {};
+          elibSessionUploads.unshift({
+            documentId: doc.id,
+            fileId: file.id,
+            title: doc.title || $('#elib-title').value.trim(),
+            originalFilename: file.original_filename || '',
+            fileSize: file.file_size,
+            mimeType: file.mime_type || ''
+          });
+          renderElibSession();
+          successBox.hidden = false;
+          successBox.textContent = t('elibUploadOk', { title: doc.title || '' });
+          showToast(t('elibUploadOk', { title: doc.title || '' }));
+          $('#elib-upload-form').reset();
+          return;
+        }
+        const code = payload?.error?.code || '';
+        const message = payload?.error?.message || `HTTP ${xhr.status}`;
+        if (xhr.status === 409 && code === 'DUPLICATE_FILE') {
+          duplicateBox.hidden = false;
+          $('#elib-duplicate-text').textContent = message || t('elibDuplicateFallback');
+          return;
+        }
+        errorBox.hidden = false;
+        errorBox.textContent = message;
+        if (xhr.status === 401) void loadDocumentsView();
+      });
+      xhr.addEventListener('error', () => {
+        submit.disabled = false;
+        submit.classList.remove('is-loading');
+        progress.hidden = true;
+        errorBox.hidden = false;
+        errorBox.textContent = t('networkError');
+      });
+      xhr.send(buildElibFormData(force));
     }
 
     // ---- Events ----
@@ -1375,6 +1652,49 @@
       } catch (error) { showToast(error.message); }
     });
     apiBaseInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); apiBaseInput.dispatchEvent(new Event('change')); } });
+    $('#header-login-btn').addEventListener('click', () => showView('documents'));
+    $('#elib-login-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const errorBox = $('#elib-login-error');
+      errorBox.hidden = true;
+      const submit = $('#elib-login-submit');
+      submit.disabled = true;
+      const result = await elibFetchJson('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: $('#elib-email').value.trim(), password: $('#elib-password').value })
+      });
+      submit.disabled = false;
+      if (result.status === 200) {
+        $('#elib-password').value = '';
+        void loadDocumentsView();
+        return;
+      }
+      errorBox.hidden = false;
+      errorBox.textContent = result.errorMessage || t('elibLoginFailed');
+    });
+    $('#elib-logout-btn').addEventListener('click', async () => {
+      await elibFetchJson('/auth/logout', { method: 'POST' });
+      elibUser = null;
+      showToast(t('elibLoggedOut'));
+      void loadDocumentsView();
+    });
+    $('#elib-upload-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const file = $('#elib-file').files?.[0];
+      const title = $('#elib-title').value.trim();
+      if (!file || !title) { showToast(t('elibNeedFileTitle')); return; }
+      elibPendingUpload = true;
+      sendElibUpload(false);
+    });
+    $('#elib-duplicate-skip').addEventListener('click', () => {
+      $('#elib-duplicate').hidden = true;
+      elibPendingUpload = null;
+    });
+    $('#elib-duplicate-force').addEventListener('click', () => {
+      if (!elibPendingUpload) return;
+      sendElibUpload(true);
+    });
 
     // ---- Init from URL ----
     applyLanguage(currentLang);
@@ -1388,7 +1708,7 @@
       searchPage.value = params.get('page') || '1';
       showView('search', false);
       void searchStandards();
-    } else if (['categories', 'library', 'docs', 'search', 'detail'].includes(view)) {
+    } else if (['categories', 'documents', 'library', 'docs', 'search', 'detail'].includes(view)) {
       showView(view, false);
     } else {
       showView('home', false);
