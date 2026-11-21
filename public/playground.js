@@ -316,25 +316,187 @@
     return;
   }
 
+
   function initApp() {
-    const searchForm = document.querySelector('#search-form');
-    const detailForm = document.querySelector('#detail-form');
-    const searchInput = document.querySelector('#search-query');
-    const searchPage = document.querySelector('#search-page');
-    const detailInput = document.querySelector('#detail-code');
-    const apiBaseInput = document.querySelector('#api-base-url');
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+    const DASH = '—';
     const memory = { search: null, detail: null };
     let toastTimer;
+    let currentLang = 'vi';
+    try { currentLang = localStorage.getItem('smartrail-lang') === 'en' ? 'en' : 'vi'; } catch { currentLang = 'vi'; }
 
-    const cleanBase = value => value.trim().replace(/\/+$/, '');
+    const I18N = {
+      vi: {
+        navHome: 'Trang chủ', navSearch: 'Tìm kiếm', navCategories: 'Danh mục', navLibrary: 'Thư viện cá nhân', navDocs: 'API',
+        apiBase: 'API BASE URL', login: 'Đăng nhập', loginNote: 'Đăng nhập chưa khả dụng: hệ thống hiện chưa có backend xác thực người dùng.',
+        heroTitle: 'Thư viện tri thức Đường sắt & TOD', heroSubtitle: 'Khám phá, tra cứu và khai thác nguồn tài liệu chuyên ngành.',
+        heroSearchLabel: 'Tìm kiếm tài liệu', heroPlaceholder: 'Tìm kiếm tài liệu, tiêu chuẩn, dự án...', search: 'Tìm kiếm',
+        heroHint: 'Tìm theo tên, mã tiêu chuẩn hoặc từ khóa. Dữ liệu được tra cứu trực tiếp từ VSQI và tracuu.tcvn.vn.',
+        disciplines: 'Danh mục chuyên ngành', discRail: 'Đường sắt', discWorks: 'Công trình', discElectric: 'Điện – Điện tử', discSignal: 'Tín hiệu', discDigital: 'Công nghệ số', discTod: 'TOD & Mobility',
+        recentDocs: 'Tài liệu mới cập nhật', seeAll: 'Xem tất cả', recentNote: 'Danh sách dưới đây được tải trực tiếp từ API tìm kiếm và sắp xếp theo năm giảm dần.',
+        featuredCollections: 'Bộ sưu tập nổi bật', collectionsNote: 'Các bộ sưu tập là lối tắt tìm kiếm theo chủ đề; kết quả luôn được tra cứu trực tiếp từ API.',
+        colRail: 'Tiêu chuẩn đường sắt', colRailDesc: 'Tra cứu tiêu chuẩn, quy chuẩn về đường sắt', colSafety: 'An toàn đường sắt', colSafetyDesc: 'Tài liệu về an toàn vận hành và khai thác',
+        colBim: 'BIM & công nghệ số', colBimDesc: 'Mô hình thông tin và chuyển đổi số', colTod: 'TOD & quy hoạch', colTodDesc: 'Phát triển đô thị gắn với giao thông công cộng',
+        colQuality: 'Quản lý chất lượng', colQualityDesc: 'Hệ thống quản lý chất lượng ISO', colWater: 'Công trình thủy lợi', colWaterDesc: 'Tiêu chuẩn công trình thủy lợi',
+        searchTitle: 'Tìm kiếm tài liệu', searchSubtitle: 'Tra cứu nhanh các tài liệu, tiêu chuẩn và ấn phẩm chuyên ngành từ VSQI và tracuu.tcvn.vn.',
+        keyword: 'Từ khóa', searchPlaceholder: 'Nhập từ khóa cần tìm (ví dụ: tiêu chuẩn đường sắt, BIM, TOD...)', try: 'Thử:', advanced: 'Tìm kiếm nâng cao',
+        advSource: 'Nguồn dữ liệu', allSources: 'Tất cả nguồn', advYear: 'Năm phát hành', advOrg: 'Tổ chức / loại tài liệu', advOrgPlaceholder: 'Ví dụ: ISO, TCVN, QCVN...',
+        advancedNote: 'Tìm kiếm nâng cao bổ sung từ khóa vào truy vấn; nguồn và năm được lọc trên kết quả trả về (phía trình duyệt).',
+        filters: 'Bộ lọc kết quả', clearFilters: 'Xóa tất cả', filterSource: 'Nguồn', filterYear: 'Năm', filterStatus: 'Tình trạng',
+        allStatuses: 'Tất cả', statusActive: 'Còn hiệu lực', statusWithdrawn: 'Hết hiệu lực',
+        filterNote: 'Bộ lọc áp dụng trên trang kết quả hiện tại (phía trình duyệt). API chỉ nhận từ khóa và số trang.',
+        awaiting: 'Chưa có truy vấn', sort: 'Sắp xếp:', sortRelevance: 'Liên quan nhất', sortNewest: 'Mới nhất', sortTitle: 'Tên A–Z',
+        listView: 'Danh sách', gridView: 'Lưới', emptyTitle: 'Sẵn sàng tra cứu', emptyText: 'Nhập từ khóa ở trên để tìm tiêu chuẩn từ VSQI và tracuu.tcvn.vn.',
+        prevPage: 'Trang trước', nextPage: 'Trang sau', pagingNote: 'Phân trang áp dụng riêng cho từng nguồn dữ liệu.',
+        copyUrl: 'Sao chép URL', httpStatus: 'HTTP', responseTime: 'Thời gian', rawJson: 'Raw JSON', copyJson: 'Sao chép JSON',
+        categoriesTitle: 'Danh mục chuyên ngành', categoriesSubtitle: 'Khám phá kho tri thức theo lĩnh vực chuyên môn. Số lượng tài liệu được tra cứu trực tiếp từ API theo từ khóa của từng danh mục.',
+        categoriesNote: 'Hệ thống hiện chưa có taxonomy riêng; mỗi danh mục là một truy vấn tìm kiếm theo chủ đề trên API hiện có.',
+        detailCodeLabel: 'Số hiệu tiêu chuẩn', detailSourceLabel: 'Nguồn', autoSource: 'Tự động (VSQI → VN → QT)', getDetail: 'Xem chi tiết',
+        detailEmptyTitle: 'Chưa chọn tài liệu', detailEmptyText: 'Nhập số hiệu ở trên hoặc chọn một kết quả từ tìm kiếm.',
+        coverKind: 'TIÊU CHUẨN', viewAtSource: 'Xem tại nguồn gốc', preview: 'Xem trước thông tin', saveLibrary: 'Lưu vào My Library', savedLibrary: 'Đã lưu ✓', copyLink: 'Sao chép liên kết',
+        noPdfNote: 'API hiện chỉ cung cấp metadata của tiêu chuẩn; chưa có file PDF để xem trực tuyến hoặc tải xuống trong hệ thống này.',
+        fieldsTab: 'Thông tin', generalInfo: 'Thông tin chung', scope: 'Phạm vi áp dụng', related: 'Tài liệu liên quan', history: 'Lịch sử soát xét', sourceInfo: 'Thông tin nguồn',
+        previewTitle: 'Xem trước thông tin tài liệu', previewNote: 'Đây là bản tóm tắt metadata từ API. Hệ thống chưa có trình xem PDF trực tuyến; vui lòng mở tài liệu tại nguồn gốc.',
+        libraryTitle: 'Thư viện cá nhân', librarySubtitle: 'Tài liệu đã lưu và đã xem gần đây trên trình duyệt này (lưu bằng localStorage, chưa đồng bộ theo tài khoản).',
+        favorites: 'Tài liệu đã lưu', favEmptyTitle: 'Chưa có tài liệu đã lưu', favEmptyText: 'Dùng nút “Lưu vào My Library” ở trang chi tiết hoặc kết quả tìm kiếm.',
+        recentlyViewed: 'Đã xem gần đây', clearRecent: 'Xóa lịch sử xem', recentEmptyTitle: 'Chưa xem tài liệu nào', recentEmptyText: 'Các tài liệu bạn mở sẽ xuất hiện tại đây.',
+        docsTitle: 'Tài liệu API', docsSubtitle: 'Các endpoint, tham số và trường dữ liệu của API tra cứu tiêu chuẩn (v1).',
+        docsSearchDesc: 'Tìm kiếm đồng thời trên VSQI, TCVN Việt Nam và TCVN Quốc tế, trả về một danh sách gộp; mỗi kết quả có trường source cho biết nguồn.',
+        queryParams: 'Tham số truy vấn', docsQ: 'Từ khóa tìm kiếm (2–120 ký tự).', docsPage: 'Số trang từ 1 đến 1000, áp dụng riêng cho từng nguồn. Mặc định 1.',
+        exampleRequest: 'YÊU CẦU MẪU', exampleResponse: 'Phản hồi mẫu',
+        docsDetailDesc: 'Lấy thông tin chi tiết của một tiêu chuẩn theo số hiệu. Chấp nhận các tổ chức TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB (có hoặc không có năm).',
+        pathParams: 'Tham số đường dẫn và truy vấn', docsCode: 'Số hiệu tiêu chuẩn, đã mã hóa URL (ví dụ TCVN 9143:2022).',
+        docsSource: 'VSQI | TCVN_VN | TCVN_QT. Nếu bỏ trống, hệ thống thử VSQI → TCVN_VN → TCVN_QT và lấy kết quả đầu tiên tìm thấy.',
+        searchFields: 'Trường kết quả tìm kiếm', fData: 'Danh sách tiêu chuẩn', fSources: 'Tổng kết quả theo từng nguồn', fPartial: 'Các nguồn bị lỗi trong lần tìm kiếm này',
+        fNames: 'Số hiệu, tên tiếng Việt, tên tiếng Anh', fMeta: 'Năm, tình trạng, liên kết nguồn gốc, nguồn dữ liệu',
+        detailFields: 'Trường chi tiết', fYearStatus: 'Năm ban hành, tình trạng', fDates: 'Ngày ban hành, ngày hiệu lực (có thể null)', fAgency: 'Cơ quan ban hành (có thể null)',
+        fReplace: 'Thay thế cho / được thay thế bởi', fAttrs: 'Thuộc tính, quan hệ và dữ liệu gốc từ nguồn', errorCodes: 'Mã phản hồi và lỗi', health: 'Trạng thái dịch vụ',
+        institute: 'Viện Công nghệ Đường sắt & TOD', footerTagline: 'Smart.Rail – Kết nối tri thức, kiến tạo tương lai',
+        resultsFound: 'Tìm thấy {n} kết quả', showingPage: 'Hiển thị {n} kết quả trên trang này', loading: 'Đang tải...', requestFailed: 'Yêu cầu thất bại',
+        noResults: 'Không có kết quả phù hợp', noResultsHint: 'Thử từ khóa khác hoặc bỏ bớt bộ lọc.', filteredOut: 'Không có kết quả nào khớp bộ lọc hiện tại.',
+        partialFail: 'Một số nguồn không phản hồi: {list}. Kết quả hiển thị từ các nguồn còn lại.', sourceFailed: '{source}: lỗi',
+        pageOf: 'Trang {page}', pageOfTotal: 'Trang {page} / {total}', totalResults: '{n} kết quả',
+        viewDetail: 'Xem chi tiết', save: 'Lưu', yearLabel: 'Năm', statusLabel: 'Tình trạng', sourceLabel: 'Nguồn', codeLabel: 'Số hiệu',
+        issuingAgency: 'Cơ quan ban hành', issuedDate: 'Ngày ban hành', effectiveDate: 'Ngày hiệu lực', replaces: 'Thay thế cho', replacedBy: 'Được thay thế bởi',
+        notProvided: '—', enterQuery: 'Nhập ít nhất 2 ký tự để tìm kiếm', enterCode: 'Nhập số hiệu tiêu chuẩn',
+        copied: 'Đã sao chép', copyFailed: 'Trình duyệt không cho phép sao chép', savedToast: 'Đã lưu vào My Library', removedToast: 'Đã xóa khỏi My Library',
+        recentLoadError: 'Không tải được tài liệu mới cập nhật từ API. Kiểm tra API BASE URL rồi thử lại.', openCategory: 'Mở danh mục', documents: 'tài liệu',
+        countUnavailable: 'Chưa tra cứu được số lượng', remove: 'Xóa', open: 'Mở', clearRecentDone: 'Đã xóa lịch sử xem',
+        networkError: 'Không kết nối được tới API. Kiểm tra API BASE URL, mạng và CORS.', yearPrefix: 'Năm ban hành'
+      },
+      en: {
+        navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navLibrary: 'My Library', navDocs: 'API',
+        apiBase: 'API BASE URL', login: 'Sign in', loginNote: 'Sign-in is not available yet: there is no user authentication backend.',
+        heroTitle: 'Railway & TOD Knowledge Library', heroSubtitle: 'Discover, search and use specialist documents.',
+        heroSearchLabel: 'Search documents', heroPlaceholder: 'Search documents, standards, projects...', search: 'Search',
+        heroHint: 'Search by title, standard code or keyword. Data is queried live from VSQI and tracuu.tcvn.vn.',
+        disciplines: 'Browse by discipline', discRail: 'Railway', discWorks: 'Structures', discElectric: 'Electrical – Electronics', discSignal: 'Signalling', discDigital: 'Digital Technology', discTod: 'TOD & Mobility',
+        recentDocs: 'Recently updated', seeAll: 'See all', recentNote: 'Loaded live from the search API and sorted by year, newest first.',
+        featuredCollections: 'Featured collections', collectionsNote: 'Collections are topic search shortcuts; results are always queried live from the API.',
+        colRail: 'Railway standards', colRailDesc: 'Standards and regulations for railways', colSafety: 'Railway safety', colSafetyDesc: 'Documents on safe operation',
+        colBim: 'BIM & digital', colBimDesc: 'Information modelling and digital transformation', colTod: 'TOD & planning', colTodDesc: 'Transit-oriented development',
+        colQuality: 'Quality management', colQualityDesc: 'ISO quality management systems', colWater: 'Hydraulic structures', colWaterDesc: 'Standards for hydraulic works',
+        searchTitle: 'Document search', searchSubtitle: 'Search documents, standards and specialist publications from VSQI and tracuu.tcvn.vn.',
+        keyword: 'Keyword', searchPlaceholder: 'Enter a keyword (e.g. railway standard, BIM, TOD...)', try: 'Try:', advanced: 'Advanced search',
+        advSource: 'Data source', allSources: 'All sources', advYear: 'Publication year', advOrg: 'Organisation / document type', advOrgPlaceholder: 'E.g. ISO, TCVN, QCVN...',
+        advancedNote: 'Advanced search adds terms to the query; source and year filter the returned results in the browser.',
+        filters: 'Filter results', clearFilters: 'Clear all', filterSource: 'Source', filterYear: 'Year', filterStatus: 'Status',
+        allStatuses: 'All', statusActive: 'Active', statusWithdrawn: 'Withdrawn',
+        filterNote: 'Filters apply to the current results page in the browser. The API only accepts a keyword and a page number.',
+        awaiting: 'No query yet', sort: 'Sort:', sortRelevance: 'Most relevant', sortNewest: 'Newest', sortTitle: 'Title A–Z',
+        listView: 'List', gridView: 'Grid', emptyTitle: 'Ready to search', emptyText: 'Enter a keyword above to search VSQI and tracuu.tcvn.vn.',
+        prevPage: 'Previous', nextPage: 'Next', pagingNote: 'Pagination applies per data source.',
+        copyUrl: 'Copy URL', httpStatus: 'HTTP', responseTime: 'Time', rawJson: 'Raw JSON', copyJson: 'Copy JSON',
+        categoriesTitle: 'Document categories', categoriesSubtitle: 'Explore the knowledge base by field. Counts are queried live from the API using each category keyword.',
+        categoriesNote: 'There is no dedicated taxonomy yet; each category is a topic search on the existing API.',
+        detailCodeLabel: 'Standard code', detailSourceLabel: 'Source', autoSource: 'Automatic (VSQI → VN → QT)', getDetail: 'View detail',
+        detailEmptyTitle: 'No document selected', detailEmptyText: 'Enter a code above or pick a search result.',
+        coverKind: 'STANDARD', viewAtSource: 'View at source', preview: 'Preview metadata', saveLibrary: 'Save to My Library', savedLibrary: 'Saved ✓', copyLink: 'Copy link',
+        noPdfNote: 'The API provides standard metadata only; there is no PDF to view or download in this system yet.',
+        fieldsTab: 'Information', generalInfo: 'General information', scope: 'Scope', related: 'Related documents', history: 'Revision history', sourceInfo: 'Source information',
+        previewTitle: 'Document metadata preview', previewNote: 'This is a metadata summary from the API. There is no online PDF viewer yet; please open the document at its source.',
+        libraryTitle: 'My Library', librarySubtitle: 'Saved and recently viewed documents in this browser (localStorage, not synced per account).',
+        favorites: 'Saved documents', favEmptyTitle: 'No saved documents yet', favEmptyText: 'Use “Save to My Library” on the detail page or in search results.',
+        recentlyViewed: 'Recently viewed', clearRecent: 'Clear viewing history', recentEmptyTitle: 'Nothing viewed yet', recentEmptyText: 'Documents you open will appear here.',
+        docsTitle: 'API reference', docsSubtitle: 'Endpoints, parameters and fields of the standards API (v1).',
+        docsSearchDesc: 'Searches VSQI, TCVN Vietnam and TCVN International at once and returns one merged list; each result carries its source.',
+        queryParams: 'Query parameters', docsQ: 'Search text (2–120 characters).', docsPage: 'Page from 1 to 1000, applied per source. Defaults to 1.',
+        exampleRequest: 'EXAMPLE REQUEST', exampleResponse: 'Example response',
+        docsDetailDesc: 'Fetch one standard by code. Accepts TCVN, QCVN, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB codes, with or without a year.',
+        pathParams: 'Path and query parameters', docsCode: 'Standard code, URL-encoded (e.g. TCVN 9143:2022).',
+        docsSource: 'VSQI | TCVN_VN | TCVN_QT. When omitted, VSQI → TCVN_VN → TCVN_QT are tried in order, first hit wins.',
+        searchFields: 'Search result fields', fData: 'Array of standards', fSources: 'Per-source totals', fPartial: 'Sources that failed in this search',
+        fNames: 'Code, Vietnamese title, English title', fMeta: 'Year, status, source URL, data source',
+        detailFields: 'Detail fields', fYearStatus: 'Year, status', fDates: 'Issued / effective dates (may be null)', fAgency: 'Issuing agency (may be null)',
+        fReplace: 'Replaces / replaced by', fAttrs: 'Attributes, relations and raw source data', errorCodes: 'Response and error codes', health: 'Service health',
+        institute: 'Institute of Railway Technology & TOD', footerTagline: 'Smart.Rail – Connecting knowledge, shaping the future',
+        resultsFound: 'Found {n} results', showingPage: 'Showing {n} results on this page', loading: 'Loading...', requestFailed: 'Request failed',
+        noResults: 'No matching results', noResultsHint: 'Try another keyword or remove filters.', filteredOut: 'No results match the current filters.',
+        partialFail: 'Some sources did not respond: {list}. Showing results from the remaining sources.', sourceFailed: '{source}: failed',
+        pageOf: 'Page {page}', pageOfTotal: 'Page {page} of {total}', totalResults: '{n} results',
+        viewDetail: 'View detail', save: 'Save', yearLabel: 'Year', statusLabel: 'Status', sourceLabel: 'Source', codeLabel: 'Code',
+        issuingAgency: 'Issuing agency', issuedDate: 'Issued date', effectiveDate: 'Effective date', replaces: 'Replaces', replacedBy: 'Replaced by',
+        notProvided: '—', enterQuery: 'Enter at least 2 characters to search', enterCode: 'Enter a standard code',
+        copied: 'Copied', copyFailed: 'Clipboard is unavailable in this browser', savedToast: 'Saved to My Library', removedToast: 'Removed from My Library',
+        recentLoadError: 'Could not load recent documents from the API. Check the API BASE URL and retry.', openCategory: 'Open category', documents: 'documents',
+        countUnavailable: 'Count unavailable', remove: 'Remove', open: 'Open', clearRecentDone: 'Viewing history cleared',
+        networkError: 'Unable to reach the API. Check the API base URL, network and CORS.', yearPrefix: 'Year'
+      }
+    };
+    const t = (key, vars = {}) => {
+      let text = I18N[currentLang][key] || I18N.vi[key] || key;
+      for (const [name, value] of Object.entries(vars)) text = text.replace(`{${name}}`, String(value));
+      return text;
+    };
+
+    const CATEGORIES = [
+      { id: 'CAT01', vi: 'Hạ tầng đường sắt', en: 'Railway Infrastructure', query: 'hạ tầng đường sắt', subs: [
+        { vi: 'Thiết kế hạ tầng', en: 'Infrastructure Design', query: 'thiết kế hạ tầng đường sắt' },
+        { vi: 'Xây dựng và thi công', en: 'Construction', query: 'thi công đường sắt' },
+        { vi: 'Bảo trì và quản lý tài sản', en: 'Asset Management', query: 'bảo trì đường sắt' },
+        { vi: 'An toàn đường sắt', en: 'Railway Safety', query: 'an toàn đường sắt' },
+        { vi: 'Công trình đặc biệt', en: 'Special Structures', query: 'cầu đường sắt' }
+      ] },
+      { id: 'CAT02', vi: 'Hệ thống đường sắt', en: 'Railway Systems', query: 'hệ thống đường sắt', subs: [
+        { vi: 'Tín hiệu và điều khiển', en: 'Signalling & Control', query: 'tín hiệu đường sắt' },
+        { vi: 'Điện khí hóa', en: 'Electrification', query: 'điện khí hóa đường sắt' },
+        { vi: 'Đầu máy toa xe', en: 'Rolling Stock', query: 'toa xe đường sắt' },
+        { vi: 'Vận hành khai thác', en: 'Operations', query: 'khai thác đường sắt' }
+      ] },
+      { id: 'CAT03', vi: 'Công nghệ số', en: 'Digital Engineering', query: 'công nghệ số', subs: [
+        { vi: 'BIM', en: 'BIM', query: 'BIM' },
+        { vi: 'Mô hình thông tin', en: 'Information Modelling', query: 'mô hình thông tin' },
+        { vi: 'Chuyển đổi số', en: 'Digital Transformation', query: 'chuyển đổi số' }
+      ] },
+      { id: 'CAT04', vi: 'Quy hoạch giao thông', en: 'Transport Planning', query: 'quy hoạch giao thông', subs: [
+        { vi: 'Quy hoạch đường sắt', en: 'Railway Planning', query: 'quy hoạch đường sắt' },
+        { vi: 'TOD', en: 'TOD', query: 'TOD' },
+        { vi: 'Giao thông đô thị', en: 'Urban Transport', query: 'giao thông đô thị' }
+      ] },
+      { id: 'CAT05', vi: 'Tiêu chuẩn & Quy chuẩn', en: 'Standards & Regulations', query: 'tiêu chuẩn', subs: [
+        { vi: 'Tiêu chuẩn quốc gia', en: 'National Standards', query: 'TCVN' },
+        { vi: 'Quy chuẩn quốc gia', en: 'National Regulations', query: 'QCVN' },
+        { vi: 'Tiêu chuẩn quốc tế', en: 'International Standards', query: 'ISO' }
+      ] },
+      { id: 'CAT06', vi: 'Nghiên cứu & Phát triển', en: 'Research & Development', query: 'nghiên cứu', subs: [
+        { vi: 'Nghiên cứu khoa học', en: 'Scientific Research', query: 'nghiên cứu khoa học' },
+        { vi: 'Báo cáo kỹ thuật', en: 'Technical Reports', query: 'báo cáo kỹ thuật' },
+        { vi: 'Đổi mới sáng tạo', en: 'Innovation', query: 'sáng tạo' }
+      ] }
+    ];
+
+    const searchForm = $('#search-form');
+    const detailForm = $('#detail-form');
+    const searchInput = $('#search-query');
+    const searchPage = $('#search-page');
+    const detailInput = $('#detail-code-input');
+    const detailSourceSelect = $('#detail-source-select');
+    const apiBaseInput = $('#api-base-url');
+    const cleanBase = value => String(value || '').trim().replace(/\/+$/, '');
     let savedBase = '';
-    try {
-      savedBase = localStorage.getItem('vsqi-api-base-url') || '';
-    } catch {
-      savedBase = '';
-    }
-    const initialBase = new URLSearchParams(location.search).get('apiBaseUrl') || savedBase || location.origin;
-    apiBaseInput.value = cleanBase(initialBase);
+    try { savedBase = localStorage.getItem('vsqi-api-base-url') || ''; } catch { savedBase = ''; }
+    apiBaseInput.value = cleanBase(new URLSearchParams(location.search).get('apiBaseUrl') || savedBase || location.origin);
 
     function getBaseUrl() {
       const value = cleanBase(apiBaseInput.value || location.origin);
@@ -343,20 +505,17 @@
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported protocol');
         if (url.username || url.password || url.search || url.hash) throw new Error('The API base URL cannot contain credentials, a query, or a fragment');
         if (location.protocol === 'https:' && url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname)) {
-          throw new Error('An HTTPS playground cannot call an insecure HTTP API');
+          throw new Error('An HTTPS page cannot call an insecure HTTP API');
         }
         return cleanBase(url.href);
       } catch (error) {
-        throw new Error(error.message === 'An HTTPS playground cannot call an insecure HTTP API'
-          ? error.message
-          : error.message === 'The API base URL cannot contain credentials, a query, or a fragment'
-            ? error.message
-            : 'Enter a valid API base URL, such as https://api.example.com');
+        throw new Error(['An HTTPS page cannot call an insecure HTTP API', 'The API base URL cannot contain credentials, a query, or a fragment'].includes(error.message)
+          ? error.message : 'Enter a valid API base URL, such as https://api.example.com');
       }
     }
 
     function showToast(message) {
-      const toast = document.querySelector('#toast');
+      const toast = $('#toast');
       toast.textContent = message;
       toast.classList.add('is-visible');
       clearTimeout(toastTimer);
@@ -364,9 +523,7 @@
     }
 
     function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, character => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      })[character]);
+      return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
     }
 
     function highlightJson(raw) {
@@ -376,216 +533,374 @@
       for (const match of raw.matchAll(tokenPattern)) {
         const token = match[0];
         output += escapeHtml(raw.slice(lastIndex, match.index));
-        const className = token === 'null'
-          ? 'json-null'
-          : token === 'true' || token === 'false'
-            ? 'json-boolean'
-            : token.startsWith('"')
-              ? /"\s*:$/.test(token) ? 'json-key' : 'json-string'
-              : 'json-number';
+        const className = token === 'null' ? 'json-null' : token === 'true' || token === 'false' ? 'json-boolean'
+          : token.startsWith('"') ? /"\s*:$/.test(token) ? 'json-key' : 'json-string' : 'json-number';
         output += `<span class="${className}">${escapeHtml(token)}</span>`;
         lastIndex = match.index + token.length;
       }
       return output + escapeHtml(raw.slice(lastIndex));
     }
 
-    function renderRaw(kind, raw) {
-      const viewer = document.querySelector(`#${kind}-raw-json`);
-      viewer.innerHTML = highlightJson(raw);
-    }
+    function renderRaw(kind, raw) { $(`#${kind}-raw-json`).innerHTML = highlightJson(raw || ''); }
 
-    function makeStatusBadge(value, forcedTone) {
-      const badge = document.createElement('span');
-      const tone = forcedTone || statusTone(value);
-      badge.className = `badge badge-${tone}`;
-      badge.textContent = valueText(value);
-      return badge;
-    }
-
-    function showView(name) {
-      document.querySelectorAll('.view-panel').forEach(panel => {
-        const isVisible = panel.id === `view-${name}`;
-        panel.hidden = !isVisible;
-        panel.classList.toggle('is-visible', isVisible);
-      });
-      document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('is-active', button.dataset.view === name));
-      const headings = { search: 'Search standards', detail: 'Standard detail', docs: 'API reference' };
-      document.querySelector('#breadcrumb-current').textContent = headings[name];
-      document.querySelector('.sidebar').classList.remove('is-open');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function updateInspector(kind, requestUrl, result) {
-      document.querySelector(`#${kind}-inspector`).hidden = false;
-      document.querySelector(`#${kind}-timestamp`).textContent = result.timestamp;
-      document.querySelector(`#${kind}-request-url`).textContent = requestUrl;
-      document.querySelector(`#${kind}-http-status`).textContent = result.status === null ? 'Network error' : `${result.status} ${result.statusText}`;
-      document.querySelector(`#${kind}-http-status`).className = `status-value ${result.ok ? 'status-ok' : 'status-error'}`;
-      document.querySelector(`#${kind}-response-time`).textContent = `${result.duration.toFixed(1)} ms`;
-      const errorBanner = document.querySelector(`#${kind}-error`);
-      errorBanner.hidden = !result.errorMessage;
-      errorBanner.textContent = result.errorMessage ? `Request failed: ${result.errorMessage}` : '';
-    }
-
-    async function requestApi(kind, path) {
+    async function fetchApi(path) {
       const started = performance.now();
       const timestamp = new Date().toLocaleString();
-      const button = document.querySelector(kind === 'search' ? '#search-submit' : '#detail-form button[type="submit"]');
-      const url = `${getBaseUrl()}${path}`;
-      button.disabled = true;
-      button.classList.add('is-loading');
-      button.dataset.originalLabel ||= button.querySelector('span').textContent;
-      button.querySelector('span').textContent = 'Sending…';
-
+      let url;
+      try { url = `${getBaseUrl()}${path}`; } catch (error) {
+        return { raw: '', payload: undefined, duration: 0, timestamp, status: null, statusText: '', ok: false, errorMessage: error.message, url: path };
+      }
       try {
         const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
         const raw = await response.text();
-        const duration = performance.now() - started;
         let payload;
         let errorMessage = '';
         try {
           payload = JSON.parse(raw);
           if (!response.ok) errorMessage = payload?.error?.message || `HTTP ${response.status}`;
-          if (response.ok && kind === 'search'
-            && (!Array.isArray(payload?.data) || !payload?.pagination || typeof payload.pagination !== 'object')) {
-            errorMessage = 'The API returned an unexpected search response structure';
-          }
-          if (response.ok && kind === 'detail' && (!payload?.data || typeof payload.data !== 'object' || Array.isArray(payload.data))) {
-            errorMessage = 'The API returned an unexpected detail response structure';
-          }
-        } catch {
-          errorMessage = `The API returned a non-JSON response (HTTP ${response.status})`;
-        }
-        const result = {
-          raw,
-          payload,
-          duration,
-          timestamp,
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok && payload !== undefined && !errorMessage,
-          errorMessage
-        };
-        memory[kind] = result;
-        updateInspector(kind, url, result);
-        renderRaw(kind, raw);
-        if (kind === 'search') renderSearchResult(result);
-        else renderDetailResult(result);
-        return result;
+        } catch { errorMessage = `Non-JSON response (HTTP ${response.status})`; }
+        return { raw, payload, duration: performance.now() - started, timestamp, status: response.status, statusText: response.statusText, ok: response.ok && payload !== undefined && !errorMessage, errorMessage, url };
       } catch (error) {
-        const result = {
-          raw: '',
-          payload: undefined,
-          duration: performance.now() - started,
-          timestamp,
-          status: null,
-          statusText: '',
-          ok: false,
-          errorMessage: error instanceof TypeError ? 'Unable to reach the API. Check the API base URL, network, and CORS configuration.' : error.message
-        };
-        memory[kind] = result;
-        updateInspector(kind, url, result);
-        renderRaw(kind, '');
-        if (kind === 'search') renderSearchResult(result);
-        else renderDetailResult(result);
-        return result;
-      } finally {
-        button.disabled = false;
-        button.classList.remove('is-loading');
-        button.querySelector('span').textContent = button.dataset.originalLabel;
+        return { raw: '', payload: undefined, duration: performance.now() - started, timestamp, status: null, statusText: '', ok: false, errorMessage: error instanceof TypeError ? t('networkError') : error.message, url };
       }
     }
 
-    function setSearchLoading(isLoading) {
-      document.querySelector('#search-empty').hidden = true;
-      document.querySelector('#search-table-wrap').hidden = true;
-      document.querySelector('#pagination-bar').hidden = true;
-      document.querySelector('#search-skeleton').hidden = !isLoading;
-      if (isLoading) document.querySelector('#search-result-count').textContent = 'Loading…';
+    function updateInspector(kind, result) {
+      const box = $(`#${kind}-inspector`);
+      if (!box) return;
+      box.hidden = false;
+      $(`#${kind}-timestamp`).textContent = result.timestamp;
+      $(`#${kind}-request-url`).textContent = result.url;
+      $(`#${kind}-http-status`).textContent = result.status === null ? 'Network error' : `${result.status} ${result.statusText}`;
+      $(`#${kind}-response-time`).textContent = `${result.duration.toFixed(1)} ms`;
     }
 
-    function createTextCell(value) {
-      const cell = document.createElement('td');
-      cell.textContent = valueText(value);
-      if (!hasValue(value)) cell.classList.add('na-value');
-      return cell;
+    // ---- localStorage: favorites + recently viewed ----
+    const readList = key => { try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const writeList = (key, list) => { try { localStorage.setItem(key, JSON.stringify(list.slice(0, 60))); } catch { /* storage unavailable */ } };
+    const favKey = item => `${item.source || ''}|${item.code}`;
+    const getFavorites = () => readList('smartrail-favorites');
+    const getRecent = () => readList('smartrail-recent');
+    const isFavorite = item => getFavorites().some(f => favKey(f) === favKey(item));
+    function toggleFavorite(item) {
+      const list = getFavorites();
+      const idx = list.findIndex(f => favKey(f) === favKey(item));
+      if (idx >= 0) { list.splice(idx, 1); writeList('smartrail-favorites', list); showToast(t('removedToast')); return false; }
+      list.unshift({ code: item.code, name: item.name || '', englishName: item.englishName || '', year: item.year ?? null, status: item.status || '', source: item.source || '', savedAt: Date.now() });
+      writeList('smartrail-favorites', list);
+      showToast(t('savedToast'));
+      return true;
+    }
+    function recordRecent(item) {
+      const list = getRecent().filter(r => favKey(r) !== favKey(item));
+      list.unshift({ code: item.code, name: item.name || '', englishName: item.englishName || '', year: item.year ?? null, status: item.status || '', source: item.source || '', viewedAt: Date.now() });
+      writeList('smartrail-recent', list);
+    }
+
+    function orgOf(code) {
+      const text = String(code || '').trim().toUpperCase();
+      const match = text.match(/^(DIN EN ISO|EN ISO|DIN EN|BS EN|GB\/T|TCVN|QCVN|ISO|IEC|ASTM|BS|DIN|EN|JIS|UL|ANSI|AS|GB)\b/);
+      return match ? match[1] : (text.split(' ')[0] || DASH);
+    }
+    const dash = value => (value === null || value === undefined || String(value).trim() === '' ? DASH : String(value));
+
+    function makeBadge(value, forcedTone) {
+      const badge = document.createElement('span');
+      badge.className = `badge badge-${forcedTone || statusTone(value)}`;
+      badge.textContent = dash(value);
+      return badge;
+    }
+
+    // ---- view switching + URL state ----
+    function showView(name, push = true) {
+      $$('.view-panel').forEach(panel => {
+        const visible = panel.id === `view-${name}`;
+        panel.hidden = !visible;
+        panel.classList.toggle('is-visible', visible);
+      });
+      $$('.nav-item').forEach(button => button.classList.toggle('is-active', button.dataset.view === name));
+      $('#main-nav').classList.remove('is-open');
+      if (name === 'library') renderLibrary();
+      if (push) {
+        const url = new URL(location.href);
+        if (name === 'home') { url.search = ''; } else { url.searchParams.set('view', name); if (name !== 'search') { url.searchParams.delete('q'); url.searchParams.delete('page'); } if (name !== 'detail') { url.searchParams.delete('code'); url.searchParams.delete('source'); } }
+        history.replaceState(null, '', url);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function goSearch(query, page = 1) {
+      searchInput.value = query;
+      searchPage.value = String(page);
+      showView('search', false);
+      void searchStandards();
+    }
+
+    // ---- Home: recently updated (live) ----
+    async function loadHomeRecent() {
+      const list = $('#home-recent-list');
+      const state = $('#home-recent-state');
+      state.hidden = false;
+      state.textContent = t('loading');
+      const result = await fetchApi(`/api/v1/standards/search?${new URLSearchParams({ q: 'đường sắt', page: '1' })}`);
+      list.replaceChildren();
+      if (!result.ok || !Array.isArray(result.payload?.data)) {
+        state.textContent = t('recentLoadError');
+        return;
+      }
+      state.hidden = true;
+      const records = [...result.payload.data].sort((a, b) => (b.year || 0) - (a.year || 0)).slice(0, 6);
+      if (records.length === 0) { state.hidden = false; state.textContent = t('noResults'); return; }
+      for (const record of records) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'recent-row';
+        const main = document.createElement('span');
+        main.className = 'recent-main';
+        const strong = document.createElement('strong');
+        strong.textContent = dash(record.code);
+        const small = document.createElement('small');
+        small.textContent = [record.name, record.englishName].filter(Boolean).join(' · ');
+        main.append(strong, small);
+        const chips = document.createElement('span');
+        chips.className = 'meta-chips';
+        if (record.year) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = String(record.year); chips.append(c); }
+        if (record.source) { const c = document.createElement('span'); c.className = 'chip chip-source'; c.textContent = record.source; chips.append(c); }
+        const arrow = document.createElement('span');
+        arrow.textContent = '›';
+        row.append(main, chips, arrow);
+        row.addEventListener('click', () => openDetail(record.code, record.source));
+        list.append(row);
+      }
+    }
+
+    // ---- Categories ----
+    function renderCategories() {
+      const grid = $('#categories-grid');
+      grid.replaceChildren();
+      for (const cat of CATEGORIES) {
+        const card = document.createElement('article');
+        card.className = 'category-card';
+        const banner = document.createElement('div');
+        banner.className = 'category-banner';
+        banner.textContent = cat.id;
+        const body = document.createElement('div');
+        body.className = 'category-body';
+        const h3 = document.createElement('h3');
+        h3.textContent = currentLang === 'en' ? cat.en : cat.vi;
+        const en = document.createElement('p');
+        en.className = 'category-en';
+        en.textContent = currentLang === 'en' ? cat.vi : cat.en;
+        const count = document.createElement('span');
+        count.className = 'category-count';
+        count.dataset.catCount = cat.id;
+        count.textContent = t('loading');
+        const subs = document.createElement('ul');
+        subs.className = 'category-subs';
+        for (const sub of cat.subs) {
+          const li = document.createElement('li');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = `${currentLang === 'en' ? sub.en : sub.vi} ›`;
+          btn.addEventListener('click', () => goSearch(sub.query));
+          li.append(btn);
+          subs.append(li);
+        }
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'button button-secondary button-small category-open';
+        open.textContent = t('openCategory');
+        open.addEventListener('click', () => goSearch(cat.query));
+        body.append(h3, en, count, subs, open);
+        card.append(banner, body);
+        grid.append(card);
+      }
+      void loadCategoryCounts();
+    }
+
+    async function loadCategoryCounts() {
+      await Promise.allSettled(CATEGORIES.map(async cat => {
+        const el = document.querySelector(`[data-cat-count="${cat.id}"]`);
+        const result = await fetchApi(`/api/v1/standards/search?${new URLSearchParams({ q: cat.query, page: '1' })}`);
+        if (!el) return;
+        const total = result.ok ? result.payload?.pagination?.totalResults : undefined;
+        el.textContent = Number.isInteger(total) ? `${total.toLocaleString()} ${t('documents')}` : t('countUnavailable');
+      }));
+    }
+
+    // ---- Search ----
+    let lastSearchPayload = null;
+    let resultsViewMode = 'list';
+
+    function currentFilters() {
+      return {
+        sources: new Set($$('.filter-source').filter(cb => cb.checked).map(cb => cb.value)),
+        year: $('#filter-year').value ? Number($('#filter-year').value) : null,
+        status: $('#filter-status').value || ''
+      };
+    }
+
+    function applyFiltersAndRender() {
+      const container = $('#search-results');
+      const empty = $('#search-empty');
+      container.replaceChildren();
+      container.classList.toggle('is-grid', resultsViewMode === 'grid');
+      if (!lastSearchPayload || !Array.isArray(lastSearchPayload.data)) return;
+      const filters = currentFilters();
+      let records = lastSearchPayload.data.filter(record => {
+        if (record.source && !filters.sources.has(record.source)) return false;
+        if (filters.year && Number(record.year) !== filters.year) return false;
+        if (filters.status && statusTone(record.status) !== filters.status) return false;
+        return true;
+      });
+      const sort = $('#sort-select').value;
+      if (sort === 'newest') records = [...records].sort((a, b) => (b.year || 0) - (a.year || 0));
+      if (sort === 'title') records = [...records].sort((a, b) => String(a.name || a.code || '').localeCompare(String(b.name || b.code || ''), 'vi'));
+      empty.hidden = records.length !== 0;
+      if (records.length === 0) {
+        empty.querySelector('strong').textContent = t(lastSearchPayload.data.length === 0 ? 'noResults' : 'filteredOut');
+        empty.querySelector('p').textContent = t('noResultsHint');
+        return;
+      }
+      for (const record of records) {
+        const card = document.createElement('article');
+        card.className = 'result-card';
+        const cover = document.createElement('div');
+        cover.className = 'result-cover';
+        const org = document.createElement('span');
+        org.className = 'cover-org-mini';
+        org.textContent = orgOf(record.code);
+        const mini = document.createElement('span');
+        mini.className = 'cover-code-mini';
+        mini.textContent = dash(record.code);
+        cover.append(org, mini);
+        const body = document.createElement('div');
+        body.className = 'result-body';
+        const code = document.createElement('div');
+        code.className = 'result-code';
+        code.textContent = dash(record.code);
+        const name = document.createElement('p');
+        name.className = 'result-name';
+        name.textContent = dash(record.name);
+        body.append(code, name);
+        if (record.englishName) {
+          const english = document.createElement('p');
+          english.className = 'result-english';
+          english.textContent = record.englishName;
+          body.append(english);
+        }
+        const chips = document.createElement('div');
+        chips.className = 'meta-chips';
+        if (record.year) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = `${t('yearLabel')}: ${record.year}`; chips.append(c); }
+        if (record.status) chips.append(makeBadge(record.status));
+        if (record.source) { const c = document.createElement('span'); c.className = 'chip chip-source'; c.textContent = record.source; chips.append(c); }
+        body.append(chips);
+        const actions = document.createElement('div');
+        actions.className = 'result-actions';
+        const detailBtn = document.createElement('button');
+        detailBtn.type = 'button';
+        detailBtn.className = 'detail-btn';
+        detailBtn.textContent = `${t('viewDetail')} →`;
+        detailBtn.addEventListener('click', () => openDetail(record.code, record.source));
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'save-btn';
+        const syncSave = () => { const saved = isFavorite(record); saveBtn.classList.toggle('is-saved', saved); saveBtn.textContent = saved ? t('savedLibrary') : t('saveLibrary'); };
+        syncSave();
+        saveBtn.addEventListener('click', () => { toggleFavorite(record); syncSave(); });
+        actions.append(detailBtn, saveBtn);
+        card.append(cover, body, actions);
+        container.append(card);
+      }
     }
 
     function renderSearchResult(result) {
-      document.querySelector('#search-skeleton').hidden = true;
-      const count = document.querySelector('#search-result-count');
-      const empty = document.querySelector('#search-empty');
-      const tableWrap = document.querySelector('#search-table-wrap');
-      const pagination = document.querySelector('#pagination-bar');
-      const tbody = document.querySelector('#search-table-body');
-      tbody.replaceChildren();
-
+      $('#search-skeleton').hidden = true;
+      const count = $('#search-result-count');
+      const errorBox = $('#search-error');
+      const breakdown = $('#search-sources-breakdown');
+      const partial = $('#partial-failures');
+      const pagination = $('#pagination-bar');
+      errorBox.hidden = !result.errorMessage;
+      errorBox.textContent = result.errorMessage ? `${t('requestFailed')}: ${result.errorMessage}` : '';
+      breakdown.replaceChildren();
+      breakdown.hidden = true;
+      partial.hidden = true;
       if (!result.ok || !result.payload || !Array.isArray(result.payload.data)) {
-        empty.hidden = false;
-        tableWrap.hidden = true;
+        lastSearchPayload = null;
+        count.textContent = t('requestFailed');
         pagination.hidden = true;
-        count.textContent = 'Request failed';
-        empty.querySelector('strong').textContent = result.errorMessage || 'Unable to load standards';
-        empty.querySelector('p').textContent = 'Check the request inspector for status and error details, then try again.';
+        $('#search-results').replaceChildren();
+        const empty = $('#search-empty');
+        empty.hidden = false;
+        empty.querySelector('strong').textContent = result.errorMessage || t('requestFailed');
+        empty.querySelector('p').textContent = t('noResultsHint');
         return;
       }
-
-      const records = result.payload.data;
-      count.textContent = `${records.length} result${records.length === 1 ? '' : 's'}`;
-      empty.hidden = records.length !== 0;
-      tableWrap.hidden = records.length === 0;
-      pagination.hidden = false;
-      if (records.length === 0) {
-        empty.querySelector('strong').textContent = 'No matching standards';
-        empty.querySelector('p').textContent = 'Try a different query or move to another page.';
-      }
-
-      for (const record of records) {
-        const row = document.createElement('tr');
-        const codeCell = document.createElement('td');
-        const codeButton = document.createElement('button');
-        codeButton.className = 'code-link';
-        codeButton.type = 'button';
-        codeButton.textContent = valueText(record?.code);
-        codeButton.disabled = record?.code == null;
-        codeButton.addEventListener('click', () => openDetail(record.code));
-        codeCell.append(codeButton);
-        row.append(codeCell);
-        row.append(createTextCell(record?.name));
-        row.append(createTextCell(record?.englishName));
-        row.append(createTextCell(record?.year));
-        const statusCell = document.createElement('td');
-        statusCell.append(makeStatusBadge(record?.status));
-        row.append(statusCell);
-        const urlCell = document.createElement('td');
-        const safeDetailUrl = safeWebUrl(record?.detailUrl);
-        if (safeDetailUrl) {
-          const link = document.createElement('a');
-          link.className = 'table-detail-link';
-          link.href = safeDetailUrl;
-          link.target = '_blank';
-          link.rel = 'noreferrer';
-          link.title = record.detailUrl;
-          link.textContent = record.detailUrl;
-          urlCell.append(link);
-        } else {
-          urlCell.textContent = 'N/A';
-          urlCell.classList.add('na-value');
+      lastSearchPayload = result.payload;
+      const total = result.payload.pagination?.totalResults;
+      count.textContent = Number.isInteger(total) ? t('resultsFound', { n: total.toLocaleString() }) : t('showingPage', { n: result.payload.data.length });
+      if (Array.isArray(result.payload.sources) && result.payload.sources.length > 0) {
+        breakdown.hidden = false;
+        for (const source of result.payload.sources) {
+          const chip = document.createElement('span');
+          chip.className = `source-chip${source.ok ? '' : ' is-failed'}`;
+          chip.textContent = source.ok ? `${source.source}: ${Number.isInteger(source.totalResults) ? source.totalResults.toLocaleString() : DASH}` : t('sourceFailed', { source: source.source });
+          breakdown.append(chip);
         }
-        row.append(urlCell);
-        row.append(createTextCell(record?.source));
-        tbody.append(row);
       }
-
+      if (Array.isArray(result.payload.partialFailures) && result.payload.partialFailures.length > 0) {
+        partial.hidden = false;
+        partial.textContent = t('partialFail', { list: result.payload.partialFailures.join(', ') });
+      }
       const pageData = result.payload.pagination || {};
       const currentPage = Number.isInteger(pageData.currentPage) ? pageData.currentPage : Number(searchPage.value) || 1;
-      const totalPages = pageData.totalPages;
       searchPage.value = String(currentPage);
-      document.querySelector('#pagination-summary').textContent = `${valueText(pageData.totalResults)} total results`;
-      document.querySelector('#pagination-current').textContent = `Page ${currentPage}${totalPages ? ` of ${totalPages}` : ''}`;
-      document.querySelector('#previous-page').disabled = currentPage <= 1;
-      document.querySelector('#next-page').disabled = Number.isInteger(totalPages) && currentPage >= totalPages;
+      $('#pagination-summary').textContent = Number.isInteger(total) ? t('totalResults', { n: total.toLocaleString() }) : '';
+      $('#pagination-current').textContent = Number.isInteger(pageData.totalPages) ? t('pageOfTotal', { page: currentPage, total: pageData.totalPages }) : t('pageOf', { page: currentPage });
+      $('#previous-page').disabled = currentPage <= 1;
+      $('#next-page').disabled = Number.isInteger(pageData.totalPages) ? currentPage >= pageData.totalPages : result.payload.data.length === 0;
+      pagination.hidden = false;
+      applyFiltersAndRender();
     }
+
+    async function searchStandards() {
+      const rawQuery = searchInput.value.trim();
+      const page = Math.max(1, Math.min(1000, Number(searchPage.value) || 1));
+      searchPage.value = String(page);
+      if (rawQuery.length < 2) { showToast(t('enterQuery')); searchInput.focus(); return; }
+      const orgExtra = $('#adv-org').value.trim();
+      const query = orgExtra && !rawQuery.toLowerCase().includes(orgExtra.toLowerCase()) ? `${orgExtra} ${rawQuery}`.slice(0, 120) : rawQuery;
+      const advSource = $('#adv-source').value;
+      if (advSource) $$('.filter-source').forEach(cb => { cb.checked = cb.value === advSource; });
+      const advYear = $('#adv-year').value;
+      if (advYear) $('#filter-year').value = advYear;
+      searchInput.value = rawQuery;
+      const url = new URL(location.href);
+      url.searchParams.set('view', 'search');
+      url.searchParams.set('q', rawQuery);
+      url.searchParams.set('page', String(page));
+      history.replaceState(null, '', url);
+      $('#search-empty').hidden = true;
+      $('#search-results').replaceChildren();
+      $('#pagination-bar').hidden = true;
+      $('#search-skeleton').hidden = false;
+      $('#search-result-count').textContent = t('loading');
+      const submit = $('#search-submit');
+      submit.disabled = true;
+      submit.classList.add('is-loading');
+      const params = new URLSearchParams({ q: query, page: String(page) });
+      const result = await fetchApi(`/api/v1/standards/search?${params}`);
+      submit.disabled = false;
+      submit.classList.remove('is-loading');
+      memory.search = result;
+      updateInspector('search', result);
+      renderRaw('search', result.raw);
+      renderSearchResult(result);
+    }
+
+    // ---- Detail ----
+    let currentDetail = null;
 
     function appendMetaField(target, item) {
       const field = document.createElement('div');
@@ -595,12 +910,8 @@
       label.textContent = item.label || 'Attribute';
       const value = document.createElement('span');
       value.className = 'meta-field-value';
-      if (hasValue(item.value)) {
-        value.textContent = String(item.value);
-      } else {
-        value.textContent = 'Not provided by VSQI';
-        value.classList.add('is-missing');
-      }
+      if (hasValue(item.value)) value.textContent = String(item.value);
+      else { value.textContent = DASH; value.classList.add('is-missing'); }
       field.append(label, value);
       target.append(field);
     }
@@ -610,15 +921,11 @@
       block.className = 'scope-block';
       const label = document.createElement('span');
       label.className = 'scope-label';
-      label.textContent = item.label || 'Scope';
+      label.textContent = item.label || t('scope');
       const text = document.createElement('p');
       text.className = 'scope-text';
-      if (hasValue(item.value)) {
-        text.textContent = String(item.value);
-      } else {
-        text.textContent = 'Not provided by VSQI';
-        text.classList.add('is-missing');
-      }
+      if (hasValue(item.value)) text.textContent = String(item.value);
+      else { text.textContent = DASH; text.classList.add('is-missing'); }
       block.append(label, text);
       target.append(block);
     }
@@ -626,91 +933,141 @@
     function appendRelationEntry(target, entry) {
       const item = document.createElement('li');
       item.className = 'relation-item';
-      if (entry.url) {
+      if (entry.code) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'relation-open';
+        btn.textContent = entry.text || entry.code;
+        btn.addEventListener('click', () => openDetail(entry.code));
+        item.append(btn);
+        if (entry.url) {
+          const link = document.createElement('a');
+          link.className = 'relation-link';
+          link.href = entry.url;
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.textContent = '↗';
+          item.append(link);
+        }
+      } else if (entry.url) {
         const link = document.createElement('a');
         link.className = 'relation-link';
         link.href = entry.url;
         link.target = '_blank';
         link.rel = 'noreferrer';
-        link.textContent = entry.text || entry.code || 'Related standard';
+        link.textContent = entry.text || DASH;
         item.append(link);
       } else {
         const text = document.createElement('span');
-        text.className = 'relation-text';
-        text.textContent = entry.text || entry.code || 'Not provided by VSQI';
-        if (!entry.text && !entry.code) text.classList.add('is-missing');
+        text.textContent = entry.text || DASH;
+        if (!entry.text) text.classList.add('is-missing');
         item.append(text);
       }
-      if (entry.status) item.append(makeStatusBadge(entry.status.text, entry.status.tone));
+      if (entry.status) item.append(makeBadge(entry.status.text, entry.status.tone));
       target.append(item);
     }
 
     function renderDetailResult(result) {
-      document.querySelector('#detail-skeleton').hidden = true;
-      const empty = document.querySelector('#detail-empty');
-      const groups = document.querySelector('#detail-groups');
+      $('#detail-skeleton').hidden = true;
+      const empty = $('#detail-empty');
+      const groups = $('#detail-groups');
+      const errorBox = $('#detail-error');
+      errorBox.hidden = !result.errorMessage;
+      errorBox.textContent = result.errorMessage ? `${t('requestFailed')}: ${result.errorMessage}` : '';
       groups.hidden = true;
       empty.hidden = false;
-      if (!result.ok || !result.payload || !result.payload.data || typeof result.payload.data !== 'object') {
-        empty.querySelector('strong').textContent = result.errorMessage || 'Unable to load standard details';
-        empty.querySelector('p').textContent = result.errorMessage
-          ? 'Check the request inspector for status and error details, then try again.'
-          : 'The API response did not contain a detail record.';
+      currentDetail = null;
+      if (!result.ok || !result.payload?.data || typeof result.payload.data !== 'object') {
+        empty.querySelector('strong').textContent = result.errorMessage || t('requestFailed');
+        empty.querySelector('p').textContent = t('detailEmptyText');
         return;
       }
-
-      const model = buildDetailViewModel(result.payload.data);
-      document.querySelector('#detail-page-title').textContent = model.header.code || 'Standard detail';
-
+      const data = result.payload.data;
+      currentDetail = data;
+      const model = buildDetailViewModel(data);
       if (model.isEmpty) {
-        empty.querySelector('strong').textContent = 'No standard information';
-        empty.querySelector('p').textContent = 'The API returned an empty detail record.';
+        empty.querySelector('strong').textContent = t('noResults');
         return;
       }
-
-      const type = document.querySelector('#detail-type');
+      $('#detail-breadcrumb-code').textContent = model.header.code || DASH;
+      $('#detail-cover-org').textContent = orgOf(model.header.code);
+      $('#detail-cover-code').textContent = model.header.code || DASH;
+      $('#detail-cover-name').textContent = model.header.titleVi || model.header.titleEn || '';
+      const type = $('#detail-type');
       type.textContent = model.header.type || '';
       type.hidden = !model.header.type;
-
-      const year = document.querySelector('#detail-year');
-      year.textContent = model.header.year ? `Năm ban hành ${model.header.year}` : '';
+      const year = $('#detail-year');
+      year.textContent = model.header.year ? `${t('yearPrefix')} ${model.header.year}` : '';
       year.hidden = !model.header.year;
-
-      document.querySelector('#detail-code').textContent = model.header.code || 'Standard detail';
-
-      const titleVi = document.querySelector('#detail-title-vi');
+      $('#detail-page-title').textContent = model.header.code || t('getDetail');
+      const titleVi = $('#detail-title-vi');
       titleVi.textContent = model.header.titleVi || '';
       titleVi.hidden = !model.header.titleVi;
-
-      const titleEn = document.querySelector('#detail-title-en');
+      const titleEn = $('#detail-title-en');
       titleEn.textContent = model.header.titleEn || '';
       titleEn.hidden = !model.header.titleEn;
-
-      const statusHost = document.querySelector('#detail-status-badge');
+      const statusHost = $('#detail-status-badge');
       statusHost.replaceChildren();
       if (model.header.status) {
         statusHost.className = `badge badge-${model.header.status.tone}`;
         statusHost.textContent = model.header.status.text;
         statusHost.hidden = false;
-      } else {
-        statusHost.textContent = '';
-        statusHost.hidden = true;
+      } else statusHost.hidden = true;
+      const sourceBadge = $('#detail-source-badge');
+      sourceBadge.textContent = data.source || '';
+      sourceBadge.hidden = !data.source;
+
+      const metaRows = $('#detail-meta-rows');
+      metaRows.replaceChildren();
+      const rows = [
+        [t('issuingAgency'), data.issuingAgency],
+        [t('codeLabel'), model.header.code],
+        [t('issuedDate'), data.issuedDate],
+        [t('effectiveDate'), data.effectiveDate],
+        [t('yearLabel'), data.year ?? model.header.year],
+        [t('statusLabel'), data.status ?? model.header.status?.text],
+        [t('replaces'), data.replaces],
+        [t('replacedBy'), data.replacedBy],
+        [t('sourceLabel'), data.source]
+      ];
+      for (const [label, value] of rows) {
+        const row = document.createElement('div');
+        row.className = 'meta-row';
+        const dt = document.createElement('dt');
+        dt.textContent = label;
+        const dd = document.createElement('dd');
+        dd.textContent = dash(value);
+        if (dash(value) === DASH) dd.classList.add('is-missing');
+        row.append(dt, dd);
+        metaRows.append(row);
       }
 
-      const generalSection = document.querySelector('#detail-general-section');
-      const generalGrid = document.querySelector('#detail-general-grid');
+      const sourceLink = $('#detail-source-link');
+      const safeDetailUrl = safeWebUrl(data.detailUrl);
+      sourceLink.hidden = !safeDetailUrl;
+      if (safeDetailUrl) sourceLink.href = safeDetailUrl;
+      const saveBtn = $('#detail-save-btn');
+      const syncSave = () => { const saved = isFavorite(data); saveBtn.textContent = saved ? t('savedLibrary') : t('saveLibrary'); };
+      syncSave();
+      saveBtn.onclick = () => { toggleFavorite(data); syncSave(); };
+      $('#detail-copy-btn').onclick = async () => {
+        const link = new URL(location.origin + '/');
+        link.searchParams.set('view', 'detail');
+        link.searchParams.set('code', data.code || model.header.code || '');
+        if (data.source) link.searchParams.set('source', data.source);
+        try { await navigator.clipboard.writeText(link.href); showToast(t('copied')); } catch { showToast(t('copyFailed')); }
+      };
+      $('#detail-preview-btn').onclick = () => openPreview(data, model);
+
+      const generalGrid = $('#detail-general-grid');
       generalGrid.replaceChildren();
       model.general.forEach(item => appendMetaField(generalGrid, item));
-      generalSection.hidden = model.general.length === 0;
-
-      const scopeSection = document.querySelector('#detail-scope-section');
-      const scopeList = document.querySelector('#detail-scope-list');
+      $('#detail-general-section').hidden = model.general.length === 0;
+      const scopeList = $('#detail-scope-list');
       scopeList.replaceChildren();
       model.scope.forEach(item => appendScopeEntry(scopeList, item));
-      scopeSection.hidden = model.scope.length === 0;
-
-      const relatedSection = document.querySelector('#detail-related-section');
-      const relatedGroups = document.querySelector('#detail-related-groups');
+      $('#detail-scope-section').hidden = model.scope.length === 0;
+      const relatedGroups = $('#detail-related-groups');
       relatedGroups.replaceChildren();
       model.related.forEach(group => {
         const wrapper = document.createElement('div');
@@ -731,10 +1088,8 @@
         wrapper.append(list);
         relatedGroups.append(wrapper);
       });
-      relatedSection.hidden = model.related.length === 0;
-
-      const historySection = document.querySelector('#detail-history-section');
-      const timeline = document.querySelector('#detail-timeline');
+      $('#detail-related-section').hidden = model.related.length === 0;
+      const timeline = $('#detail-timeline');
       timeline.replaceChildren();
       model.history.forEach(entry => {
         const item = document.createElement('li');
@@ -747,22 +1102,20 @@
         card.className = 'timeline-card';
         const head = document.createElement('div');
         head.className = 'timeline-head';
-
-        if (entry.code && entry.url) {
-          const link = document.createElement('a');
-          link.className = 'timeline-code';
-          link.href = entry.url;
-          link.target = '_blank';
-          link.rel = 'noreferrer';
-          link.textContent = entry.code;
-          head.append(link);
+        if (entry.code) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'relation-open timeline-code';
+          btn.textContent = entry.code;
+          btn.addEventListener('click', () => openDetail(entry.code));
+          head.append(btn);
         } else {
           const code = document.createElement('span');
           code.className = 'timeline-code';
-          code.textContent = entry.code || entry.text || 'Revision';
+          code.textContent = entry.text || t('history');
           head.append(code);
         }
-        if (entry.status) head.append(makeStatusBadge(entry.status, statusTone(entry.status)));
+        if (entry.status) head.append(makeBadge(entry.status, statusTone(entry.status)));
         card.append(head);
         if (entry.note) {
           const note = document.createElement('p');
@@ -773,34 +1126,29 @@
         item.append(marker, card);
         timeline.append(item);
       });
-      historySection.hidden = model.history.length === 0;
-
-      const otherSection = document.querySelector('#detail-other-section');
-      const otherGrid = document.querySelector('#detail-other-grid');
+      $('#detail-history-section').hidden = model.history.length === 0;
+      const otherGrid = $('#detail-other-grid');
       otherGrid.replaceChildren();
       model.other.forEach(item => appendMetaField(otherGrid, item));
-      otherSection.hidden = model.other.length === 0;
-
-      const source = document.querySelector('#detail-source');
-      const sourceBody = document.querySelector('#detail-source-body');
+      $('#detail-other-section').hidden = model.other.length === 0;
+      const sourceBox = $('#detail-source');
+      const sourceBody = $('#detail-source-body');
       sourceBody.replaceChildren();
       if (model.source) {
         const websiteRow = document.createElement('div');
         websiteRow.className = 'source-row';
         const websiteLabel = document.createElement('span');
         websiteLabel.className = 'source-label';
-        websiteLabel.textContent = 'Source website';
+        websiteLabel.textContent = t('sourceLabel');
         const websiteValue = document.createElement('span');
         websiteValue.className = 'source-value';
-        websiteValue.textContent = model.source.website || 'VSQI';
-        if (model.source.host) websiteValue.textContent += ` · ${model.source.host}`;
+        websiteValue.textContent = model.source.website + (model.source.host ? ` · ${model.source.host}` : '');
         websiteRow.append(websiteLabel, websiteValue);
-
         const urlRow = document.createElement('div');
         urlRow.className = 'source-row';
         const urlLabel = document.createElement('span');
         urlLabel.className = 'source-label';
-        urlLabel.textContent = 'Source URL';
+        urlLabel.textContent = 'URL';
         const urlValue = document.createElement('span');
         urlValue.className = 'source-value';
         if (model.source.url) {
@@ -810,125 +1158,192 @@
           link.rel = 'noreferrer';
           link.textContent = model.source.url;
           urlValue.append(link);
-        } else {
-          urlValue.textContent = 'Not provided by VSQI';
-          urlValue.classList.add('is-missing');
-        }
+        } else { urlValue.textContent = DASH; urlValue.classList.add('is-missing'); }
         urlRow.append(urlLabel, urlValue);
         sourceBody.append(websiteRow, urlRow);
-        source.hidden = false;
-      } else {
-        source.hidden = true;
-      }
+        sourceBox.hidden = false;
+      } else sourceBox.hidden = true;
 
+      recordRecent(data);
       empty.hidden = true;
       groups.hidden = false;
     }
 
-    function openDetail(code) {
-      detailInput.value = code;
-      showView('detail');
-      detailForm.requestSubmit();
-    }
-
-    async function searchStandards() {
-      const query = searchInput.value.trim();
-      const page = Math.max(1, Math.min(1000, Number(searchPage.value) || 1));
-      searchPage.value = String(page);
-      if (query.length < 2) {
-        showToast('Enter at least 2 characters to search');
-        searchInput.focus();
-        return;
+    function openPreview(data, model) {
+      const body = $('#preview-body');
+      body.replaceChildren();
+      const title = document.createElement('h4');
+      title.textContent = `${model.header.code || ''} — ${model.header.titleVi || model.header.titleEn || ''}`;
+      body.append(title);
+      const dl = document.createElement('dl');
+      dl.className = 'detail-meta-rows';
+      const rows = [
+        [t('issuingAgency'), data.issuingAgency], [t('issuedDate'), data.issuedDate], [t('effectiveDate'), data.effectiveDate],
+        [t('yearLabel'), data.year ?? model.header.year], [t('statusLabel'), data.status], [t('sourceLabel'), data.source]
+      ];
+      for (const [label, value] of rows) {
+        const row = document.createElement('div');
+        row.className = 'meta-row';
+        const dt = document.createElement('dt');
+        dt.textContent = label;
+        const dd = document.createElement('dd');
+        dd.textContent = dash(value);
+        row.append(dt, dd);
+        dl.append(row);
       }
-      searchInput.value = query;
-      setSearchLoading(true);
-      try {
-        getBaseUrl();
-      } catch (error) {
-        const result = { raw: '', payload: undefined, duration: 0, timestamp: new Date().toLocaleString(), status: null, statusText: '', ok: false, errorMessage: error.message };
-        memory.search = result;
-        updateInspector('search', 'Invalid API base URL', result);
-        renderRaw('search', '');
-        renderSearchResult(result);
-        return;
-      }
-      const params = new URLSearchParams({ q: query, page: String(page) });
-      await requestApi('search', `/api/v1/standards/search?${params}`);
-    }
-
-    async function requestDetail() {
-      const code = detailInput.value.trim().replace(/\s+/g, ' ');
-      if (!code) {
-        showToast('Enter a standard code');
-        detailInput.focus();
-        return;
-      }
-      detailInput.value = code;
-      document.querySelector('#detail-empty').hidden = true;
-      document.querySelector('#detail-groups').hidden = true;
-      document.querySelector('#detail-skeleton').hidden = false;
-      try {
-        getBaseUrl();
-      } catch (error) {
-        const result = { raw: '', payload: undefined, duration: 0, timestamp: new Date().toLocaleString(), status: null, statusText: '', ok: false, errorMessage: error.message };
-        memory.detail = result;
-        updateInspector('detail', 'Invalid API base URL', result);
-        renderRaw('detail', '');
-        renderDetailResult(result);
-        return;
-      }
-      await requestApi('detail', `/api/v1/standards/${encodeURIComponent(code)}`);
-    }
-
-    searchForm.addEventListener('submit', event => {
-      event.preventDefault();
-      void searchStandards();
-    });
-    detailForm.addEventListener('submit', event => {
-      event.preventDefault();
-      void requestDetail();
-    });
-
-    apiBaseInput.addEventListener('change', () => {
-      try {
-        const base = getBaseUrl();
-        apiBaseInput.value = base;
-        try {
-          localStorage.setItem('vsqi-api-base-url', base);
-        } catch {
-          showToast('API base URL updated for this session');
-          return;
+      body.append(dl);
+      if (model.scope.length > 0) {
+        const scopeTitle = document.createElement('h4');
+        scopeTitle.textContent = t('scope');
+        body.append(scopeTitle);
+        for (const item of model.scope) {
+          const p = document.createElement('p');
+          p.className = 'scope-text';
+          p.textContent = dash(item.value);
+          body.append(p);
         }
-        showToast('API base URL saved');
-      } catch (error) {
-        showToast(error.message);
       }
-    });
-    apiBaseInput.addEventListener('keydown', event => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        apiBaseInput.dispatchEvent(new Event('change'));
-      }
-    });
+      const link = $('#preview-source-link');
+      const safe = safeWebUrl(data.detailUrl);
+      link.hidden = !safe;
+      if (safe) link.href = safe;
+      $('#preview-modal').hidden = false;
+    }
 
-    document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
-    document.querySelector('#mobile-menu').addEventListener('click', () => document.querySelector('.sidebar').classList.toggle('is-open'));
-    document.querySelectorAll('[data-query]').forEach(button => button.addEventListener('click', () => {
-      searchInput.value = button.dataset.query;
-      searchPage.value = '1';
-      searchForm.requestSubmit();
-    }));
-    document.querySelector('#previous-page').addEventListener('click', () => {
-      searchPage.value = String(Math.max(1, Number(searchPage.value) - 1));
-      searchForm.requestSubmit();
-    });
-    document.querySelector('#next-page').addEventListener('click', () => {
-      searchPage.value = String(Math.min(1000, Number(searchPage.value) + 1));
-      searchForm.requestSubmit();
-    });
+    async function requestDetail(codeOverride, sourceOverride) {
+      const code = String(codeOverride ?? detailInput.value).trim().replace(/\s+/g, ' ');
+      if (!code) { showToast(t('enterCode')); detailInput.focus(); return; }
+      detailInput.value = code;
+      const source = sourceOverride !== undefined ? sourceOverride : detailSourceSelect.value;
+      if (source) detailSourceSelect.value = source;
+      const url = new URL(location.href);
+      url.searchParams.set('view', 'detail');
+      url.searchParams.set('code', code);
+      if (source) url.searchParams.set('source', source); else url.searchParams.delete('source');
+      url.searchParams.delete('q');
+      url.searchParams.delete('page');
+      history.replaceState(null, '', url);
+      $('#detail-empty').hidden = true;
+      $('#detail-groups').hidden = true;
+      $('#detail-skeleton').hidden = false;
+      const params = source ? `?${new URLSearchParams({ source })}` : '';
+      const result = await fetchApi(`/api/v1/standards/${encodeURIComponent(code)}${params}`);
+      memory.detail = result;
+      updateInspector('detail', result);
+      renderRaw('detail', result.raw);
+      renderDetailResult(result);
+    }
 
-    document.querySelectorAll('[data-response-tab]').forEach(button => button.addEventListener('click', () => {
-      const group = button.closest('.results-card, .detail-response-card');
+    function openDetail(code, source) {
+      if (!code) return;
+      showView('detail', false);
+      void requestDetail(code, source || '');
+    }
+
+    // ---- My Library ----
+    function renderLibrary() {
+      const renderInto = (containerId, emptyId, items, removable) => {
+        const container = $(containerId);
+        container.replaceChildren();
+        $(emptyId).hidden = items.length !== 0;
+        for (const item of items) {
+          const row = document.createElement('div');
+          row.className = 'library-row';
+          const main = document.createElement('div');
+          main.className = 'lib-main';
+          const strong = document.createElement('strong');
+          strong.textContent = dash(item.code);
+          const small = document.createElement('small');
+          small.textContent = [item.name, item.englishName, item.year ? String(item.year) : '', item.source].filter(Boolean).join(' · ');
+          main.append(strong, small);
+          const openBtn = document.createElement('button');
+          openBtn.type = 'button';
+          openBtn.className = 'detail-btn';
+          openBtn.textContent = t('open');
+          openBtn.addEventListener('click', () => openDetail(item.code, item.source));
+          row.append(main, openBtn);
+          if (removable) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = t('remove');
+            removeBtn.addEventListener('click', () => { toggleFavorite(item); renderLibrary(); });
+            row.append(removeBtn);
+          }
+          container.append(row);
+        }
+      };
+      renderInto('#library-favorites', '#library-favorites-empty', getFavorites(), true);
+      renderInto('#library-recent', '#library-recent-empty', getRecent(), false);
+    }
+
+    // ---- Language ----
+    function applyLanguage(lang) {
+      currentLang = lang === 'en' ? 'en' : 'vi';
+      document.documentElement.lang = currentLang;
+      try { localStorage.setItem('smartrail-lang', currentLang); } catch { /* ignore */ }
+      $('#lang-vi').classList.toggle('is-active', currentLang === 'vi');
+      $('#lang-en').classList.toggle('is-active', currentLang === 'en');
+      $$('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+      $$('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+      if (lastSearchPayload) applyFiltersAndRender();
+      renderCategories();
+      void loadHomeRecent();
+      if (currentDetail && memory.detail) renderDetailResult(memory.detail);
+      if (!$('#view-library').hidden) renderLibrary();
+    }
+
+    // ---- Events ----
+    $$('.nav-item').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    $$('[data-goto-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.gotoView)));
+    $('#mobile-menu').addEventListener('click', () => {
+      const nav = $('#main-nav');
+      const open = nav.classList.toggle('is-open');
+      $('#mobile-menu').setAttribute('aria-expanded', String(open));
+    });
+    $('#lang-vi').addEventListener('click', () => applyLanguage('vi'));
+    $('#lang-en').addEventListener('click', () => applyLanguage('en'));
+    $('#to-top').addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    $('#hero-search-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const query = $('#hero-query').value.trim();
+      if (query.length < 2) { showToast(t('enterQuery')); return; }
+      goSearch(query);
+    });
+    $$('[data-discipline-query]').forEach(button => button.addEventListener('click', () => goSearch(button.dataset.disciplineQuery)));
+    $$('[data-collection-query]').forEach(button => button.addEventListener('click', () => goSearch(button.dataset.collectionQuery)));
+    $$('[data-goto-search]').forEach(button => button.addEventListener('click', () => goSearch(button.dataset.gotoSearch)));
+    searchForm.addEventListener('submit', event => { event.preventDefault(); void searchStandards(); });
+    detailForm.addEventListener('submit', event => { event.preventDefault(); void requestDetail(); });
+    $$('[data-query]').forEach(button => button.addEventListener('click', () => { searchInput.value = button.dataset.query; searchPage.value = '1'; void searchStandards(); }));
+    $('#advanced-toggle').addEventListener('click', () => {
+      const panel = $('#advanced-panel');
+      panel.hidden = !panel.hidden;
+      $('#advanced-toggle').setAttribute('aria-expanded', String(!panel.hidden));
+    });
+    $('#previous-page').addEventListener('click', () => { searchPage.value = String(Math.max(1, Number(searchPage.value) - 1)); void searchStandards(); });
+    $('#next-page').addEventListener('click', () => { searchPage.value = String(Math.min(1000, Number(searchPage.value) + 1)); void searchStandards(); });
+    $$('.filter-source').forEach(cb => cb.addEventListener('change', applyFiltersAndRender));
+    $('#filter-year').addEventListener('input', applyFiltersAndRender);
+    $('#filter-status').addEventListener('change', applyFiltersAndRender);
+    $('#sort-select').addEventListener('change', applyFiltersAndRender);
+    $('#filter-clear').addEventListener('click', () => {
+      $$('.filter-source').forEach(cb => { cb.checked = true; });
+      $('#filter-year').value = '';
+      $('#filter-status').value = '';
+      $('#adv-source').value = '';
+      $('#adv-year').value = '';
+      applyFiltersAndRender();
+    });
+    $('#view-toggle-list').addEventListener('click', () => { resultsViewMode = 'list'; $('#view-toggle-list').classList.add('is-active'); $('#view-toggle-grid').classList.remove('is-active'); applyFiltersAndRender(); });
+    $('#view-toggle-grid').addEventListener('click', () => { resultsViewMode = 'grid'; $('#view-toggle-grid').classList.add('is-active'); $('#view-toggle-list').classList.remove('is-active'); applyFiltersAndRender(); });
+    $('#search-raw-toggle').addEventListener('click', () => {
+      const pane = $('#search-raw-pane');
+      pane.hidden = !pane.hidden;
+      $('#search-raw-toggle').setAttribute('aria-expanded', String(!pane.hidden));
+    });
+    $$('[data-response-tab]').forEach(button => button.addEventListener('click', () => {
+      const group = button.closest('.detail-main');
       group.querySelectorAll('[data-response-tab]').forEach(tab => tab.classList.toggle('is-active', tab === button));
       group.querySelectorAll('.response-pane').forEach(pane => {
         const active = pane.id === `${button.dataset.responseTab}-pane`;
@@ -936,32 +1351,48 @@
         pane.classList.toggle('is-active', active);
       });
     }));
-    document.querySelectorAll('.copy-url').forEach(button => button.addEventListener('click', async () => {
-      const url = document.querySelector(`#${button.dataset.copyUrl}-request-url`).textContent;
-      if (!url || url === '—') return showToast('No request URL to copy');
-      try {
-        await navigator.clipboard.writeText(url);
-        showToast('Request URL copied');
-      } catch {
-        showToast('Clipboard access is unavailable in this browser');
-      }
+    $$('[data-copy-url]').forEach(button => button.addEventListener('click', async () => {
+      const url = $(`#${button.dataset.copyUrl}-request-url`).textContent;
+      if (!url || url === DASH) return showToast(t('copyFailed'));
+      try { await navigator.clipboard.writeText(url); showToast(t('copied')); } catch { showToast(t('copyFailed')); }
     }));
-    document.querySelectorAll('.copy-json').forEach(button => button.addEventListener('click', async () => {
+    $$('.copy-json').forEach(button => button.addEventListener('click', async () => {
       const result = memory[button.dataset.raw];
-      if (!result) return showToast('No response JSON to copy');
+      if (!result) return showToast(t('copyFailed'));
+      try { await navigator.clipboard.writeText(result.raw); showToast(t('copied')); } catch { showToast(t('copyFailed')); }
+    }));
+    $('#preview-close').addEventListener('click', () => { $('#preview-modal').hidden = true; });
+    $('#preview-modal').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.hidden = true; });
+    $('#library-clear-recent').addEventListener('click', () => { writeList('smartrail-recent', []); renderLibrary(); showToast(t('clearRecentDone')); });
+    apiBaseInput.addEventListener('change', () => {
       try {
-        await navigator.clipboard.writeText(result.raw);
-        showToast('Raw response copied');
-      } catch {
-        showToast('Clipboard access is unavailable in this browser');
-      }
-    }));
-    document.querySelectorAll('[data-doc-action]').forEach(button => button.addEventListener('click', () => {
-      const action = button.dataset.docAction;
-      showView(action);
-      if (action === 'search') searchInput.focus();
-      else detailInput.focus();
-    }));
+        const base = getBaseUrl();
+        apiBaseInput.value = base;
+        try { localStorage.setItem('vsqi-api-base-url', base); } catch { /* session only */ }
+        showToast(t('copied'));
+        void loadHomeRecent();
+        void loadCategoryCounts();
+      } catch (error) { showToast(error.message); }
+    });
+    apiBaseInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); apiBaseInput.dispatchEvent(new Event('change')); } });
+
+    // ---- Init from URL ----
+    applyLanguage(currentLang);
+    const params = new URLSearchParams(location.search);
+    const view = params.get('view');
+    if (view === 'detail' && params.get('code')) {
+      showView('detail', false);
+      void requestDetail(params.get('code'), params.get('source') || '');
+    } else if (view === 'search' && params.get('q')) {
+      searchInput.value = params.get('q');
+      searchPage.value = params.get('page') || '1';
+      showView('search', false);
+      void searchStandards();
+    } else if (['categories', 'library', 'docs', 'search', 'detail'].includes(view)) {
+      showView(view, false);
+    } else {
+      showView('home', false);
+    }
   }
 
   initApp();
