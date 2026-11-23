@@ -115,7 +115,39 @@ describe('TcvnVnProvider detail', () => {
     const client = fakeClient(async () => searchPage([], 0));
     const provider = new TcvnVnProvider(client, BASE);
     await expect(provider.getDetail('TCVN 9999:2099')).resolves.toBeNull();
-    expect(client.urls).toHaveLength(1);
+    // Two searches (status=A, then the status=H retry), no detail fetch.
+    expect(client.urls).toHaveLength(2);
+    expect(client.urls.map(url => url.searchParams.get('status'))).toEqual(['A', 'H']);
+  });
+
+  it('retries with status=H for a withdrawn standard missed by status=A', async () => {
+    const withdrawn = { ...vnRecord('TCVN 9143:2012', 'key-old'), up: 'H' };
+    const client = fakeClient(async url => {
+      if (url.pathname.endsWith('/vs-standard/search')) {
+        return url.searchParams.get('status') === 'H'
+          ? searchPage([withdrawn], 1)
+          : searchPage([], 0);
+      }
+      expect(url.pathname).toBe('/sdomain/front-api/vs-standard/key-old');
+      return withdrawn;
+    });
+    const provider = new TcvnVnProvider(client, BASE);
+    const detail = await provider.getDetail('TCVN 9143:2012');
+    expect(detail?.code).toBe('TCVN 9143:2012');
+    expect(detail?.status).toBe('Withdrawn');
+    expect(client.urls.map(url => url.searchParams.get('status')).filter(Boolean)).toEqual(['A', 'H']);
+  });
+
+  it('does not retry with status=H when status=A already finds the record', async () => {
+    const client = fakeClient(async url => {
+      if (url.pathname.endsWith('/vs-standard/search')) {
+        return searchPage([vnRecord('TCVN 9143:2022', 'key-1')], 1);
+      }
+      return vnRecord('TCVN 9143:2022', 'key-1');
+    });
+    const provider = new TcvnVnProvider(client, BASE);
+    await provider.getDetail('TCVN 9143:2022');
+    expect(client.urls.some(url => url.searchParams.get('status') === 'H')).toBe(false);
   });
 });
 
@@ -223,5 +255,26 @@ describe('TcvnQtProvider detail', () => {
     expect(detail?.code).toBe('ISO 9001');
     expect(detail?.source).toBe('TCVN_QT');
     expect(detail?.year).toBe(2015);
+    // status=A hit: no withdrawn retry.
+    expect(client.urls.some(url => url.searchParams.get('status') === 'H')).toBe(false);
+  });
+
+  it('retries with status=H (same orgCode) for a withdrawn standard', async () => {
+    const withdrawn = { ...qtRecord('ISO 9001:2008', 'k-old'), up: 'H' };
+    const client = fakeClient(async url => {
+      if (url.pathname.endsWith('/is-standard/search')) {
+        expect(url.searchParams.get('orgCode')).toBe('ISO');
+        return url.searchParams.get('status') === 'H'
+          ? searchPage([withdrawn], 1)
+          : searchPage([], 0);
+      }
+      expect(url.pathname).toBe('/sdomain/front-api/is-standard/k-old');
+      return withdrawn;
+    });
+    const provider = new TcvnQtProvider(client, BASE, ['ISO']);
+    const detail = await provider.getDetail('ISO 9001:2008');
+    expect(detail?.code).toBe('ISO 9001:2008');
+    expect(detail?.status).toBe('Withdrawn');
+    expect(client.urls.map(url => url.searchParams.get('status')).filter(Boolean)).toEqual(['A', 'H']);
   });
 });

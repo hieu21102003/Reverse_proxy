@@ -177,6 +177,27 @@ describe('Elib proxy (/api/elib/*)', () => {
     expect(state.lastUpload?.bytes).toBeGreaterThan(FILE_MARKER.length);
   });
 
+  it('proxies uploads that carry an Expect: 100-continue header', async () => {
+    // Regression: undici refuses to send `expect` (NotSupportedError), so
+    // forwarding it turned every curl/script upload into a 502. The proxy
+    // must strip it. app.inject is used because fetch() forbids the header.
+    const boundary = '----expect-test-boundary';
+    const payload = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="stub.pdf"\r\nContent-Type: application/pdf\r\n\r\n${FILE_MARKER}\r\n--${boundary}--\r\n`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/elib/documents',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+        expect: '100-continue',
+        cookie: 'elib_session=good-token'
+      },
+      payload
+    });
+    expect(res.statusCode).toBe(201);
+    const state = (stub.server as unknown as { __state: { lastUpload: { hasMarker: boolean } | null } }).__state;
+    expect(state.lastUpload?.hasMarker).toBe(true);
+  });
+
   it('streams downloads with Content-Disposition passthrough', async () => {
     const res = await fetch(`${base}/api/elib/documents/d1/files/f1/download`);
     expect(res.status).toBe(200);

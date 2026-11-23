@@ -5,6 +5,7 @@ import {
   isTcvnCodeQuery,
   mapTcvnDetail,
   mapTcvnSearchRecord,
+  normalizeTcvnDate,
   parseTcvnOrgList,
   parseTcvnSearchResponse,
   tcvnStatus,
@@ -164,5 +165,26 @@ describe('TCVN query routing', () => {
     expect(tcvnYear({ di: 'ISO 9001', dp: '2015-09-00' })).toBe(2015);
     expect(tcvnYear({ di: 'TCVN 1', pi: '2022-12-21,2593/QĐ-BKHCN' })).toBe(2022);
     expect(tcvnYear({ di: 'ISO 9001' })).toBeUndefined();
+  });
+
+  it('normalises zero month/day placeholders in TCVN dates', () => {
+    expect(normalizeTcvnDate('2015-09-00')).toBe('2015-09');
+    expect(normalizeTcvnDate('2015-00-00')).toBe('2015');
+    expect(normalizeTcvnDate('2015-09-15')).toBe('2015-09-15');
+    expect(normalizeTcvnDate('2015')).toBe('2015');
+    expect(normalizeTcvnDate(null)).toBeNull();
+    expect(normalizeTcvnDate(undefined)).toBeNull();
+    expect(normalizeTcvnDate('not-a-date')).toBe('not-a-date');
+  });
+
+  it('never emits an invalid issuedDate for QT records', () => {
+    const detail = mapTcvnDetail(
+      { key: 'k-iso', di: 'ISO 9001', ti: 'Quality management', dp: '2015-09-00', up: 'A', fm: '29', ca: '03.100.70' },
+      'QT',
+      BASE
+    );
+    expect(detail?.issuedDate).toBe('2015-09');
+    const pubDate = detail?.attributes.find(a => a.label === 'Ngày công bố');
+    expect(pubDate?.value).toBe('2015-09');
   });
 });

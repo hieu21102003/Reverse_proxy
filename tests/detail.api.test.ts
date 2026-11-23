@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createApp, normalizeStandardCode } from '../src/app.js';
 import { VsqiError } from '../src/errors.js';
 import { HttpClient } from '../src/http/http-client.js';
 import { VsqiProvider } from '../src/providers/vsqi.provider.js';
@@ -267,6 +267,34 @@ describe('detail API', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('accepts TCXD/TCN/TCCS/GOST/ST SEV codes and parenthesised suffixes', async () => {
+    // Regression: search/UI recognise these organisations, so the detail
+    // endpoint must not reject them with 400 INVALID_CODE. A stub that
+    // finds nothing yields 404, which proves the code was accepted.
+    const app = await createApp(providerStub({ getDetail: async () => null }));
+    try {
+      for (const code of ['TCXD 200:2005', 'TCN 123:2020', 'TCCS 123:2020', 'GOST 12345', 'ST SEV 123', 'ISO 9001:2015 (E)']) {
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/v1/standards/${encodeURIComponent(code)}`
+        });
+        expect(response.statusCode, code).toBe(404);
+        expect(response.json().error.code).toBe('NOT_FOUND');
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('normalises the newly accepted code shapes', () => {
+    expect(normalizeStandardCode('TCXD 200:2005')).toBe('TCXD 200:2005');
+    expect(normalizeStandardCode('tccs 123:2020')).toBe('TCCS 123:2020');
+    expect(normalizeStandardCode('ISO 9001:2015 (E)')).toBe('ISO 9001:2015 (E)');
+    expect(normalizeStandardCode('st sev 123')).toBe('ST SEV 123');
+    expect(normalizeStandardCode('anything')).toBeNull();
+    expect(normalizeStandardCode('ISO 9001; DROP')).toBeNull();
   });
 
   it('returns 404 when the code is absent from VSQI search results', async () => {
