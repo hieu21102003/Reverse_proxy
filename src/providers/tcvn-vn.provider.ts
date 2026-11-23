@@ -16,8 +16,9 @@ import type { SearchInput, SearchResult, StandardDetail, StandardProvider } from
  * backend (sending tn and ti together returns nothing), so a title query
  * fans out into two parallel calls — one by Vietnamese title (tn), one by
  * English title (ti) — and merges them, deduplicated by record key.
- * `status=A` (still effective) is always sent: without it the backend
- * returns zero results.
+ * `status=A` (still effective) is always sent for search: without it the
+ * backend returns zero results. Detail lookups additionally retry with
+ * `status=H` (withdrawn) so replaced standards remain reachable.
  */
 export class TcvnVnProvider implements StandardProvider {
   private readonly json: Pick<TcvnJsonClient, 'getJson'>;
@@ -34,19 +35,19 @@ export class TcvnVnProvider implements StandardProvider {
     }
   }
 
-  private searchUrl(params: Record<string, string>, page: number): URL {
+  private searchUrl(params: Record<string, string>, page: number, status: 'A' | 'H' = 'A'): URL {
     const url = new URL(`${this.baseUrl}/vs-standard/search`);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }
-    url.searchParams.set('status', 'A');
+    url.searchParams.set('status', status);
     url.searchParams.set('page', String(page));
     url.searchParams.set('limit', String(config.TCVN_SEARCH_LIMIT));
     return url;
   }
 
-  private async runSearch(params: Record<string, string>, page: number): Promise<SearchResult> {
-    const payload = await this.json.getJson(this.searchUrl(params, page));
+  private async runSearch(params: Record<string, string>, page: number, status: 'A' | 'H' = 'A'): Promise<SearchResult> {
+    const payload = await this.json.getJson(this.searchUrl(params, page, status));
     const { total, records } = parseTcvnSearchResponse(payload);
     const data = records
       .map(record => mapTcvnSearchRecord(record, 'VN', this.baseUrl))
@@ -66,17 +67,21 @@ export class TcvnVnProvider implements StandardProvider {
     };
   }
 
-  async search({ query, page }: SearchInput): Promise<SearchResult> {
+  async search(input: SearchInput): Promise<SearchResult> {
     this.ensureEnabled();
+    return this.searchWithStatus(input, 'A');
+  }
+
+  private async searchWithStatus({ query, page }: SearchInput, status: 'A' | 'H'): Promise<SearchResult> {
     const trimmed = query.trim();
     if (isTcvnCodeQuery(trimmed)) {
-      return this.runSearch({ di: trimmed }, page);
+      return this.runSearch({ di: trimmed }, page, status);
     }
     // Title search: tn and ti are ANDed upstream, so query each separately.
     // One field failing must not lose the other's results.
     const settled = await Promise.allSettled([
-      this.runSearch({ tn: trimmed }, page),
-      this.runSearch({ ti: trimmed }, page)
+      this.runSearch({ tn: trimmed }, page, status),
+      this.runSearch({ ti: trimmed }, page, status)
     ]);
     const fulfilled = settled
       .filter((o): o is PromiseFulfilledResult<SearchResult> => o.status === 'fulfilled')
@@ -108,12 +113,18 @@ export class TcvnVnProvider implements StandardProvider {
 
   async getDetail(code: string): Promise<StandardDetail | null> {
     this.ensureEnabled();
-    const search = await this.search({ query: code, page: 1 });
-    const found = search.data.find(
-      item => item.code.toLocaleLowerCase('en') === code.toLocaleLowerCase('en')
-    );
-    if (!found?.detailUrl) return null;
-    const payload = await this.json.getJson(new URL(found.detailUrl));
-    return mapTcvnDetail(payload, 'VN', this.baseUrl);
+    // Search stays effective-only (status=A), but a detail lookup must
+    // also find replaced/withdrawn standards (status=H) — e.g. following
+    // "replaces TCVN 9143:2012" from the current edition's page.
+    for (const status of ['A', 'H'] as const) {
+      const search = await this.searchWithStatus({ query: code, page: 1 }, status);
+      const found = search.data.find(
+        item => item.code.toLocaleLowerCase('en') === code.toLocaleLowerCase('en')
+      );
+      if (!found?.detailUrl) continue;
+      const payload = await this.json.getJson(new URL(found.detailUrl));
+      return mapTcvnDetail(payload, 'VN', this.baseUrl);
+    }
+    return null;
   }
 }

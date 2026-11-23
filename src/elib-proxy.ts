@@ -38,7 +38,10 @@ const HOP_BY_HOP = new Set([
   'trailer',
   'transfer-encoding',
   'upgrade',
-  'host'
+  'host',
+  // undici throws NotSupportedError when asked to send `expect`, which
+  // turned curl/script uploads (Expect: 100-continue) into a 502.
+  'expect'
 ]);
 
 /** Slightly above elib's 200 MB file cap, to allow multipart field overhead. */

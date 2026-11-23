@@ -18,9 +18,13 @@ export class ResponseCache {
     private readonly maxEntries = config.CACHE_MAX_ENTRIES
   ) {}
 
-  async getOrLoad<T>(key: string, loader: () => Promise<T>): Promise<T>;
-  async getOrLoad<T>(key: string, loader: () => Promise<T | null>): Promise<T | null>;
-  async getOrLoad<T>(key: string, loader: () => Promise<T | null>): Promise<T | null> {
+  async getOrLoad<T>(key: string, loader: () => Promise<T>, options?: { shouldCache?: (value: T) => boolean }): Promise<T>;
+  async getOrLoad<T>(key: string, loader: () => Promise<T | null>, options?: { shouldCache?: (value: T) => boolean }): Promise<T | null>;
+  async getOrLoad<T>(
+    key: string,
+    loader: () => Promise<T | null>,
+    options?: { shouldCache?: (value: T) => boolean }
+  ): Promise<T | null> {
     const now = Date.now();
     const entry = this.entries.get(key);
     if (entry && entry.expiresAt > now) {
@@ -34,7 +38,7 @@ export class ResponseCache {
     if (pending) return structuredClone(await pending as T | null);
 
     const request = loader().then(value => {
-      if (value !== null && this.ttlMs > 0 && this.maxEntries > 0) {
+      if (value !== null && this.ttlMs > 0 && this.maxEntries > 0 && (options?.shouldCache?.(value) ?? true)) {
         while (this.entries.size >= this.maxEntries) {
           const oldestKey = this.entries.keys().next().value as string | undefined;
           if (oldestKey === undefined) break;
@@ -117,6 +121,11 @@ export class CachedStandardProvider implements StandardProvider {
         throw new VsqiError('VSQI search response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
       }
       return result;
+    }, {
+      // A partial result (some source failed) must not be cached: one
+      // transient upstream outage would otherwise hide that source's
+      // records for the whole TTL.
+      shouldCache: result => !result.partialFailures || result.partialFailures.length === 0
     });
   }
 

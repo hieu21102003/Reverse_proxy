@@ -267,9 +267,13 @@ export interface SearchResult {
   data: Standard[];
   pagination: {
     currentPage: number;
-    /** Omitted for merged results: paging is per source, see `sources`. */
+    /** Merged results: ceil(totalResults / merged page size), exact when
+     *  every successful source was exhausted. Single-source results: the
+     *  source's own page count when known. */
     totalPages?: number;
-    /** Sum of the per-source totals of the sources that succeeded. */
+    /** Sum of the per-source totals of the sources that succeeded. For
+     *  merged results this is an upper bound: the same standard can be
+     *  counted by several sources. */
     totalResults?: number;
   };
   /** A single source's id for a single-source result, 'MULTI' for a
