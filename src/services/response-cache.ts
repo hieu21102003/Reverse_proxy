@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { VsqiError } from '../errors.js';
 import type { StandardsDbClient, DbLookupResult } from '../standards-db/client.js';
-import { dbInfoFor, detailFromDb, isFreshStandard, mergeSearchWithDb } from '../standards-db/db-detail.js';
+import { detailFromDb, mergeSearchWithDb } from '../standards-db/db-detail.js';
 import { lightNormalizeCode } from '../standards-db/light-normalize.js';
 import type { SearchInput, SearchResult, StandardDetail, StandardProvider, StandardSource } from '../types.js';
 
@@ -134,18 +134,23 @@ function lookupMatchesCode(lookup: DbLookupResult, requestedCode: string): boole
 }
 
 /**
- * Cache ↔ DB order (STANDARDS_DB_ENABLED on):
+ * Cache ↔ live ↔ DB order (STANDARDS_DB_ENABLED on):
  * 1. In-memory response cache (CACHE_TTL_SECONDS, default 300s) — a hit
  *    short-circuits everything below, including DB lookups.
- * 2. Metadata DB (elib /internal/standards/lookup): search merges DB
- *    editions into the live page; detail is served from DB only when
- *    the record is `full` and verified within STANDARDS_STALE_DAYS.
- * 3. Live upstream providers (VSQI + TCVN) — always consulted for
- *    search, and for detail whenever the DB record is missing/stale.
- * Live results are ingested back into the DB fire-and-forget (one
- * ingest batch per results page / detail, grouped by source); ingest
- * never blocks or fails a response. With the flag off, none of this
- * runs and behavior is identical to the live-proxy-only service.
+ * 2. Live upstream providers (VSQI + TCVN) — search always runs live
+ *    (DB editions are merged into the page); detail is served LIVE
+ *    whenever upstream answers.
+ * 3. Metadata DB (elib /internal/standards/lookup) — for detail it is
+ *    ONLY a fallback: consulted when live fails (upstream error or
+ *    not found), and served with dbInfo.servedFrom='db' so the UI can
+ *    label it "dữ liệu từ DB, có thể chưa đầy đủ". DB-first serving
+ *    (fresh ≤ STANDARDS_STALE_DAYS) was removed 2026-11-23; the
+ *    threshold now only drives the stale-data warning. Revisit DB
+ *    priority only once lookup payloads are complete.
+ * Live results are ingested back fire-and-forget (ONE multi-source
+ * ingest request per results page, one per detail; `raw` never sent);
+ * ingest never blocks or fails a response. With the flag off, none of
+ * this runs and behavior is identical to the live-proxy-only service.
  */
 export class CachedStandardProvider implements StandardProvider {
   constructor(
@@ -187,36 +192,46 @@ export class CachedStandardProvider implements StandardProvider {
     const key = `detail:${normalizedCode}:${source ?? 'ALL'}`;
     return this.cache.getOrLoad(key, async () => {
       const db = this.standardsDb;
-      let lookup: DbLookupResult | null = null;
-      if (db && source === undefined) {
-        lookup = await db.client.lookup(normalizedCode);
-        if (lookup && !lookupMatchesCode(lookup, normalizedCode)) lookup = null;
-        if (lookup && isFreshStandard(lookup.standard, db.staleDays)) {
+      // Live first (2026-11-23): the metadata DB is only a fallback
+      // for when upstream fails or has no such standard. Pass no
+      // second argument when no source was pinned, so providers that
+      // inspect their arguments (and existing callers) see the
+      // original one-argument call.
+      let result: StandardDetail | null = null;
+      let liveError: unknown = null;
+      try {
+        result = source === undefined
+          ? await this.provider.getDetail(normalizedCode)
+          : await this.provider.getDetail(normalizedCode, source);
+        if (result !== null && !isStandardDetail(result, normalizedCode)) {
+          throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
+        }
+      } catch (error) {
+        liveError = error;
+        result = null;
+      }
+      if (result !== null) {
+        if (db) db.client.ingestDetail(result);
+        return result;
+      }
+      // Live failed (error or not found): try the metadata DB before
+      // surfacing the original outcome. A pinned source is honored by
+      // only serving records that actually have that source snapshot.
+      if (db) {
+        const lookup = await db.client.lookup(normalizedCode);
+        if (
+          lookup &&
+          lookupMatchesCode(lookup, normalizedCode) &&
+          (source === undefined || lookup.sources.some(entry => entry.source === source))
+        ) {
           const fromDb = detailFromDb(lookup, db.staleDays);
-          if (fromDb) {
-            if (!isStandardDetail(fromDb, normalizedCode)) {
-              throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
-            }
+          if (fromDb && isStandardDetail(fromDb, normalizedCode)) {
             return fromDb;
           }
         }
       }
-      // Pass no second argument when no source was pinned, so providers
-      // that inspect their arguments (and existing callers) see the
-      // original one-argument call.
-      const result = source === undefined
-        ? await this.provider.getDetail(normalizedCode)
-        : await this.provider.getDetail(normalizedCode, source);
-      if (result !== null && !isStandardDetail(result, normalizedCode)) {
-        throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
-      }
-      if (result !== null && db) {
-        if (lookup) {
-          result.dbInfo = dbInfoFor(lookup, 'live', db.staleDays);
-        }
-        db.client.ingestDetail(result);
-      }
-      return result;
+      if (liveError !== null) throw liveError;
+      return null;
     });
   }
 }

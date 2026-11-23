@@ -66,7 +66,7 @@ Copy-Item .env.example .env
 | `STANDARDS_DB_ENABLED` | `false` | Enable the standards metadata DB integration (elib `/internal/standards/*`); off = live-proxy behavior unchanged |
 | `STANDARDS_INTERNAL_TOKEN` | empty | Shared secret for elib internal API calls (same value on elib); never logged |
 | `STANDARDS_DB_TIMEOUT_MS` | `2000` | Timeout for internal DB calls, 100–30000 ms (short on purpose; DB errors never fail search) |
-| `STANDARDS_STALE_DAYS` | `7` | Freshness window in days for serving detail from the metadata DB; `0` = never fresh |
+| `STANDARDS_STALE_DAYS` | `7` | Freshness window in days for the stale-data warning on DB-fallback details; `0` = always stale |
 
 Configuration is validated at startup. `VSQI_BASE_URL` must use HTTPS. TLS certificate verification remains enabled. Do not commit `.env` or put credentials in the upstream URL.
 
@@ -142,10 +142,12 @@ With `STANDARDS_DB_ENABLED=true` (+ the same `STANDARDS_INTERNAL_TOKEN` on elib,
 Order of layers for search/detail:
 
 1. **In-memory response cache** (`CACHE_TTL_SECONDS`, default 300s) — a hit short-circuits everything below.
-2. **Metadata DB** — search merges DB editions into the live page (dedup by light-normalized code, live fields win, DB adds `lastVerifiedAt`/`fromDb`); detail is served from DB only when the record is `full` and verified within `STANDARDS_STALE_DAYS` (default 7).
-3. **Live upstream** (VSQI + TCVN) — always consulted for search; for detail whenever the DB record is missing or stale.
+2. **Live upstream** (VSQI + TCVN) — always consulted first for detail; search always runs live and merges DB editions into the page (dedup by light-normalized code, live fields win, DB adds `lastVerifiedAt`/`fromDb`; editions with no live counterpart are added as DB-only items).
+3. **Metadata DB** — for detail it is **only a fallback**: consulted when live fails (upstream error or not found) and served with `dbInfo.servedFrom='db'` so the UI labels it "Dữ liệu từ DB, có thể chưa đầy đủ". DB-first serving was removed 2026-11-23; `STANDARDS_STALE_DAYS` now only drives the stale-data warning. Revisit DB priority only once lookup payloads are complete.
 
-Live results are ingested back fire-and-forget (one batch per results page, grouped by source; `raw` is never sent). Internal calls use a short timeout (`STANDARDS_DB_TIMEOUT_MS`, default 2000ms) behind a circuit breaker (5 consecutive failures → 60s pause); any DB error is logged and swallowed — search/detail never fail because of the DB. Detail responses carry `dbInfo` (`servedFrom`, `lastVerifiedAt`, `stale`, `staleDays`, `sources`) so the UI can show "Kiểm tra lần cuối", label DB-served data, and warn when the record is past the freshness threshold. The UI never links the TCVN front-api JSON `detailUrl` as a public source page; it shows fallback links instead (VSQI page when a VSQI snapshot exists, ISO OBP search, Google search). With the flag off (default), behavior is identical to the live-proxy-only service.
+Live results are ingested back fire-and-forget as **one multi-source request per results page** (one `search_log` row per search; `raw` is never sent). The wire shapes are the shared zod contract (`src/standards-db/contract.ts`, mirrored from elib — elib is the source of truth; contract tests in both repos validate the same JSON fixture). Internal calls use a short timeout (`STANDARDS_DB_TIMEOUT_MS`, default 2000ms) behind a circuit breaker (5 consecutive failures → 60s pause); any DB error is logged and swallowed — search/detail never fail because of the DB. Detail responses carry `dbInfo` (`servedFrom`, `lastVerifiedAt`, `stale`, `staleDays`, `sources`) so the UI can show "Kiểm tra lần cuối", label DB-served data, and warn when the record is past the freshness threshold. The UI never links the TCVN front-api JSON `detailUrl` as a public source page; it shows fallback links instead (VSQI page when a VSQI snapshot exists, ISO OBP search, Google search). With the flag off (default), behavior is identical to the live-proxy-only service.
+
+**Not yet verified:** the real elib + PostgreSQL integration run and real-browser rendering. Run `tests/standards-db.live.test.ts` against a dev elib+Postgres per [docs/standards-db-live-test.md](docs/standards-db-live-test.md) before enabling `STANDARDS_DB_ENABLED`.
 
 ## Docker deployment
 
