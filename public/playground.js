@@ -389,7 +389,55 @@
     return `/api/elib/documents/${encodeURIComponent(doc.id)}/files/${encodeURIComponent(file.id)}/download`;
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath };
+  function elibPreviewPath(doc) {
+    if (!doc?.id) return null;
+    return `/api/elib/documents/${encodeURIComponent(doc.id)}/preview`;
+  }
+
+  function elibViewPath(doc) {
+    if (!doc?.id) return null;
+    return `/api/elib/documents/${encodeURIComponent(doc.id)}/view`;
+  }
+
+  /**
+   * Trạng thái nút xem trên thẻ file, suy từ trường API của elib
+   * (snake_case: file.preview_status / preview_pages / page_count,
+   * can_view_full ở cấp tài liệu — đúng response thật của elib).
+   * - ready -> nút "Xem trước"; pending/processing -> "Đang chuẩn bị"
+   *   (không bấm được); failed/unsupported -> không có nút xem trước.
+   * - "Xem toàn bộ" chỉ khi can_view_full (chủ tài liệu + admin).
+   */
+  function previewAffordance(doc) {
+    const file = doc?.file;
+    const status = file?.preview_status ?? null;
+    const kind = fileKindFromName(file?.original_filename, file?.mime_type);
+    return {
+      showPreview: status === 'ready',
+      showPreparing: status === 'pending' || status === 'processing',
+      showViewFull: doc?.can_view_full === true,
+      isImage: kind === 'img',
+      previewPages: Number.isInteger(file?.preview_pages) ? file.preview_pages : null,
+      pageCount: Number.isInteger(file?.page_count) ? file.page_count : null,
+      previewStatus: status
+    };
+  }
+
+  /** Map mã lỗi ổn định của endpoint preview/view sang khóa i18n (không parse message). */
+  function previewErrorKey(status, code) {
+    if (code === 'PREVIEW_NOT_READY') return 'previewNotReady';
+    if (code === 'PREVIEW_UNSUPPORTED' || status === 415) return 'previewUnsupported';
+    if (code === 'PREVIEW_NOT_AVAILABLE' || status === 403) return 'previewNotAvailable';
+    if (status === 429) return 'previewRateLimited';
+    if (status === 404) return 'previewNotFound';
+    return 'previewLoadError';
+  }
+
+  /** Hết trang xem trước: chưa đăng nhập -> mời đăng nhập; đã đăng nhập -> liên hệ chủ tài liệu. */
+  function endOfPreviewKind(user) {
+    return user ? 'contact' : 'login';
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -483,6 +531,18 @@
         fileNoResults: 'Không tìm thấy file phù hợp', fileNoResultsHint: 'Thử từ khóa khác hoặc chọn danh mục khác.',
         fileSearchError: 'Không tải được danh sách file. Dịch vụ tài liệu (elib) có thể đang bảo trì hoặc chưa sẵn sàng.',
         loadMore: 'Xem thêm', loginToDownload: 'Đăng nhập để tải', fileResultsFound: 'Tìm thấy {n} file',
+        viewPreview: 'Xem trước', viewFull: 'Xem toàn bộ', previewPreparing: 'Đang chuẩn bị bản xem trước',
+        previewOfPages: 'Xem trước {x}/{y} trang', viewerPage: 'Trang {n}/{total}',
+        previewEndTitle: 'Đã hết phần xem trước', previewEndLogin: 'Đăng nhập để xem thêm hoặc tải tài liệu.',
+        previewEndContact: 'Vui lòng liên hệ người tạo tài liệu để xem toàn bộ.',
+        previewNotReady: 'Bản xem trước chưa sẵn sàng. Vui lòng thử lại sau ít phút.',
+        previewUnsupported: 'Định dạng tài liệu này chưa hỗ trợ xem trước trực tuyến.',
+        previewNotAvailable: 'Tài liệu này không có bản xem trước. Vui lòng liên hệ người tạo tài liệu để xem toàn bộ.',
+        previewNotFound: 'Không tìm thấy tài liệu hoặc bạn không có quyền xem.',
+        previewRateLimited: 'Bạn đang xem quá nhanh. Vui lòng chờ một lát rồi thử lại.',
+        previewLoadError: 'Không tải được bản xem trước. Vui lòng thử lại sau.',
+        viewerLoading: 'Đang tải tài liệu...', viewerClose: 'Đóng', viewerPrev: 'Trang trước', viewerNext: 'Trang sau',
+        viewerDownload: 'Tải xuống', viewerPrint: 'In / mở bản gốc',
         uploadedOn: 'Ngày tải lên', recentEmpty: 'Chưa có tài liệu nào được tải lên.',
         recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
         heroEyebrow: 'Viện Công nghệ Đường sắt & TOD · Tra cứu trực tuyến',
@@ -567,6 +627,18 @@
         fileNoResults: 'No matching files', fileNoResultsHint: 'Try another keyword or a different category.',
         fileSearchError: 'Could not load the file list. The document service (elib) may be under maintenance or not ready yet.',
         loadMore: 'Load more', loginToDownload: 'Sign in to download', fileResultsFound: 'Found {n} files',
+        viewPreview: 'Preview', viewFull: 'View full', previewPreparing: 'Preparing preview',
+        previewOfPages: 'Preview {x}/{y} pages', viewerPage: 'Page {n}/{total}',
+        previewEndTitle: 'End of preview', previewEndLogin: 'Sign in to see more or download the document.',
+        previewEndContact: 'Please contact the document owner to view it in full.',
+        previewNotReady: 'The preview is not ready yet. Please try again in a few minutes.',
+        previewUnsupported: 'This document format does not support online preview yet.',
+        previewNotAvailable: 'This document has no preview. Please contact the document owner to view it in full.',
+        previewNotFound: 'Document not found, or you do not have access to it.',
+        previewRateLimited: 'You are viewing too quickly. Please wait a moment and try again.',
+        previewLoadError: 'Could not load the preview. Please try again later.',
+        viewerLoading: 'Loading document...', viewerClose: 'Close', viewerPrev: 'Previous page', viewerNext: 'Next page',
+        viewerDownload: 'Download', viewerPrint: 'Print / open original',
         uploadedOn: 'Uploaded', recentEmpty: 'No documents have been uploaded yet.',
         recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.',
         heroEyebrow: 'Institute of Railway Technology & TOD · Live Search',
@@ -837,6 +909,214 @@
       container.append(link);
     }
 
+    // ---- Document preview / full viewer (Phase B) ----
+    // pdf.js is lazy-loaded from /vendor/pdfjs/ only when a viewer opens;
+    // it is NOT part of the initial page bundle. Preview bytes come from
+    // elib's pre-cut preview PDF; the original is only fetched via /view
+    // for owner+admin (can_view_full).
+
+    function appendPreviewAffordances(container, doc) {
+      const aff = previewAffordance(doc);
+      if (aff.showPreview) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button-primary button-small';
+        btn.textContent = t('viewPreview');
+        btn.addEventListener('click', () => void openDocViewer(doc, 'preview'));
+        container.append(btn);
+      } else if (aff.showPreparing) {
+        const span = document.createElement('span');
+        span.className = 'preview-preparing';
+        span.textContent = t('previewPreparing');
+        container.append(span);
+      }
+      if (aff.showViewFull) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button-secondary button-small';
+        btn.textContent = t('viewFull');
+        btn.addEventListener('click', () => void openDocViewer(doc, aff.isImage ? 'image' : 'full'));
+        container.append(btn);
+      }
+    }
+
+    let pdfjsPromise = null;
+    function loadPdfjs() {
+      if (!pdfjsPromise) {
+        // Specifier built at runtime: pdf.js is a vendored static file,
+        // deliberately outside any bundler/test transform pipeline.
+        const pdfjsUrl = '/vendor/pdfjs/' + 'pdf.min.mjs';
+        pdfjsPromise = import(/* @vite-ignore */ pdfjsUrl).then((mod) => {
+          mod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+          return mod;
+        });
+      }
+      return pdfjsPromise;
+    }
+
+    let viewerState = null;
+
+    function closeDocViewer() {
+      const overlay = $('#doc-viewer');
+      if (overlay) overlay.hidden = true;
+      if (viewerState?.observer) viewerState.observer.disconnect();
+      if (viewerState?.loadingTask) {
+        // Release pdf.js resources (worker document + rendered pages).
+        viewerState.loadingTask.destroy().catch(() => undefined);
+      }
+      if (viewerState?.objectUrl) URL.revokeObjectURL(viewerState.objectUrl);
+      viewerState = null;
+      const pages = $('#doc-viewer-pages');
+      if (pages) pages.replaceChildren();
+      const img = $('#doc-viewer-img');
+      if (img) img.removeAttribute('src');
+    }
+
+    async function fetchDocBytes(url) {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) {
+        let code = null;
+        try {
+          const payload = await res.json();
+          code = payload?.error?.code ?? null;
+        } catch { /* non-JSON error body */ }
+        const err = new Error('preview fetch failed');
+        err.status = res.status;
+        err.code = code;
+        throw err;
+      }
+      return res.arrayBuffer();
+    }
+
+    async function openDocViewer(doc, mode) {
+      const overlay = $('#doc-viewer');
+      const pagesEl = $('#doc-viewer-pages');
+      const imgEl = $('#doc-viewer-img');
+      const statusEl = $('#doc-viewer-status');
+      const titleEl = $('#doc-viewer-title');
+      const pageInfoEl = $('#doc-viewer-pageinfo');
+      const endEl = $('#doc-viewer-end');
+      const aff = previewAffordance(doc);
+      closeDocViewer();
+      overlay.hidden = false;
+      titleEl.textContent = doc.title || doc.file?.original_filename || '';
+      endEl.hidden = true;
+      imgEl.hidden = mode !== 'image';
+      pagesEl.hidden = mode === 'image';
+      // Preview mode hides download/print (UX only, not a security boundary).
+      $('#doc-viewer-download').hidden = mode === 'preview';
+      $('#doc-viewer-print').hidden = mode === 'preview';
+      const downloadPath = elibDownloadPath(doc);
+      if (downloadPath) $('#doc-viewer-download').href = downloadPath;
+      const viewUrl = elibViewPath(doc);
+      $('#doc-viewer-print').href = viewUrl || '#';
+      if (mode === 'preview' && aff.previewPages && aff.pageCount) {
+        pageInfoEl.textContent = t('previewOfPages', { x: aff.previewPages, y: aff.pageCount });
+      } else {
+        pageInfoEl.textContent = '';
+      }
+      statusEl.hidden = false;
+      statusEl.textContent = t('viewerLoading');
+      statusEl.classList.remove('viewer-error');
+
+      try {
+        if (mode === 'image') {
+          // Simple image viewer for owner/admin full view.
+          const res = await fetch(viewUrl, { credentials: 'same-origin' });
+          if (!res.ok) {
+            let code = null;
+            try { code = (await res.json())?.error?.code ?? null; } catch { /* ignore */ }
+            const err = new Error('image fetch failed');
+            err.status = res.status; err.code = code;
+            throw err;
+          }
+          const blob = await res.blob();
+          imgEl.src = URL.createObjectURL(blob);
+          viewerState = { objectUrl: imgEl.src };
+          statusEl.hidden = true;
+          return;
+        }
+
+        const pdfjs = await loadPdfjs();
+        const url = mode === 'preview' ? elibPreviewPath(doc) : viewUrl;
+        let loadingTask;
+        if (mode === 'preview') {
+          // Preview PDFs are small (a few pages): fetch bytes so HTTP
+          // error codes map cleanly before pdf.js sees anything.
+          const data = await fetchDocBytes(url);
+          loadingTask = pdfjs.getDocument({
+            data,
+            isEvalSupported: false,
+            standardFontDataUrl: '/vendor/pdfjs/standard_fonts/'
+          });
+        } else {
+          // Full view can be large: preflight with a 1-byte Range request
+          // for error mapping, then let pdf.js stream via Range.
+          const probe = await fetch(url, { credentials: 'same-origin', headers: { Range: 'bytes=0-0' } });
+          if (!probe.ok && probe.status !== 206) {
+            let code = null;
+            try { code = (await probe.json())?.error?.code ?? null; } catch { /* ignore */ }
+            const err = new Error('view fetch failed');
+            err.status = probe.status; err.code = code;
+            throw err;
+          }
+          loadingTask = pdfjs.getDocument({
+            url,
+            isEvalSupported: false,
+            standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
+            withCredentials: true
+          });
+        }
+        viewerState = { loadingTask, doc, mode };
+        const pdf = await loadingTask.promise;
+        statusEl.hidden = true;
+        const total = pdf.numPages;
+        if (mode !== 'preview') {
+          pageInfoEl.textContent = t('viewerPage', { n: total, total });
+        }
+        // Render pages sequentially; preview PDFs are small, full PDFs
+        // render on scroll via IntersectionObserver to stay responsive.
+        const renderPage = async (pageNum, canvas) => {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 1.5 });
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        };
+        const canvases = [];
+        for (let n = 1; n <= total; n += 1) {
+          const canvas = document.createElement('canvas');
+          canvas.className = 'viewer-page';
+          canvas.dataset.page = String(n);
+          pagesEl.append(canvas);
+          canvases.push(canvas);
+        }
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const canvas = entry.target;
+            observer.unobserve(canvas);
+            void renderPage(Number(canvas.dataset.page), canvas).catch(() => undefined);
+          }
+        }, { root: pagesEl, rootMargin: '400px' });
+        canvases.forEach((c) => observer.observe(c));
+        if (viewerState) viewerState.observer = observer;
+
+        if (mode === 'preview') {
+          // End-of-preview panel: no scrolling past the cut pages exists
+          // (the preview PDF simply has no more pages).
+          const kind = endOfPreviewKind(elibUser);
+          $('#doc-viewer-end-text').textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
+          $('#doc-viewer-end-login').hidden = kind !== 'login';
+          endEl.hidden = false;
+        }
+      } catch (error) {
+        statusEl.hidden = false;
+        statusEl.classList.add('viewer-error');
+        statusEl.textContent = t(previewErrorKey(error?.status ?? 0, error?.code ?? null));
+      }
+    }
+
     async function loadHomeRecent() {
       const list = $('#home-recent-list');
       const state = $('#home-recent-state');
@@ -872,7 +1152,9 @@
         main.append(strong, small);
         const actions = document.createElement('span');
         actions.className = 'recent-file-actions';
-        appendDownloadAffordance(actions, doc);
+        appendPreviewAffordances(actions, doc);
+        appendPreviewAffordances(actions, doc);
+      appendDownloadAffordance(actions, doc);
         row.append(fileBadge(kind), main, actions);
         list.append(row);
       }
@@ -2024,6 +2306,21 @@
     }
 
     // ---- Events ----
+    $('#doc-viewer-close').addEventListener('click', closeDocViewer);
+    $('#doc-viewer-end-login').addEventListener('click', () => { closeDocViewer(); showView('documents'); });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !$('#doc-viewer').hidden) closeDocViewer();
+    });
+    const scrollViewerPage = (delta) => {
+      const pagesEl = $('#doc-viewer-pages');
+      const canvases = [...pagesEl.querySelectorAll('canvas')];
+      if (canvases.length === 0) return;
+      const current = canvases.findIndex((c) => c.offsetTop + c.offsetHeight > pagesEl.scrollTop + 10);
+      const target = canvases[Math.min(canvases.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta))];
+      if (target) pagesEl.scrollTo({ top: target.offsetTop, behavior: 'smooth' });
+    };
+    $('#doc-viewer-prev').addEventListener('click', () => scrollViewerPage(-1));
+    $('#doc-viewer-next').addEventListener('click', () => scrollViewerPage(1));
     $$('.nav-item').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
     $$('[data-goto-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.gotoView)));
     $('#mobile-menu').addEventListener('click', () => {

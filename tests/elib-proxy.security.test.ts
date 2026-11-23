@@ -110,3 +110,92 @@ describe('Elib proxy security (allowlist / traversal / token strip)', () => {
     expect(lastHeaders.cookie).toBe('elib_session=good-token');
   });
 });
+
+describe('Elib proxy — preview/view routes (Phase B)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let lastHeaders: Record<string, string | string[] | undefined> = {};
+  let hits = 0;
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastHeaders = req.headers;
+      if (req.headers.range) {
+        res.writeHead(206, {
+          'content-type': 'application/pdf',
+          'content-disposition': 'inline; filename="preview-x.pdf"',
+          'cache-control': 'private, no-store',
+          'content-range': 'bytes 0-0/100',
+          'accept-ranges': 'bytes'
+        });
+        res.end(Buffer.from('%'));
+        return;
+      }
+      res.writeHead(200, {
+        'content-type': 'application/pdf',
+        'content-disposition': 'inline; filename="preview-x.pdf"',
+        'cache-control': 'public, max-age=3600',
+        etag: '"abc-v1-p2"'
+      });
+      res.end(Buffer.from('%PDF-fake'));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('GET preview và view được cho qua, header cache/content giữ nguyên', async () => {
+    for (const url of ['/api/elib/documents/d1/preview', '/api/elib/documents/d1/view']) {
+      const res = await app.inject({ method: 'GET', url, headers: { cookie: 'elib_session=good-token' } });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.headers['content-type'], url).toContain('application/pdf');
+      expect(res.headers['content-disposition'], url).toContain('inline');
+      expect(res.headers['cache-control'], url).toBe('public, max-age=3600');
+      expect(lastHeaders.cookie, url).toBe('elib_session=good-token');
+    }
+  });
+
+  it('Range request được chuyển tiếp, 206 + Content-Range đi qua nguyên vẹn', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/elib/documents/d1/view',
+      headers: { range: 'bytes=0-0' }
+    });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers['content-range']).toBe('bytes 0-0/100');
+    expect(res.headers['cache-control']).toBe('private, no-store');
+    expect(lastHeaders.range).toBe('bytes=0-0');
+  });
+
+  it('preview/view chỉ GET: POST/PUT/DELETE bị chặn 404, không forward', async () => {
+    const before = hits;
+    for (const method of ['POST', 'PUT', 'DELETE'] as const) {
+      for (const url of ['/api/elib/documents/d1/preview', '/api/elib/documents/d1/view']) {
+        const res = await app.inject({ method, url });
+        expect(res.statusCode, `${method} ${url}`).toBe(404);
+      }
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('route gần giống nhưng ngoài allowlist vẫn bị chặn', async () => {
+    const before = hits;
+    for (const url of [
+      '/api/elib/documents/d1/preview/extra',
+      '/api/elib/documents/d1/views',
+      '/api/elib/documents/d1/files/f1/preview'
+    ]) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(404);
+    }
+    expect(hits).toBe(before);
+  });
+});
