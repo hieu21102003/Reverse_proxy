@@ -18,7 +18,8 @@ import type { SearchInput, SearchResult, Standard, StandardDetail, StandardProvi
  * "GB/T 19001") searches that single organisation; a title query fans out
  * across the enabled organisations from
  * GET /is-standard/is-organization/all (cached briefly, capped by
- * TCVN_QT_MAX_ORGS). `status=A` is always sent. Note the `tn` field on IS
+ * TCVN_QT_MAX_ORGS). `status=A` is always sent for search; detail lookups
+ * additionally retry with `status=H` (withdrawn). Note the `tn` field on IS
  * records is a non-English title, so title search uses `ti` only and the
  * mapper never uses `tn` as the record name.
  */
@@ -59,14 +60,15 @@ export class TcvnQtProvider implements StandardProvider {
   private async runSearch(
     orgCode: string,
     params: Record<string, string>,
-    page: number
+    page: number,
+    status: 'A' | 'H' = 'A'
   ): Promise<SearchResult> {
     const url = new URL(`${this.baseUrl}/is-standard/search`);
     url.searchParams.set('orgCode', orgCode);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }
-    url.searchParams.set('status', 'A');
+    url.searchParams.set('status', status);
     url.searchParams.set('page', String(page));
     url.searchParams.set('limit', String(config.TCVN_SEARCH_LIMIT));
     const payload = await this.json.getJson(url);
@@ -123,10 +125,11 @@ export class TcvnQtProvider implements StandardProvider {
   private async fanOut(
     orgs: string[],
     params: Record<string, string>,
-    page: number
+    page: number,
+    status: 'A' | 'H' = 'A'
   ): Promise<SearchResult> {
     const settled = await Promise.allSettled(
-      orgs.map(orgCode => this.runSearch(orgCode, params, page))
+      orgs.map(orgCode => this.runSearch(orgCode, params, page, status))
     );
     const fulfilled = settled
       .filter((o): o is PromiseFulfilledResult<SearchResult> => o.status === 'fulfilled')
@@ -137,8 +140,12 @@ export class TcvnQtProvider implements StandardProvider {
     return this.mergeOrgResults(fulfilled, page);
   }
 
-  async search({ query, page }: SearchInput): Promise<SearchResult> {
+  async search(input: SearchInput): Promise<SearchResult> {
     this.ensureEnabled();
+    return this.searchWithStatus(input, 'A');
+  }
+
+  private async searchWithStatus({ query, page }: SearchInput, status: 'A' | 'H'): Promise<SearchResult> {
     const trimmed = query.trim();
     // TCVN/QCVN codes never live in the international catalogue; answer
     // empty without firing (up to 11) pointless organisation searches.
@@ -147,15 +154,15 @@ export class TcvnQtProvider implements StandardProvider {
     }
     const org = detectQtOrg(trimmed);
     if (org) {
-      return this.runSearch(org, { di: trimmed }, page);
+      return this.runSearch(org, { di: trimmed }, page, status);
     }
     if (/\d/.test(trimmed)) {
       // A code fragment without a known organisation prefix: try the code
       // in every enabled organisation.
-      return this.fanOut(await this.enabledOrgs(), { di: trimmed }, page);
+      return this.fanOut(await this.enabledOrgs(), { di: trimmed }, page, status);
     }
     // Title query: English title (`ti`) across the enabled organisations.
-    return this.fanOut(await this.enabledOrgs(), { ti: trimmed }, page);
+    return this.fanOut(await this.enabledOrgs(), { ti: trimmed }, page, status);
   }
 
   async getDetail(code: string): Promise<StandardDetail | null> {
@@ -164,15 +171,20 @@ export class TcvnQtProvider implements StandardProvider {
     // TCVN/QCVN codes never live in the international catalogue; skip the
     // (up to 11-way) fan-out for them.
     if (/^(TCVN|QCVN)\b/i.test(trimmed)) return null;
-    const org = detectQtOrg(trimmed);
-    const search = org
-      ? await this.runSearch(org, { di: trimmed }, 1)
-      : await this.search({ query: trimmed, page: 1 });
-    const found = search.data.find(
-      item => item.code.toLocaleLowerCase('en') === trimmed.toLocaleLowerCase('en')
-    );
-    if (!found?.detailUrl) return null;
-    const payload = await this.json.getJson(new URL(found.detailUrl));
-    return mapTcvnDetail(payload, 'QT', this.baseUrl);
+    // Search stays effective-only (status=A), but a detail lookup must
+    // also find replaced/withdrawn standards (status=H).
+    for (const status of ['A', 'H'] as const) {
+      const org = detectQtOrg(trimmed);
+      const search = org
+        ? await this.runSearch(org, { di: trimmed }, 1, status)
+        : await this.searchWithStatus({ query: trimmed, page: 1 }, status);
+      const found = search.data.find(
+        item => item.code.toLocaleLowerCase('en') === trimmed.toLocaleLowerCase('en')
+      );
+      if (!found?.detailUrl) continue;
+      const payload = await this.json.getJson(new URL(found.detailUrl));
+      return mapTcvnDetail(payload, 'QT', this.baseUrl);
+    }
+    return null;
   }
 }

@@ -17,6 +17,15 @@ import type {
 
 export const MERGE_ORDER: StandardSource[] = ['VSQI', 'TCVN_VN', 'TCVN_QT'];
 
+/** Items per merged page. Sources are over-fetched (see search()) so a
+ *  merged page is always full unless the sources are exhausted. */
+export const MERGED_PAGE_SIZE = 20;
+
+/** Hard cap on upstream pages fetched per source for one merged search.
+ *  Bounds the fan-out amplification of deep pages; beyond the cap a deep
+ *  page may return fewer (or zero) items even if totals say more exist. */
+export const MAX_SOURCE_PAGES = 10;
+
 function errorCode(error: unknown): string {
   return error instanceof VsqiError ? error.code : 'UPSTREAM_ERROR';
 }
@@ -33,8 +42,18 @@ function normalizeCode(code: string): string {
  * - Order is VSQI first, then TCVN_VN, then TCVN_QT; each source's own
  *   order is preserved. The same code may appear under several sources and
  *   is kept once per source (dedup is by source + code).
- * - `page` applies per source (page N of each source). `totalResults` is
- *   the sum of the per-source totals; there is no combined `totalPages`.
+ * - Pagination is over the merged list at MERGED_PAGE_SIZE items per page.
+ *   Each source is over-fetched page by page (up to MAX_SOURCE_PAGES)
+ *   until it has contributed `page * MERGED_PAGE_SIZE` items or is
+ *   exhausted; the merged list is then sliced to the requested page, so
+ *   pages have no gaps while any source still has records. (Previously
+ *   `page` applied per source, which could yield an empty page 2 while
+ *   totals said more results existed.)
+ * - `totalResults` is the sum of the per-source totals — an upper bound:
+ *   the same standard can be counted by several sources (and, inside
+ *   TCVN, by several fields/organisations). `totalPages` is
+ *   ceil(totalResults / MERGED_PAGE_SIZE), except when every successful
+ *   source was exhausted, in which case it is exact.
  * - One source failing (or disabled) never fails the whole search: its
  *   records are absent, it is listed in `partialFailures` and in
  *   `sources`, and the failure is logged. Only when every source fails
@@ -57,9 +76,64 @@ export class MergedStandardProvider implements StandardProvider {
     };
   }
 
+  /**
+   * Fetch pages 1..N from one source until it has contributed `target`
+   * items, is exhausted (empty page / known last page / known total
+   * reached), or the MAX_SOURCE_PAGES cap is hit. A failure on page 1
+   * fails the source; a failure on a later page keeps the items already
+   * fetched and still marks the source failed (partial).
+   */
+  private async fetchSourcePages(
+    source: StandardSource,
+    input: SearchInput,
+    target: number
+  ): Promise<{
+    items: Standard[];
+    totalResults?: number;
+    totalPages?: number;
+    exhausted: boolean;
+    error?: unknown;
+  }> {
+    const provider = this.providers[source];
+    const items: Standard[] = [];
+    let totalResults: number | undefined;
+    let totalPages: number | undefined;
+    let exhausted = false;
+
+    for (let page = 1; page <= MAX_SOURCE_PAGES; page++) {
+      let result: SearchResult;
+      try {
+        result = await provider.search({ query: input.query, page });
+      } catch (error) {
+        return { items, totalResults, totalPages, exhausted, error };
+      }
+      if (page === 1) {
+        totalResults = result.pagination.totalResults;
+        totalPages = result.pagination.totalPages;
+      }
+      items.push(...result.data);
+      if (result.data.length === 0) {
+        exhausted = true;
+        break;
+      }
+      if (totalPages !== undefined && page >= totalPages) {
+        exhausted = true;
+        break;
+      }
+      if (totalResults !== undefined && totalResults > 0 && items.length >= totalResults) {
+        exhausted = true;
+        break;
+      }
+      if (items.length >= target) break;
+    }
+    return { items, totalResults, totalPages, exhausted };
+  }
+
   async search(input: SearchInput): Promise<SearchResult> {
+    const page = Math.max(1, input.page);
+    const target = page * MERGED_PAGE_SIZE;
     const settled = await Promise.allSettled(
-      MERGE_ORDER.map(source => this.providers[source].search(input))
+      MERGE_ORDER.map(source => this.fetchSourcePages(source, input, target))
     );
 
     const data: Standard[] = [];
@@ -68,42 +142,53 @@ export class MergedStandardProvider implements StandardProvider {
     const partialFailures: StandardSource[] = [];
     let totalResults = 0;
     let anyTotal = false;
+    let anySuccess = false;
+    let allExhausted = true;
 
     settled.forEach((outcome, index) => {
       const source = MERGE_ORDER[index] as StandardSource;
-      if (outcome.status === 'fulfilled') {
-        const result = outcome.value;
-        if (result.pagination.totalResults !== undefined) {
-          totalResults += result.pagination.totalResults;
-          anyTotal = true;
-        }
-        summaries.push({
-          source,
-          ok: true,
-          ...(result.pagination.totalResults !== undefined
-            ? { totalResults: result.pagination.totalResults }
-            : {}),
-          ...(result.pagination.totalPages !== undefined
-            ? { totalPages: result.pagination.totalPages }
-            : {})
-        });
-        for (const item of result.data) {
-          const key = `${source}::${normalizeCode(item.code)}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          data.push(item);
-        }
-      } else {
+      // fetchSourcePages never rejects (it captures errors), but stay safe.
+      const fetched: {
+        items: Standard[];
+        totalResults?: number;
+        totalPages?: number;
+        exhausted: boolean;
+        error?: unknown;
+      } = outcome.status === 'fulfilled'
+        ? outcome.value
+        : { items: [], exhausted: false, error: outcome.reason };
+      const failed = fetched.error !== undefined;
+      if (failed) {
         partialFailures.push(source);
-        summaries.push({ source, ok: false, error: errorCode(outcome.reason) });
         this.logger?.warn(
-          { source, errorCode: errorCode(outcome.reason) },
+          { source, errorCode: errorCode(fetched.error) },
           'Upstream source search failed; returning partial merged results'
         );
       }
+      if (!failed || fetched.items.length > 0 || fetched.totalResults !== undefined) {
+        anySuccess = true;
+      }
+      if (!fetched.exhausted) allExhausted = false;
+      if (fetched.totalResults !== undefined) {
+        totalResults += fetched.totalResults;
+        anyTotal = true;
+      }
+      summaries.push({
+        source,
+        ok: !failed,
+        ...(fetched.totalResults !== undefined ? { totalResults: fetched.totalResults } : {}),
+        ...(fetched.totalPages !== undefined ? { totalPages: fetched.totalPages } : {}),
+        ...(failed ? { error: errorCode(fetched.error) } : {})
+      });
+      for (const item of fetched.items) {
+        const key = `${source}::${normalizeCode(item.code)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        data.push(item);
+      }
     });
 
-    if (partialFailures.length === MERGE_ORDER.length) {
+    if (!anySuccess) {
       throw new VsqiError(
         'All upstream sources failed',
         'UPSTREAM_UNAVAILABLE',
@@ -111,11 +196,20 @@ export class MergedStandardProvider implements StandardProvider {
       );
     }
 
+    const start = (page - 1) * MERGED_PAGE_SIZE;
+    const pageData = data.slice(start, start + MERGED_PAGE_SIZE);
+    // When every successful source was exhausted we know the exact merged
+    // length; otherwise totalResults is an upper bound (see class docs).
+    const effectiveTotal = allExhausted ? data.length : totalResults;
+
     return {
-      data,
+      data: pageData,
       pagination: {
-        currentPage: input.page,
-        ...(anyTotal ? { totalResults } : {})
+        currentPage: page,
+        ...(anyTotal ? { totalResults } : {}),
+        ...(anyTotal || allExhausted
+          ? { totalPages: Math.max(1, Math.ceil(effectiveTotal / MERGED_PAGE_SIZE)) }
+          : {})
       },
       source: 'MULTI',
       sources: summaries,

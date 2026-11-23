@@ -68,6 +68,22 @@ export function tcvnStatus(record: RawRecord): 'Active' | 'Withdrawn' | undefine
   return undefined;
 }
 
+/**
+ * TCVN dates may carry zero month/day placeholders ("2015-09-00",
+ * "2015-00-00"). Drop the zero components so consumers never see an
+ * invalid calendar date: "2015-09-00" → "2015-09", "2015-00-00" → "2015".
+ * Anything not matching YYYY[-MM[-DD]] is returned unchanged.
+ */
+export function normalizeTcvnDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  if (!month || month === '00') return year as string;
+  if (!day || day === '00') return `${year}-${month}`;
+  return `${year}-${month}-${day}`;
+}
+
 /** Year from the code (`:YYYY`), else the publication/issue date prefix. */
 export function tcvnYear(record: RawRecord): number | undefined {
   const code = str(record, 'di');
@@ -190,7 +206,7 @@ function detailAttributes(record: RawRecord, kind: 'VN' | 'QT'): DetailAttribute
     { label: 'Số trang', labelEn: 'Pages', value: str(record, 'fm') },
     kind === 'VN'
       ? { label: 'Ngày ban hành / Quyết định', labelEn: 'Issue date / decision', value: str(record, 'pi') }
-      : { label: 'Ngày công bố', labelEn: 'Publication date', value: str(record, 'dp') },
+      : { label: 'Ngày công bố', labelEn: 'Publication date', value: normalizeTcvnDate(str(record, 'dp')) },
     { label: 'Thay thế cho', labelEn: 'Replaces', value: str(record, 'rz') },
     { label: 'Được thay thế bởi', labelEn: 'Replaced by', value: str(record, 'rx') },
     { label: 'Tương đương', labelEn: 'Equivalent', value: str(record, 'ii') },
@@ -313,8 +329,8 @@ export function mapTcvnDetail(
   const attributes = detailAttributes(data, kind);
   const issuedDate =
     kind === 'VN'
-      ? (str(data, 'pi')?.split(',')[0] ?? null)
-      : (str(data, 'dp') ?? null);
+      ? normalizeTcvnDate(str(data, 'pi')?.split(',')[0])
+      : normalizeTcvnDate(str(data, 'dp'));
   return {
     code,
     name,

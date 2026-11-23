@@ -10,17 +10,22 @@ import { VsqiError } from './errors.js';
 import { CachedStandardProvider } from './services/response-cache.js';
 import type { StandardProvider, StandardSource } from './types.js';
 
-/** Organisation words that may start a standard code. */
+/** Organisation words that may start a standard code. Kept in step with
+ *  STANDARD_CODE_RE in src/parsers/detail/helpers.ts, which recognises the
+ *  same set (plus multi-word "ST SEV", covered by ST + SEV here) when
+ *  extracting codes from detail pages — a code the UI/search can surface
+ *  must not be rejected by the detail endpoint. */
 const KNOWN_CODE_ORGS = new Set([
-  'TCVN', 'QCVN', 'ISO', 'IEC', 'ASTM', 'BS', 'DIN', 'EN', 'JIS', 'UL',
-  'ANSI', 'AS', 'GB'
+  'TCVN', 'QCVN', 'TCXD', 'TCN', 'TCCS', 'ISO', 'IEC', 'ASTM', 'BS', 'DIN',
+  'EN', 'JIS', 'UL', 'ANSI', 'AS', 'GB', 'GOST', 'ST', 'SEV'
 ]);
 
 /**
  * Normalise a user-supplied standard code, or return null when it is not a
  * plausible code. Accepts multi-organisation codes ("EN ISO 9001",
  * "DIN EN ISO 9001", "GB/T 19001", "ASTM E8/E8M", "JIS Q 9001"), codes
- * with or without a year ("ISO 9001", "TCVN 9143:2022"), and the old
+ * with or without a year ("ISO 9001", "TCVN 9143:2022"), parenthesised
+ * suffixes ("ISO 9001:2015 (E)"), and the old
  * TCVN|QCVN-only shapes. Rejects anything without a digit, without a known
  * leading organisation, or with characters outside the code alphabet.
  */
@@ -28,7 +33,7 @@ export function normalizeStandardCode(raw: string): string | null {
   const code = raw.trim().replace(/\s+/g, ' ').replace(/\s*:\s*/, ':');
   if (code.length < 3 || code.length > 80) return null;
   if (!/[0-9]/.test(code)) return null;
-  if (!/^[A-Za-z0-9][A-Za-z0-9 ./:+\/-]*$/.test(code)) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9 ./:+\/()\-]*$/.test(code)) return null;
   const firstToken = code.split(' ')[0]?.split('/')[0]?.toUpperCase();
   if (!firstToken || !KNOWN_CODE_ORGS.has(firstToken)) return null;
   // Upper-case the leading organisation tokens ("en iso 9001" -> "EN ISO 9001").

@@ -82,8 +82,7 @@ describe('merged search', () => {
       'TCVN_VN:TCVN 9143:2022',
       'TCVN_QT:ISO 9001'
     ]);
-    expect(result.pagination).toEqual({ currentPage: 1, totalResults: 5 });
-    expect(result.pagination.totalPages).toBeUndefined();
+    expect(result.pagination).toEqual({ currentPage: 1, totalResults: 5, totalPages: 1 });
     expect(result.sources).toEqual([
       { source: 'VSQI', ok: true, totalResults: 2, totalPages: 1 },
       { source: 'TCVN_VN', ok: true, totalResults: 1, totalPages: 1 },
@@ -127,6 +126,95 @@ describe('merged search', () => {
     const provider = new MergedStandardProvider({ VSQI: failing, TCVN_VN: failing, TCVN_QT: failing });
     await expect(provider.search({ query: 'x', page: 1 }))
       .rejects.toMatchObject({ code: 'UPSTREAM_UNAVAILABLE', statusCode: 502 });
+  });
+});
+
+describe('merged pagination (over-fetch + slice)', () => {
+  /** A source whose upstream pages are smaller than the merged page size. */
+  function pagedStub(
+    source: 'VSQI' | 'TCVN_VN' | 'TCVN_QT',
+    prefix: string,
+    total: number,
+    perPage: number
+  ): StandardProvider {
+    const all = Array.from({ length: total }, (_, i) => `${prefix} ${i + 1}`);
+    return stub({
+      search: async ({ page }) => ({
+        data: all.slice((page - 1) * perPage, page * perPage).map(code => std(source, code)),
+        pagination: {
+          currentPage: page,
+          totalResults: total,
+          totalPages: Math.max(1, Math.ceil(total / perPage))
+        },
+        source
+      })
+    });
+  }
+
+  it('slices the merged list with no gaps or dupes across pages', async () => {
+    const provider = new MergedStandardProvider({
+      VSQI: pagedStub('VSQI', 'VSQI', 25, 10),
+      TCVN_VN: pagedStub('TCVN_VN', 'VN', 18, 9),
+      TCVN_QT: pagedStub('TCVN_QT', 'QT', 2, 20)
+    });
+
+    const page1 = await provider.search({ query: 'x', page: 1 });
+    const page2 = await provider.search({ query: 'x', page: 2 });
+    const page3 = await provider.search({ query: 'x', page: 3 });
+
+    expect(page1.data).toHaveLength(20);
+    expect(page2.data).toHaveLength(20);
+    expect(page3.data).toHaveLength(5);
+    const seen = [...page1.data, ...page2.data, ...page3.data]
+      .map(item => `${item.source}:${item.code}`);
+    expect(new Set(seen).size).toBe(45);
+    // Merge order preserved across the whole list.
+    expect(seen.slice(0, 25).every(key => key.startsWith('VSQI:'))).toBe(true);
+    expect(seen.slice(25, 43).every(key => key.startsWith('TCVN_VN:'))).toBe(true);
+    expect(seen.slice(43).every(key => key.startsWith('TCVN_QT:'))).toBe(true);
+    expect(page1.pagination.totalResults).toBe(45);
+    expect(page1.pagination.totalPages).toBe(3);
+    expect(page3.pagination.totalPages).toBe(3);
+  });
+
+  it('caps upstream pages per source at MAX_SOURCE_PAGES', async () => {
+    const search = vi.fn(async ({ page }: { page: number }) => ({
+      data: Array.from({ length: 20 }, (_, i) => std('VSQI', `VSQI ${page}-${i}`)),
+      pagination: { currentPage: page, totalResults: 100000 },
+      source: 'VSQI' as const
+    }));
+    const empty = stub({
+      search: async () => ({ data: [], pagination: { currentPage: 1, totalResults: 0 }, source: 'TCVN_VN' as const })
+    });
+    const provider = new MergedStandardProvider({
+      VSQI: stub({ search }),
+      TCVN_VN: empty,
+      TCVN_QT: empty
+    });
+    await provider.search({ query: 'x', page: 50 });
+    expect(search).toHaveBeenCalledTimes(10);
+  });
+
+  it('keeps items from earlier pages when a later page fails', async () => {
+    const flaky = stub({
+      search: async ({ page }) => {
+        if (page > 1) throw new VsqiError('page 2 down', 'UPSTREAM_UNAVAILABLE', 502);
+        return {
+          data: [std('VSQI', 'VSQI 1'), std('VSQI', 'VSQI 2')],
+          pagination: { currentPage: 1, totalResults: 50 },
+          source: 'VSQI' as const
+        };
+      }
+    });
+    const empty = stub({
+      search: async () => ({ data: [], pagination: { currentPage: 1, totalResults: 0 }, source: 'TCVN_VN' as const })
+    });
+    const provider = new MergedStandardProvider({ VSQI: flaky, TCVN_VN: empty, TCVN_QT: empty });
+    const result = await provider.search({ query: 'x', page: 2 });
+    expect(result.partialFailures).toEqual(['VSQI']);
+    expect(result.sources?.find(s => s.source === 'VSQI')).toMatchObject({ ok: false, totalResults: 50 });
+    // Page 2 slice of a 2-item merged list is empty, but totals survive.
+    expect(result.pagination.totalResults).toBe(50);
   });
 });
 

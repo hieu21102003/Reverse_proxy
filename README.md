@@ -100,7 +100,7 @@ The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specific
 | Spec screen | Status | Notes |
 | --- | --- | --- |
 | 01 Library Home | Implemented | Hero search, 6 discipline cards, "Tài liệu mới cập nhật" loaded live from the search API (sorted by year desc), featured collections as labelled search shortcuts. No hard-coded counts or dates. |
-| 02 Document Search | Implemented | One merged list from VSQI + TCVN_VN + TCVN_QT with per-item `source`, per-source totals from `sources[]`, `partialFailures` banner, shareable `?view=search&q=&page=` URLs, Raw JSON toggle. Filters (source/year/status), sort (relevance/newest/title) and list/grid are **client-side** on the returned page — the API only accepts `q` + `page`, and paging applies per source. |
+| 02 Document Search | Implemented | One merged list from VSQI + TCVN_VN + TCVN_QT with per-item `source`, per-source totals from `sources[]`, `partialFailures` banner, shareable `?view=search&q=&page=` URLs, Raw JSON toggle. Filters (source/year/status), sort (relevance/newest/title) and list/grid are **client-side** on the returned page — the API only accepts `q` + `page`, and paging is over the merged list (20 per page, sources over-fetched). |
 | 03 Document Categories | Implemented (as search topics) | CAT01–CAT06 cards with subcategory shortcuts. Counts are live `totalResults` per category keyword (or "—"/unavailable on failure); there is no taxonomy backend, so each category is a topic search. |
 | 04 Document Detail | Implemented | Breadcrumb, CSS-generated cover (organisation + code), badges, metadata rows (`issuingAgency`, dates, year, status, source — "—" when null, e.g. TCVN issuing agency), scope/related/history/other sections via the existing `buildDetailViewModel`, "Xem tại nguồn gốc" (`detailUrl`, new tab), save to My Library, copy `?view=detail&code=&source=` link. No Download button: the API serves metadata only, there is no file. |
 | 05 Online Viewer | Partial (metadata preview) | "Xem trước thông tin" opens a modal summarizing the record with a link to the source. There is no PDF preview, thumbnails, or zoom — the API has no document files. |
@@ -108,7 +108,7 @@ The browser UI at `/` follows the Smart.Rail Digital Library Phase 1 UI specific
 | 07 Login & Profile | Implemented via elib (Documents view) | Sign-in happens in the **Tài liệu** view against the elib service (`/api/elib/auth/*` through the proxy). There is no registration page; accounts are created by the library admin (elib `create-admin` script). Profile editing is not implemented. |
 | 08–10 Admin (Dashboard / Document Management / Metadata & Access) | Partial (upload only) | The **Tài liệu** view provides elib Phase 1 upload (single file + metadata, progress, duplicate handling) for admin/editor accounts. Dashboards, document list/management, and metadata/access admin are **not** implemented — elib has no list/management API yet (Phase 4). Nothing is faked. |
 
-Language: VI by default; the VI/EN toggle switches all UI chrome labels via a dictionary (document titles use the API's `name`/`englishName` as-is). Fonts load from Google Fonts (allowed by the Helmet CSP `style-src https:` / `font-src https:`) with a system font-stack fallback. The API reference view documents the merged response (`source: "MULTI"`, `sources[]`, `partialFailures`), `?source=` detail pinning, and the accepted code organisations (TCVN/QCVN/ISO/IEC/ASTM/BS/DIN/EN/JIS/UL/ANSI/AS/GB).
+Language: VI by default; the VI/EN toggle switches all UI chrome labels via a dictionary (document titles use the API's `name`/`englishName` as-is). Fonts load from Google Fonts (allowed by the Helmet CSP `style-src https:` / `font-src https:`) with a system font-stack fallback. The API reference view documents the merged response (`source: "MULTI"`, `sources[]`, `partialFailures`), `?source=` detail pinning, and the accepted code organisations (TCVN/QCVN/TCXD/TCN/TCCS/ISO/IEC/ASTM/BS/DIN/EN/JIS/UL/ANSI/AS/GB/GOST/ST SEV).
 
 Health check:
 
@@ -240,24 +240,33 @@ The top-level `source` is `MULTI` for merged results.
 - **Order:** VSQI first, then TCVN_VN, then TCVN_QT; each source's own
   order is preserved. The same code may legitimately appear in two sources
   and is kept once per source.
-- **Paging:** `page` applies per source (page N of each source).
-  `pagination.totalResults` is the sum of the per-source totals, and the
-  per-source breakdown is in `sources`. There is no combined `totalPages`:
-  a single page count would imply one sorted list, which a merged fan-out
-  is not. Fanned-out totals (a TCVN title search, or an international title
+- **Paging:** paging is over the merged list, 20 items per page. Each
+  source is over-fetched page by page (capped at 10 upstream pages per
+  source) until it has contributed enough items or is exhausted, then the
+  merged list is sliced — so pages have no gaps while any source still
+  has records. `pagination.totalResults` is the sum of the per-source
+  totals (per-source breakdown in `sources`) and is an **upper bound**:
+  fanned-out totals (a TCVN title search, or an international title
   search across organisations) may double-count records listed under
-  several fields/organisations; the returned page itself is deduplicated.
+  several fields/organisations, and the same standard can be counted by
+  several sources. `pagination.totalPages` is
+  `ceil(totalResults / 20)`, exact when every successful source was
+  exhausted. The returned page itself is deduplicated by source + code.
 - **Partial failure:** one source failing (or disabled via
   `VSQI_ENABLED`/`TCVN_ENABLED`) never fails the whole search. Its records
   are absent, it is listed in `partialFailures` and in `sources` with
   `ok: false`, and the failure is logged. Only when every source fails
   does search return `502`.
-- **Detail:** `GET /api/v1/standards/:code` accepts TCVN, QCVN, ISO, IEC,
-  ASTM, BS, DIN, EN, JIS, UL, ANSI, AS and GB codes, with or without a
-  year. Without `?source=`, sources are tried in merge order (VSQI, then
-  TCVN_VN, then TCVN_QT) and the first hit wins; `?source=VSQI|TCVN_VN|
-  TCVN_QT` pins one source. An invalid `source` returns `400`
-  (`INVALID_SOURCE`).
+- **Detail:** `GET /api/v1/standards/:code` accepts TCVN, QCVN, TCXD, TCN,
+  TCCS, ISO, IEC, ASTM, BS, DIN, EN, JIS, UL, ANSI, AS, GB, GOST and
+  ST SEV codes, with or without a year, including parenthesised suffixes
+  such as `ISO 9001:2015 (E)`. Without `?source=`, sources are tried in
+  merge order (VSQI, then TCVN_VN, then TCVN_QT) and the first hit wins;
+  `?source=VSQI|TCVN_VN|TCVN_QT` pins one source. An invalid `source`
+  returns `400` (`INVALID_SOURCE`). TCVN detail lookups retry with
+  `status=H` (withdrawn) when the effective-only search misses, so
+  replaced standards (e.g. following "replaces TCVN 9143:2012") resolve
+  instead of returning `404`; search itself stays effective-only.
 
 ### TCVN (tracuu.tcvn.vn)
 
@@ -335,7 +344,7 @@ Success response:
       "source": "TCVN_VN"
     }
   ],
-  "pagination": { "currentPage": 1, "totalResults": 3 },
+  "pagination": { "currentPage": 1, "totalResults": 3, "totalPages": 1 },
   "source": "MULTI",
   "sources": [
     { "source": "VSQI", "ok": true, "totalResults": 2, "totalPages": 1 },
@@ -346,8 +355,9 @@ Success response:
 ```
 
 The same code can appear twice with different `source` values — that is
-one record per source, not a duplicate. `pagination` has no `totalPages`
-for merged results; use `sources[].totalPages` per source.
+one record per source, not a duplicate. `pagination.totalPages` counts
+merged pages of 20 (see "Merged search"); `sources[].totalPages` remains
+the per-source page count at that source's own page size.
 
 ### `GET /api/v1/standards/:code`
 
