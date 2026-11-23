@@ -275,3 +275,132 @@ describe('Elib proxy — PATCH documents/:id đổi visibility (Giai đoạn A2/
     expect(hits).toBe(before);
   });
 });
+
+describe('Elib proxy — đăng ký / đổi mật khẩu / quản trị người dùng (Giai đoạn B3)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let lastHeaders: Record<string, string | string[] | undefined> = {};
+  let hits = 0;
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastHeaders = req.headers;
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, path: req.url, method: req.method }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('POST register + change-password được cho qua; method khác bị chặn', async () => {
+    for (const url of ['/api/elib/auth/register', '/api/elib/auth/change-password']) {
+      const res = await app.inject({
+        method: 'POST',
+        url,
+        headers: { 'content-type': 'application/json' },
+        payload: JSON.stringify({})
+      });
+      expect(res.statusCode, `POST ${url}`).toBe(200);
+    }
+    const before = hits;
+    for (const method of ['GET', 'PUT', 'DELETE', 'PATCH'] as const) {
+      for (const url of ['/api/elib/auth/register', '/api/elib/auth/change-password']) {
+        const res = await app.inject({ method, url });
+        expect(res.statusCode, `${method} ${url}`).toBe(404);
+        expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+      }
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('GET admin/users được cho qua; POST/DELETE trên cùng pattern bị chặn', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/elib/admin/users?status=pending' });
+    expect(res.statusCode).toBe(200);
+    const before = hits;
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'] as const) {
+      const blocked = await app.inject({ method, url: '/api/elib/admin/users' });
+      expect(blocked.statusCode, method).toBe(404);
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('POST approve/reject/reset-password/unlock/bulk-reject + PATCH admin/users/:id được cho qua', async () => {
+    const posts = [
+      '/api/elib/admin/users/u1/approve',
+      '/api/elib/admin/users/u1/reject',
+      '/api/elib/admin/users/u1/reset-password',
+      '/api/elib/admin/users/u1/unlock',
+      '/api/elib/admin/users/bulk-reject'
+    ];
+    for (const url of posts) {
+      const res = await app.inject({
+        method: 'POST',
+        url,
+        headers: { 'content-type': 'application/json', cookie: 'elib_session=good-token' },
+        payload: JSON.stringify({})
+      });
+      expect(res.statusCode, `POST ${url}`).toBe(200);
+      expect(lastHeaders.cookie, url).toBe('elib_session=good-token');
+    }
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: '/api/elib/admin/users/u1',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ role: 'viewer' })
+    });
+    expect(patch.statusCode).toBe(200);
+  });
+
+  it('method sai / route gần giống của admin bị chặn, không forward', async () => {
+    const before = hits;
+    const blocked: Array<[string, string]> = [
+      ['GET', '/api/elib/admin/users/u1/approve'],
+      ['PATCH', '/api/elib/admin/users/u1/approve'],
+      ['DELETE', '/api/elib/admin/users/u1'],
+      ['POST', '/api/elib/admin/users/u1'],
+      ['GET', '/api/elib/admin/users/u1'],
+      ['GET', '/api/elib/admin/users/bulk-reject'],
+      ['PATCH', '/api/elib/admin/users/bulk-reject'],
+      ['POST', '/api/elib/admin/users/u1/approve/extra'],
+      ['POST', '/api/elib/admin/users/u1/delete'],
+      ['GET', '/api/elib/admin/roles'],
+      ['POST', '/api/elib/admin/users/u1/resetpassword']
+    ];
+    for (const [method, url] of blocked) {
+      const res = await app.inject({ method: method as never, url });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('Origin được chuyển tiếp nguyên vẹn; X-Forwarded-Host đặt từ Host (ghi đè giá trị client gửi)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/elib/auth/register',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://192.168.1.66:8443',
+        host: '192.168.1.66:8443',
+        'x-forwarded-host': 'evil.example.com'
+      },
+      payload: JSON.stringify({})
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastHeaders.origin).toBe('https://192.168.1.66:8443');
+    expect(lastHeaders['x-forwarded-host']).toBe('192.168.1.66:8443');
+  });
+});

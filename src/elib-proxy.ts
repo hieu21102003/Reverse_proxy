@@ -51,12 +51,18 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  * Allowlist of elib API paths reachable through the browser proxy,
  * enumerated from elib's actual routes (src/routes/*.ts):
  *   POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
+ *   POST /api/auth/register           (self-registration, Phase B3)
+ *   POST /api/auth/change-password    (forced change after admin reset, Phase B3)
  *   GET  /api/categories
  *   POST /api/documents, GET /api/documents
  *   GET  /api/documents/:id/files/:fileId/download
  *   GET  /api/documents/:id/preview   (limited-page preview, Phase B)
  *   GET  /api/documents/:id/view      (full view, owner+admin, Phase B)
  *   PATCH /api/documents/:id          (visibility change, admin/owner, Phase A2/B2)
+ *   GET  /api/admin/users             (admin user list, Phase B3)
+ *   POST /api/admin/users/bulk-reject (Phase B3)
+ *   POST /api/admin/users/:id/approve|reject|reset-password|unlock (Phase B3)
+ *   PATCH /api/admin/users/:id        (Phase B3)
  * Anything else (including elib's /internal/*, which is never under
  * /api/ and must stay unreachable from browsers) is refused here
  * instead of being forwarded.
@@ -73,6 +79,12 @@ const ELIB_ALLOWLIST_DOWNLOAD = /^documents\/[^/]+\/files\/[^/]+\/download$/;
 const ELIB_ALLOWLIST_PREVIEW_VIEW = /^documents\/[^/]+\/(preview|view)$/;
 /** Visibility change (Phase A2): PATCH only, exactly documents/<id>. */
 const ELIB_ALLOWLIST_DOCUMENT_PATCH = /^documents\/[^/]+$/;
+/** Self-registration + forced password change (Phase B3): POST only. */
+const ELIB_ALLOWLIST_AUTH_POST = new Set(['auth/register', 'auth/change-password']);
+/** Admin user management (Phase B3): exact method+pattern pairs. */
+const ELIB_ALLOWLIST_ADMIN_USERS_LIST = /^admin\/users$/;
+const ELIB_ALLOWLIST_ADMIN_USER_ACTION = /^admin\/users\/[^/]+\/(approve|reject|reset-password|unlock)$/;
+const ELIB_ALLOWLIST_ADMIN_USER_PATCH = /^admin\/users\/[^/]+$/;
 
 /**
  * Path-traversal guard for the wildcard segment. Checks both the raw
@@ -94,6 +106,25 @@ function isAllowlisted(wildcard: string, method: string): boolean {
   if (ELIB_ALLOWLIST_DOCUMENT_PATCH.test(wildcard)) {
     return method === 'PATCH';
   }
+  // Phase B3: registration / change-password are POST-only.
+  if (ELIB_ALLOWLIST_AUTH_POST.has(wildcard)) {
+    return method === 'POST';
+  }
+  // Phase B3: admin user management, exact method+pattern pairs.
+  // bulk-reject is checked before the :id action pattern (it has no
+  // trailing action segment, so the two never collide).
+  if (wildcard === 'admin/users/bulk-reject') {
+    return method === 'POST';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_USER_ACTION.test(wildcard)) {
+    return method === 'POST';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_USERS_LIST.test(wildcard)) {
+    return method === 'GET';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_USER_PATCH.test(wildcard)) {
+    return method === 'PATCH';
+  }
   return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);
 }
 
@@ -108,6 +139,19 @@ function forwardRequestHeaders(headers: Record<string, string | string[] | undef
     // directly on elib-net calls, never through this proxy).
     if (name.toLowerCase() === 'x-internal-token') continue;
     out[name] = value;
+  }
+  // elib's CSRF guard compares the browser Origin host against
+  // request.hostname, which (with trustProxy=1) comes from
+  // X-Forwarded-Host. The browser Origin carries the public host it
+  // used to reach us, so forward exactly that host — overwriting any
+  // client-sent X-Forwarded-Host — or every cookie POST through this
+  // proxy would 403 once elib's CSRF check is live. Origin itself is
+  // forwarded unchanged above (it is not hop-by-hop).
+  const host = headers.host;
+  if (typeof host === 'string' && host) {
+    out['x-forwarded-host'] = host;
+  } else {
+    delete out['x-forwarded-host'];
   }
   return out;
 }

@@ -2016,3 +2016,61 @@ h1 {
   .doc-viewer-bar { padding: 8px 10px; }
   .doc-viewer-pages { padding: 8px; }
 }
+
+/* ---- Đăng ký / quản trị người dùng (Giai đoạn B3) ---- */
+/* Honeypot: đẩy ra ngoài màn hình (không dùng display:none) để bot
+   vẫn "thấy" và điền, người thật không chạm tới (tabindex=-1). */
+.honeypot-field {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+#elib-register-form { position: relative; }
+.admin-user-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 20px; }
+.admin-user-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: var(--card);
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+}
+.admin-user-row .lib-main { flex: 1; min-width: 220px; }
+.admin-user-row strong { display: block; }
+.admin-user-row small { color: var(--muted); display: block; margin-top: 2px; }
+.admin-user-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-user-actions select,
+.admin-reject-reason-input {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: inherit;
+}
+.admin-bulk-bar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+.admin-reject-reason-field { flex: 1; min-width: 220px; }
+.admin-filter-row { margin: 10px 0 4px; max-width: 280px; }
+.badge-internal-hint { background: var(--green-soft); margin-top: 6px; }
+.temp-password-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.temp-password-row code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--green-soft);
+  word-break: break-all;
+}
