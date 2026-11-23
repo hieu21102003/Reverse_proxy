@@ -687,7 +687,7 @@ h1 {
 .recent-main strong { display: block; color: var(--ink); font-size: 15px; }
 .recent-main small { color: var(--muted); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .recent-file-row { cursor: default; }
-.recent-file-actions { flex: none; }
+.recent-file-actions { flex: none; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
 
 .state-box {
   border: 1px dashed var(--line);
@@ -1677,7 +1677,7 @@ h1 {
 }
 
 .tag-chip:hover { background: var(--green-soft); border-color: var(--green); }
-.file-card-actions { flex: none; }
+.file-card-actions { flex: none; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
 .file-load-more { display: flex; justify-content: center; margin-top: 18px; }
 
 .library-list { display: flex; flex-direction: column; gap: 10px; }

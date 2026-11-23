@@ -129,6 +129,46 @@ describe('endOfPreviewKind — thông báo hết preview theo trạng thái đă
   });
 });
 
+describe('thẻ file: mỗi nút hành động xuất hiện tối đa một lần (không nhân đôi)', () => {
+  const playgroundJs = readFileSync(new URL('../public/playground.js', import.meta.url), 'utf8');
+
+  const countCalls = (source: string, fn: string) =>
+    (source.match(new RegExp(`${fn}\\(actions, doc\\)`, 'g')) ?? []).length;
+
+  const sliceBetween = (start: string, end: string) => {
+    const from = playgroundJs.indexOf(start);
+    const to = playgroundJs.indexOf(end, from);
+    expect(from, start).toBeGreaterThanOrEqual(0);
+    expect(to, end).toBeGreaterThan(from);
+    return playgroundJs.slice(from, to);
+  };
+
+  it('mục "Tài liệu mới cập nhật" gắn nút xem trước/toàn bộ đúng một lần', () => {
+    const homeRecent = sliceBetween('async function loadHomeRecent()', '// ---- Categories ----');
+    expect(countCalls(homeRecent, 'appendPreviewAffordances')).toBe(1);
+    expect(countCalls(homeRecent, 'appendDownloadAffordance')).toBe(1);
+  });
+
+  it('thẻ file ở tab tìm kiếm cũng gắn đủ nút xem trước/toàn bộ + tải, mỗi loại một lần', () => {
+    const fileCard = sliceBetween('function renderFileCard(doc)', 'async function searchFiles');
+    expect(countCalls(fileCard, 'appendPreviewAffordances')).toBe(1);
+    expect(countCalls(fileCard, 'appendDownloadAffordance')).toBe(1);
+  });
+
+  it('không còn hai lời gọi giống hệt nhau liên tiếp (nguyên nhân nút bị nhân đôi)', () => {
+    expect(playgroundJs).not.toMatch(
+      /appendPreviewAffordances\(actions, doc\);\s*appendPreviewAffordances\(actions, doc\);/
+    );
+    // Tổng cộng đúng 2 điểm gọi (trang chủ + thẻ tìm kiếm), ngoài định nghĩa hàm.
+    expect(countCalls(playgroundJs, 'appendPreviewAffordances')).toBe(2);
+  });
+
+  it('appendPreviewAffordances tự chống gọi trùng bằng cờ trên container', () => {
+    expect(playgroundJs).toContain("container.dataset.previewAffordances === '1'");
+    expect(playgroundJs).toContain("container.dataset.previewAffordances = '1'");
+  });
+});
+
 describe('lazy-load pdf.js + viewer markup', () => {
   const playgroundJs = readFileSync(new URL('../public/playground.js', import.meta.url), 'utf8');
   const indexHtml = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
