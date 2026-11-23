@@ -422,6 +422,54 @@
     };
   }
 
+  /**
+   * Trạng thái nút tải trên thẻ file, suy từ can_download của elib
+   * (chỉ chủ tài liệu + admin mới true; ẩn danh luôn false):
+   * - không có file -> 'none' (không hiện gì);
+   * - can_download === true -> 'download' (nút "Tải xuống");
+   * - còn lại: đã đăng nhập -> 'contact' (gợi ý liên hệ xin quyền),
+   *   chưa đăng nhập -> 'login' (nút "Đăng nhập để tải" như trước).
+   * Thiếu trường can_download (elib cũ chưa gửi) được coi là false:
+   * fail-closed, không hiện nút tải khi chưa rõ quyền.
+   */
+  function downloadAffordance(doc, user) {
+    if (!elibDownloadPath(doc)) return 'none';
+    if (doc?.can_download === true) return 'download';
+    return user ? 'contact' : 'login';
+  }
+
+  /**
+   * Nút tải/in trên thanh công cụ viewer: chỉ ở chế độ toàn bộ
+   * (full/image), tải cần can_download, in/mở bản gốc cần
+   * can_view_full. Chế độ xem trước luôn ẩn cả hai.
+   */
+  function viewerToolbar(doc, mode) {
+    const full = mode === 'full' || mode === 'image';
+    return {
+      showDownload: full && doc?.can_download === true && elibDownloadPath(doc) !== null,
+      showPrint: full && doc?.can_view_full === true
+    };
+  }
+
+  /** Map mã lỗi ổn định của endpoint download sang khóa i18n (không parse message). */
+  function downloadErrorKey(status, code) {
+    if (code === 'DOWNLOAD_FORBIDDEN' || status === 403) return 'downloadForbidden';
+    if (status === 404) return 'downloadNotFound';
+    if (status === 429) return 'downloadRateLimited';
+    return 'downloadFailed';
+  }
+
+  /** Tên file từ header Content-Disposition (ưu tiên filename* UTF-8), null nếu không có. */
+  function filenameFromDisposition(header) {
+    if (typeof header !== 'string' || !header) return null;
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star) {
+      try { return decodeURIComponent(star[1].trim()); } catch { return star[1].trim(); }
+    }
+    const plain = /filename="?([^";]+)"?/i.exec(header);
+    return plain ? plain[1].trim() : null;
+  }
+
   /** Map mã lỗi ổn định của endpoint preview/view sang khóa i18n (không parse message). */
   function previewErrorKey(status, code) {
     if (code === 'PREVIEW_NOT_READY') return 'previewNotReady';
@@ -601,7 +649,7 @@
     return { text: text || null, url: url || null };
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser };
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -696,6 +744,11 @@
         fileNoResults: 'Không tìm thấy file phù hợp', fileNoResultsHint: 'Thử từ khóa khác hoặc chọn danh mục khác.',
         fileSearchError: 'Không tải được danh sách file. Dịch vụ tài liệu (elib) có thể đang bảo trì hoặc chưa sẵn sàng.',
         loadMore: 'Xem thêm', loginToDownload: 'Đăng nhập để tải', fileResultsFound: 'Tìm thấy {n} file',
+        downloadContactHint: 'Liên hệ để được cấp quyền tải xuống.',
+        downloadForbidden: 'Bạn không có quyền tải xuống tài liệu này. Chỉ chủ tài liệu hoặc quản trị viên mới tải xuống được.',
+        downloadNotFound: 'Không tìm thấy file hoặc bạn không có quyền truy cập.',
+        downloadRateLimited: 'Bạn đang thao tác quá nhanh. Vui lòng chờ một lát rồi thử lại.',
+        downloadFailed: 'Không tải được file. Vui lòng thử lại sau.',
         viewPreview: 'Xem trước', viewFull: 'Xem toàn bộ', previewPreparing: 'Đang chuẩn bị bản xem trước',
         previewOfPages: 'Xem trước {x}/{y} trang', viewerPage: 'Trang {n}/{total}',
         previewEndTitle: 'Đã hết phần xem trước', previewEndLogin: 'Đăng nhập để xem thêm hoặc tải tài liệu.',
@@ -852,6 +905,11 @@
         fileNoResults: 'No matching files', fileNoResultsHint: 'Try another keyword or a different category.',
         fileSearchError: 'Could not load the file list. The document service (elib) may be under maintenance or not ready yet.',
         loadMore: 'Load more', loginToDownload: 'Sign in to download', fileResultsFound: 'Found {n} files',
+        downloadContactHint: 'Contact us to request download access.',
+        downloadForbidden: 'You do not have permission to download this document. Only the document owner or an administrator can download it.',
+        downloadNotFound: 'File not found, or you do not have access to it.',
+        downloadRateLimited: 'You are doing this too quickly. Please wait a moment and try again.',
+        downloadFailed: 'Could not download the file. Please try again later.',
         viewPreview: 'Preview', viewFull: 'View full', previewPreparing: 'Preparing preview',
         previewOfPages: 'Preview {x}/{y} pages', viewerPage: 'Page {n}/{total}',
         previewEndTitle: 'End of preview', previewEndLogin: 'Sign in to see more or download the document.',
@@ -1175,10 +1233,44 @@
       return badge;
     }
 
-    function appendDownloadAffordance(container, doc) {
+    /**
+     * Tải file qua fetch để bắt lỗi theo mã ổn định (403
+     * DOWNLOAD_FORBIDDEN -> thông báo rõ, không hiện lỗi trống của
+     * trình duyệt). Thành công -> tải blob với tên file từ
+     * Content-Disposition (dự phòng: tên file gốc).
+     */
+    async function downloadFile(doc) {
       const path = elibDownloadPath(doc);
       if (!path) return;
-      if (needsLoginForDoc(doc, elibUser)) {
+      try {
+        const res = await fetch(path, { credentials: 'same-origin' });
+        if (!res.ok) {
+          let code = null;
+          try { code = (await res.json())?.error?.code ?? null; } catch { /* body lỗi không phải JSON */ }
+          showToast(t(downloadErrorKey(res.status, code)));
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filenameFromDisposition(res.headers.get('content-disposition')) || doc.file?.original_filename || '';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {
+        showToast(t('downloadFailed'));
+      }
+    }
+
+    function appendDownloadAffordance(container, doc) {
+      // Idempotent như appendPreviewAffordances: mỗi thẻ chỉ gắn một lần.
+      if (container.dataset.downloadAffordance === '1') return;
+      container.dataset.downloadAffordance = '1';
+      const kind = downloadAffordance(doc, elibUser);
+      if (kind === 'none') return;
+      if (kind === 'login') {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'button button-secondary button-small';
@@ -1187,11 +1279,34 @@
         container.append(btn);
         return;
       }
-      const link = document.createElement('a');
-      link.className = 'button button-secondary button-small';
-      link.href = path;
-      link.textContent = t('elibDownload');
-      container.append(link);
+      if (kind === 'contact') {
+        // Đã đăng nhập nhưng không có quyền tải: gợi ý liên hệ xin
+        // quyền thay cho nút tải, kèm kênh liên hệ từ ui-config
+        // (cùng cấu hình ELIB_CONTACT với panel hết preview ở B2).
+        const hint = document.createElement('span');
+        hint.className = 'download-contact-hint';
+        hint.textContent = t('downloadContactHint');
+        container.append(hint);
+        const contact = normalizeContact(uiConfig);
+        if (contact.text || contact.url) {
+          const link = document.createElement('a');
+          link.className = 'download-contact-link';
+          link.textContent = contact.text || contact.url;
+          if (contact.url) {
+            link.href = contact.url;
+            link.target = '_blank';
+            link.rel = 'noreferrer';
+          }
+          container.append(link);
+        }
+        return;
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'button button-secondary button-small';
+      btn.textContent = t('elibDownload');
+      btn.addEventListener('click', () => void downloadFile(doc));
+      container.append(btn);
     }
 
     // ---- Danh mục tài liệu: deep link, cấu hình liên hệ, đổi visibility (Giai đoạn B2) ----
@@ -1218,6 +1333,7 @@
     }
 
     let viewerDocId = null;
+    let viewerDoc = null;
     function setDocDeepLink(id) {
       try { history.replaceState(null, '', docDeepLinkHash(id)); } catch { /* bỏ qua */ }
     }
@@ -1348,6 +1464,7 @@
       const overlay = $('#doc-viewer');
       if (overlay) overlay.hidden = true;
       viewerDocId = null;
+      viewerDoc = null;
       clearDocDeepLink();
       if (viewerState?.observer) viewerState.observer.disconnect();
       if (viewerState?.loadingTask) {
@@ -1388,6 +1505,7 @@
       const endEl = $('#doc-viewer-end');
       const aff = previewAffordance(doc);
       closeDocViewer();
+      viewerDoc = doc || null;
       viewerDocId = doc?.id ? String(doc.id) : null;
       if (viewerDocId) setDocDeepLink(viewerDocId);
       overlay.hidden = false;
@@ -1395,11 +1513,13 @@
       endEl.hidden = true;
       imgEl.hidden = mode !== 'image';
       pagesEl.hidden = mode === 'image';
-      // Preview mode hides download/print (UX only, not a security boundary).
-      $('#doc-viewer-download').hidden = mode === 'preview';
-      $('#doc-viewer-print').hidden = mode === 'preview';
+      // Download/print chỉ hiện ở chế độ toàn bộ khi có quyền tương
+      // ứng (can_download / can_view_full); xem trước luôn ẩn cả hai.
+      const toolbar = viewerToolbar(doc, mode);
+      $('#doc-viewer-download').hidden = !toolbar.showDownload;
+      $('#doc-viewer-print').hidden = !toolbar.showPrint;
       const downloadPath = elibDownloadPath(doc);
-      if (downloadPath) $('#doc-viewer-download').href = downloadPath;
+      $('#doc-viewer-download').href = downloadPath || '#';
       const viewUrl = elibViewPath(doc);
       $('#doc-viewer-print').href = viewUrl || '#';
       if (mode === 'preview' && aff.previewPages && aff.pageCount) {
@@ -2378,6 +2498,7 @@
       // Thẻ file render trước khi auth/me xong sẽ thiếu ô chọn visibility
       // (cần biết admin/chủ): tải lại mục trang chủ một lần khi đã biết user.
       if (homeRecentLoaded && !$('#view-home').hidden) void loadHomeRecent();
+      reloadFileResultsIfLoaded();
       return { status: elibAuthStatus, result };
     }
 
@@ -2709,6 +2830,15 @@
       return card;
     }
 
+    /**
+     * Quyền tải (can_download) phụ thuộc người dùng hiện tại: khi
+     * đăng nhập/đăng xuất xong, tải lại danh sách file đã hiện để
+     * nút tải/gợi ý liên hệ khớp quyền mới (như loadHomeRecent).
+     */
+    function reloadFileResultsIfLoaded() {
+      if (fileSearchState.loaded > 0 && !fileSearchState.loading) void searchFiles(true);
+    }
+
     async function searchFiles(reset) {
       if (fileSearchState.loading) return;
       const query = $('#file-search-query').value.trim();
@@ -2759,6 +2889,11 @@
 
     // ---- Events ----
     $('#doc-viewer-close').addEventListener('click', closeDocViewer);
+    // Tải qua fetch để 403 DOWNLOAD_FORBIDDEN hiện thông báo rõ thay vì lỗi trống.
+    $('#doc-viewer-download').addEventListener('click', (event) => {
+      event.preventDefault();
+      if (viewerDoc) void downloadFile(viewerDoc);
+    });
     $('#doc-viewer-end-login').addEventListener('click', () => { closeDocViewer(); showView('documents'); });
     window.addEventListener('hashchange', () => {
       const id = parseDocDeepLink(location.hash);
@@ -2857,6 +2992,7 @@
       showToast(t('elibLoggedOut'));
       if (!$('#view-documents').hidden) void loadDocumentsView();
       void loadHomeRecent();
+      reloadFileResultsIfLoaded();
     });
     $('#search-tab-btn-standards').addEventListener('click', () => showSearchTab('standards'));
     $('#search-tab-btn-files').addEventListener('click', () => { showSearchTab('files'); if (fileSearchState.loaded === 0 && !fileSearchState.loading) void searchFiles(true); });
@@ -2894,6 +3030,7 @@
       showToast(t('elibLoggedOut'));
       void loadDocumentsView();
       void loadHomeRecent();
+      reloadFileResultsIfLoaded();
     });
     $('#elib-upload-form').addEventListener('submit', event => {
       event.preventDefault();
