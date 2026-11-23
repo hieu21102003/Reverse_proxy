@@ -63,8 +63,11 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(page.body).toContain('header-upload-btn');
       expect(page.body).toContain('header-logout-btn');
       expect(page.body).toContain('header-user-info');
-      expect(page.body).toContain('playground.css?v=5');
-      expect(page.body).toContain('playground.js?v=5');
+      expect(page.body).toContain('elib-dropzone');
+      expect(page.body).toContain('nav-library-count');
+      expect(page.body).toContain('hero-chips');
+      expect(page.body).toContain('playground.css?v=6');
+      expect(page.body).toContain('playground.js?v=6');
       // No fake mockup numbers may leak into the UI
       expect(page.body).not.toContain('12,480');
       expect(page.body).not.toContain('2.5 MB');
@@ -73,6 +76,8 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(styles.statusCode).toBe(200);
       expect(styles.headers['content-type']).toContain('text/css');
       expect(styles.body).toContain('@media (max-width: 600px)');
+      expect(styles.body).toContain('@keyframes shimmer');
+      expect(styles.body).toContain('prefers-reduced-motion');
       expect(styles.body).toContain('#0b4f3a'); // Deep Green
       expect(styles.body).toContain('#c2410c'); // Terracotta
       expect(styles.body).toContain('.hero');
@@ -112,10 +117,12 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(script.body).not.toContain('apiBaseUrl');
       expect(script.body).not.toContain('vsqi-api-base-url');
       expect(script.body).not.toContain('navDocs');
-      // UI enhancement: file search + shared auth
+      // UI enhancement: file search + shared auth + dropzone + library badge
       expect(script.body).toContain('searchFiles');
       expect(script.body).toContain('refreshElibAuth');
       expect(script.body).toContain('renderHeaderAuth');
+      expect(script.body).toContain('updateDropzoneDisplay');
+      expect(script.body).toContain('updateLibraryNavBadge');
       expect(script.body).toContain('/documents?limit=6');
       expect(script.body).toContain('Tìm theo tiêu đề, mô tả, thẻ');
       expect(script.body).toContain('Đăng nhập để tải');

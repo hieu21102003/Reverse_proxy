@@ -141,6 +141,75 @@ docker run --rm --env-file .env -p 3100:3100 vsqi-proxy-api
 
 The runtime image contains the compiled application and production dependencies only, runs as the non-root `node` user, and includes a `/health` container health check. Set `PORT` to `3100` in the container (or adjust the port mapping and health check if you change it). `.dockerignore` excludes local dependencies, build output, tests, and environment files.
 
+## Server operations: TLS certificate reload & backup schedule
+
+### Isolated HTTPS (Caddy `:8443`) & TLS certificate reload
+
+When deployed alongside `esign` on the same host, `Reverse_proxy` runs completely independently (own Docker networks `reverse_proxy_default` + `elib-net`, own volumes, own `Caddyfile` and `docker-compose.override.yml`) and never touches any `esign-*` container, network, or volume. Until `Reverse_proxy` has its own dedicated certificate, its Caddy container listens on `:8443` and bind-mounts **only the two individual certificate/key files** read-only (`:ro`):
+
+- `/opt/esign-app/esign/pki-data/server/server.crt` → `/etc/caddy/certs/server.crt:ro`
+- `/opt/esign-app/esign/pki-data/server/server.key` → `/etc/caddy/certs/server.key:ro`
+
+> **Single-file bind-mount inode caveat:** Docker bind-mounts individual files by **inode**. When `esign` renews its certificate by atomic file replacement (`mv new.crt server.crt`), the host path gets a new inode while the running Caddy container still holds the old inode — so running `caddy reload` alone will keep serving the old certificate.
+
+Whenever `esign` renews `/opt/esign-app/esign/pki-data/server/server.crt` and `server.key`, recreate **only** `reverse-proxy-caddy` to pick up the new inodes (zero impact on `esign-*` or `reverse-proxy`):
+
+```sh
+cd /opt/Reverse_proxy
+docker compose up -d --force-recreate caddy
+```
+
+Verify the served certificate and full TLS chain against the internal Root CA:
+
+```sh
+# Check certificate dates, subject, and issuer actually served on :8443
+openssl s_client -connect 192.168.1.66:8443 -servername 192.168.1.66 </dev/null 2>/dev/null \
+  | openssl x509 -noout -dates -subject -issuer
+
+# Verify TLS validation and health endpoint without -k
+curl --cacert /opt/esign-app/esign/pki-data/public/root.crt -fsS https://192.168.1.66:8443/health
+```
+
+The current server certificate expires on **Nov 17, 2027 (`2027-11-17 GMT`)** — set an operational reminder 30 days beforehand to verify renewal and recreate `reverse-proxy-caddy`.
+
+### Backup schedule (`pg_dump` + `STORAGE_ROOT`)
+
+When deploying **PostgreSQL + Elib** (Phase 2), place both the PostgreSQL data directory (`/srv/elib/pgdata`) and `STORAGE_ROOT` (`/srv/elib/storage`) on explicit **host bind mounts backed by the large storage partition** (never inside container writable layers or ephemeral volumes). Store local backups under `/srv/elib/backups` and also replicate them off-host (external disk or NAS following the 3-2-1 rule).
+
+| Target | Method | Schedule | Retention |
+|---|---|---|---|
+| PostgreSQL (Elib metadata/users) | `pg_dump -Fc` (compressed custom format) | Daily at `02:00` | 14 daily + 4 weekly (Sunday) + monthly |
+| `STORAGE_ROOT` (`/srv/elib/storage`) | `rsync -a --delete` (plus weekly off-host sync) | Daily at `02:30` | Latest mirror + weekly off-host copy |
+| Restore drill | `pg_restore` into a temporary DB + spot-check files in `/srv/elib/storage` | Quarterly | Verify checksum & readability |
+
+Example backup and restore commands (matching the deployed `elib-postgres` container, user `elib`, and database `elib`):
+
+```sh
+# 1. Daily PostgreSQL logical dump (custom format)
+docker exec -t elib-postgres pg_dump -U elib -Fc elib \
+  > "/srv/elib/backups/db/elib_$(date +\%F).dump"
+
+# Prune daily dumps older than 14 days (Sunday copies are preserved in backups/db/weekly/)
+find /srv/elib/backups/db -maxdepth 1 -name 'elib_*.dump' -mtime +14 -delete
+
+# 2. Daily STORAGE_ROOT incremental mirror
+rsync -a --delete /srv/elib/storage/ /srv/elib/backups/storage/
+
+# 3. Restore drill (verify dump into a temporary database without touching production)
+docker exec -i elib-postgres createdb -U elib elib_restore_test
+docker exec -i elib-postgres pg_restore -U elib -d elib_restore_test --no-owner \
+  < /srv/elib/backups/db/elib_YYYY-MM-DD.dump
+docker exec -i elib-postgres dropdb -U elib elib_restore_test
+```
+
+Example `crontab -e` entries (run DB dump before `STORAGE_ROOT` sync so metadata and file blobs stay closely aligned, and mirror `/srv/elib/backups` to off-host storage weekly):
+
+```cron
+0 2 * * * docker exec elib-postgres pg_dump -U elib -Fc elib > /srv/elib/backups/db/elib_$(date +\%F).dump && [ "$(date +\%u)" = "7" ] && cp /srv/elib/backups/db/elib_$(date +\%F).dump /srv/elib/backups/db/weekly/ || true
+15 2 * * * find /srv/elib/backups/db -maxdepth 1 -name 'elib_*.dump' -mtime +14 -delete
+30 2 * * * rsync -a --delete /srv/elib/storage/ /srv/elib/backups/storage/
+```
+
 ## Vercel deployment
 
 The Vercel configuration explicitly builds one Node.js Function from `src/vercel.ts` and routes requests to it. Vercel's automatic Fastify entrypoint detection recognizes filenames such as `src/app.ts`, `src/index.ts`, and `src/server.ts`, but not `src/vercel.ts`. Since `src/server.ts` remains the local development entrypoint and `src/app.ts` is the application factory, the project uses Vercel's explicit `@vercel/node` builder for the single `src/vercel.ts` Function instead of automatic Fastify detection. This also avoids treating `src/app.ts` as a Function entrypoint. The adapter creates one Fastify app, waits for it to be ready, exports a default Node.js request handler, and does not call `listen()`. Playground assets are included through that builder's `includeFiles` option. Local development continues to use `src/server.ts`.

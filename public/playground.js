@@ -440,7 +440,13 @@
         fileSearchError: 'Không tải được danh sách file. Dịch vụ tài liệu (elib) có thể đang bảo trì hoặc chưa sẵn sàng.',
         loadMore: 'Xem thêm', loginToDownload: 'Đăng nhập để tải', fileResultsFound: 'Tìm thấy {n} file',
         uploadedOn: 'Ngày tải lên', recentEmpty: 'Chưa có tài liệu nào được tải lên.',
-        recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.'
+        recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
+        heroEyebrow: 'Viện Công nghệ Đường sắt & TOD · Tra cứu trực tuyến',
+        explore: 'Khám phá',
+        elibDropHint: 'Kéo thả file vào đây hoặc bấm để chọn từ máy tính',
+        elibDropChange: 'Bấm hoặc kéo file khác để thay thế',
+        browseStandards: 'Tra cứu tiêu chuẩn',
+        activeFilters: '{n} bộ lọc'
       },
       en: {
         navHome: 'Home', navSearch: 'Search', navCategories: 'Categories', navDocuments: 'Documents', navLibrary: 'My Library',
@@ -515,7 +521,13 @@
         fileSearchError: 'Could not load the file list. The document service (elib) may be under maintenance or not ready yet.',
         loadMore: 'Load more', loginToDownload: 'Sign in to download', fileResultsFound: 'Found {n} files',
         uploadedOn: 'Uploaded', recentEmpty: 'No documents have been uploaded yet.',
-        recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.'
+        recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.',
+        heroEyebrow: 'Institute of Railway Technology & TOD · Live Search',
+        explore: 'Explore',
+        elibDropHint: 'Drag & drop a file here, or click to browse',
+        elibDropChange: 'Click or drag another file to replace',
+        browseStandards: 'Browse standards',
+        activeFilters: '{n} active'
       }
     };
     const t = (key, vars = {}) => {
@@ -623,7 +635,11 @@
       box.hidden = false;
       $(`#${kind}-timestamp`).textContent = result.timestamp;
       $(`#${kind}-request-url`).textContent = result.url;
-      $(`#${kind}-http-status`).textContent = result.status === null ? 'Network error' : `${result.status} ${result.statusText}`;
+      const statusEl = $(`#${kind}-http-status`);
+      statusEl.textContent = result.status === null ? 'Network error' : `${result.status} ${result.statusText}`;
+      const ok = Boolean(result.status && result.status >= 200 && result.status < 300);
+      statusEl.classList.toggle('is-ok', ok);
+      statusEl.classList.toggle('is-err', !ok);
       $(`#${kind}-response-time`).textContent = `${result.duration.toFixed(1)} ms`;
     }
 
@@ -634,12 +650,20 @@
     const getFavorites = () => readList('smartrail-favorites');
     const getRecent = () => readList('smartrail-recent');
     const isFavorite = item => getFavorites().some(f => favKey(f) === favKey(item));
+    function updateLibraryNavBadge() {
+      const badge = $('#nav-library-count');
+      if (!badge) return;
+      const count = getFavorites().length;
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = count === 0;
+    }
     function toggleFavorite(item) {
       const list = getFavorites();
       const idx = list.findIndex(f => favKey(f) === favKey(item));
-      if (idx >= 0) { list.splice(idx, 1); writeList('smartrail-favorites', list); showToast(t('removedToast')); return false; }
+      if (idx >= 0) { list.splice(idx, 1); writeList('smartrail-favorites', list); updateLibraryNavBadge(); showToast(t('removedToast')); return false; }
       list.unshift({ code: item.code, name: item.name || '', englishName: item.englishName || '', year: item.year ?? null, status: item.status || '', source: item.source || '', savedAt: Date.now() });
       writeList('smartrail-favorites', list);
+      updateLibraryNavBadge();
       showToast(t('savedToast'));
       return true;
     }
@@ -653,6 +677,39 @@
       const text = String(code || '').trim().toUpperCase();
       const match = text.match(/^(DIN EN ISO|EN ISO|DIN EN|BS EN|GB\/T|TCVN|QCVN|ISO|IEC|ASTM|BS|DIN|EN|JIS|UL|ANSI|AS|GB)\b/);
       return match ? match[1] : (text.split(' ')[0] || DASH);
+    }
+    function orgTone(code) {
+      const text = String(code || '').trim().toUpperCase();
+      if (text.startsWith('QCVN')) return 'qcvn';
+      if (/^(TCVN|TCXD|TCN|TCCS)\b/.test(text)) return 'tcvn';
+      return 'intl';
+    }
+    const SVG_ICONS = {
+      CAT01: ['M2 10h20', 'M4 10v9M20 10v9M12 10v9', 'M4 19a4 4 0 0 1 8 0M12 19a4 4 0 0 1 8 0', 'M6 10V6l6-2 6 2v4'],
+      CAT02: ['M13 2 4 14h7l-1 8 10-12h-7l0-8z'],
+      CAT03: ['M12 2 2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
+      CAT04: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M3.6 9h16.8', 'M3.6 15h16.8', 'M12 3a14 14 0 0 1 0 18', 'M12 3a14 14 0 0 0 0 18'],
+      CAT05: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
+      CAT06: ['M9 3h6', 'M10 3v5l-4.5 7.5A2 2 0 0 0 7.2 18.5h9.6a2 2 0 0 0 1.7-3L14 8V3']
+    };
+    function iconSvg(name, size = 22) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('width', String(size));
+      svg.setAttribute('height', String(size));
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.setAttribute('aria-hidden', 'true');
+      for (const d of (SVG_ICONS[name] || [])) {
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', d);
+        svg.append(path);
+      }
+      return svg;
     }
     const dash = value => (value === null || value === undefined || String(value).trim() === '' ? DASH : String(value));
 
@@ -672,6 +729,7 @@
       });
       $$('.nav-item').forEach(button => button.classList.toggle('is-active', button.dataset.view === name));
       $('#main-nav').classList.remove('is-open');
+      $('#mobile-menu')?.setAttribute('aria-expanded', 'false');
       if (name === 'library') renderLibrary();
       if (name === 'documents') void loadDocumentsView();
       if (push) {
@@ -728,11 +786,13 @@
     async function loadHomeRecent() {
       const list = $('#home-recent-list');
       const state = $('#home-recent-state');
+      const skeleton = $('#home-recent-skeleton');
       if (!list || !state) return;
-      state.hidden = false;
-      state.textContent = t('loading');
+      if (skeleton) skeleton.hidden = false;
+      state.hidden = true;
       list.replaceChildren();
       const result = await elibFetchJson('/documents?limit=6&offset=0');
+      if (skeleton) skeleton.hidden = true;
       if (result.status !== 200 || !result.payload || !Array.isArray(result.payload.data)) {
         state.hidden = false;
         state.textContent = t('recentError');
@@ -771,9 +831,12 @@
       for (const cat of CATEGORIES) {
         const card = document.createElement('article');
         card.className = 'category-card';
+        card.dataset.cat = cat.id;
         const banner = document.createElement('div');
         banner.className = 'category-banner';
-        banner.textContent = cat.id;
+        const catId = document.createElement('span');
+        catId.textContent = cat.id;
+        banner.append(catId, iconSvg(cat.id, 26));
         const body = document.createElement('div');
         body.className = 'category-body';
         const h3 = document.createElement('h3');
@@ -830,13 +893,23 @@
       };
     }
 
+    function updateFilterBadge(filters) {
+      const badge = $('#filter-active-badge');
+      if (!badge) return;
+      const totalSources = $$('.filter-source').length || 3;
+      const activeCount = (filters.sources.size < totalSources ? 1 : 0) + (filters.year ? 1 : 0) + (filters.status ? 1 : 0);
+      badge.hidden = activeCount === 0;
+      if (activeCount > 0) badge.textContent = t('activeFilters', { n: activeCount });
+    }
+
     function applyFiltersAndRender() {
       const container = $('#search-results');
       const empty = $('#search-empty');
       container.replaceChildren();
       container.classList.toggle('is-grid', resultsViewMode === 'grid');
-      if (!lastSearchPayload || !Array.isArray(lastSearchPayload.data)) return;
       const filters = currentFilters();
+      updateFilterBadge(filters);
+      if (!lastSearchPayload || !Array.isArray(lastSearchPayload.data)) return;
       let records = lastSearchPayload.data.filter(record => {
         if (record.source && !filters.sources.has(record.source)) return false;
         if (filters.year && Number(record.year) !== filters.year) return false;
@@ -856,7 +929,7 @@
         const card = document.createElement('article');
         card.className = 'result-card';
         const cover = document.createElement('div');
-        cover.className = 'result-cover';
+        cover.className = `result-cover tone-${orgTone(record.code)}`;
         const org = document.createElement('span');
         org.className = 'cover-org-mini';
         org.textContent = orgOf(record.code);
@@ -866,13 +939,15 @@
         cover.append(org, mini);
         const body = document.createElement('div');
         body.className = 'result-body';
-        const code = document.createElement('div');
-        code.className = 'result-code';
-        code.textContent = dash(record.code);
+        const codeBtn = document.createElement('button');
+        codeBtn.type = 'button';
+        codeBtn.className = 'result-code result-code-btn';
+        codeBtn.textContent = dash(record.code);
+        codeBtn.addEventListener('click', () => openDetail(record.code, record.source));
         const name = document.createElement('p');
         name.className = 'result-name';
         name.textContent = dash(record.name);
-        body.append(code, name);
+        body.append(codeBtn, name);
         if (record.englishName) {
           const english = document.createElement('p');
           english.className = 'result-english';
@@ -1080,6 +1155,11 @@
         return;
       }
       $('#detail-breadcrumb-code').textContent = model.header.code || DASH;
+      const detailCover = $('.detail-cover');
+      if (detailCover) {
+        detailCover.classList.remove('tone-tcvn', 'tone-qcvn', 'tone-intl');
+        detailCover.classList.add(`tone-${orgTone(model.header.code)}`);
+      }
       $('#detail-cover-org').textContent = orgOf(model.header.code);
       $('#detail-cover-code').textContent = model.header.code || DASH;
       $('#detail-cover-name').textContent = model.header.titleVi || model.header.titleEn || '';
@@ -1137,7 +1217,12 @@
       sourceLink.hidden = !safeDetailUrl;
       if (safeDetailUrl) sourceLink.href = safeDetailUrl;
       const saveBtn = $('#detail-save-btn');
-      const syncSave = () => { const saved = isFavorite(data); saveBtn.textContent = saved ? t('savedLibrary') : t('saveLibrary'); };
+      const saveLabel = saveBtn.querySelector('.btn-label') || saveBtn;
+      const syncSave = () => {
+        const saved = isFavorite(data);
+        saveBtn.classList.toggle('is-saved', saved);
+        saveLabel.textContent = saved ? t('savedLibrary') : t('saveLibrary');
+      };
       syncSave();
       saveBtn.onclick = () => { toggleFavorite(data); syncSave(); };
       $('#detail-copy-btn').onclick = async () => {
@@ -1339,6 +1424,9 @@
         for (const item of items) {
           const row = document.createElement('div');
           row.className = 'library-row';
+          const orgBadge = document.createElement('span');
+          orgBadge.className = `lib-org-badge tone-${orgTone(item.code)}`;
+          orgBadge.textContent = orgOf(item.code);
           const main = document.createElement('div');
           main.className = 'lib-main';
           const strong = document.createElement('strong');
@@ -1351,7 +1439,7 @@
           openBtn.className = 'detail-btn';
           openBtn.textContent = t('open');
           openBtn.addEventListener('click', () => openDetail(item.code, item.source));
-          row.append(main, openBtn);
+          row.append(orgBadge, main, openBtn);
           if (removable) {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
@@ -1363,8 +1451,14 @@
           container.append(row);
         }
       };
-      renderInto('#library-favorites', '#library-favorites-empty', getFavorites(), true);
-      renderInto('#library-recent', '#library-recent-empty', getRecent(), false);
+      const favorites = getFavorites();
+      const recent = getRecent();
+      const favCount = $('#library-favorites-count');
+      const recentCount = $('#library-recent-count');
+      if (favCount) favCount.textContent = String(favorites.length);
+      if (recentCount) recentCount.textContent = String(recent.length);
+      renderInto('#library-favorites', '#library-favorites-empty', favorites, true);
+      renderInto('#library-recent', '#library-recent-empty', recent, false);
     }
 
     // ---- Language ----
@@ -1379,6 +1473,7 @@
       if (lastSearchPayload) applyFiltersAndRender();
       renderHeaderAuth();
       renderCategories();
+      updateDropzoneDisplay();
       void loadHomeRecent();
       if (currentDetail && memory.detail) renderDetailResult(memory.detail);
       if (!$('#view-library').hidden) renderLibrary();
@@ -1442,6 +1537,8 @@
       userInfo.hidden = !loggedIn;
       if (loggedIn) userInfo.textContent = t('headerSignedInAs', { email: elibUser.email || '', role: elibUser.role || '' });
       uploadBtn.hidden = !(loggedIn && (elibUser.role === 'editor' || elibUser.role === 'admin'));
+      const loginNote = $('#header-login-note');
+      if (loginNote) loginNote.hidden = loggedIn;
       // When elib is down/disabled, keep Đăng nhập visible (it opens the
       // Tài liệu view, which explains the state) and hide Tải lên.
       loginBtn.disabled = false;
@@ -1478,6 +1575,7 @@
       for (const item of elibSessionUploads) {
         const row = document.createElement('div');
         row.className = 'elib-session-row';
+        const kind = fileKindFromName(item.originalFilename, item.mimeType);
         const main = document.createElement('div');
         main.className = 'lib-main';
         const strong = document.createElement('strong');
@@ -1485,7 +1583,7 @@
         const small = document.createElement('small');
         small.textContent = [item.originalFilename, formatBytes(item.fileSize), item.mimeType].filter(Boolean).join(' · ');
         main.append(strong, small);
-        row.append(main);
+        row.append(fileBadge(kind), main);
         if (item.documentId && item.fileId) {
           const href = elibUrl(`/documents/${encodeURIComponent(item.documentId)}/files/${encodeURIComponent(item.fileId)}/download`);
           const link = document.createElement('a');
@@ -1557,6 +1655,39 @@
       setElibBanner(result.errorMessage || t('elibDown'));
     }
 
+    function updateDropzoneDisplay() {
+      const dropzone = $('#elib-dropzone');
+      const input = $('#elib-file');
+      const promptEl = $('#elib-dropzone-text');
+      const selectedEl = $('#elib-file-selected');
+      if (!dropzone || !input || !selectedEl) return;
+      const file = input.files?.[0];
+      if (!file) {
+        dropzone.classList.remove('has-file');
+        selectedEl.hidden = true;
+        selectedEl.replaceChildren();
+        if (promptEl) promptEl.textContent = t('elibDropHint');
+        return;
+      }
+      dropzone.classList.add('has-file');
+      if (promptEl) promptEl.textContent = t('elibDropChange');
+      selectedEl.hidden = false;
+      selectedEl.replaceChildren();
+      const kind = fileKindFromName(file.name, file.type);
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'elib-selected-name';
+      nameSpan.textContent = file.name;
+      const sizeSpan = document.createElement('span');
+      sizeSpan.className = 'elib-selected-size';
+      sizeSpan.textContent = formatBytes(file.size);
+      selectedEl.append(fileBadge(kind), nameSpan, sizeSpan);
+      const titleInput = $('#elib-title');
+      if (titleInput && !titleInput.value.trim()) {
+        const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+        if (baseName) titleInput.value = baseName;
+      }
+    }
+
     function buildElibFormData(force) {
       const formData = new FormData();
       const file = $('#elib-file').files?.[0];
@@ -1626,6 +1757,7 @@
           successBox.textContent = t('elibUploadOk', { title: doc.title || '' });
           showToast(t('elibUploadOk', { title: doc.title || '' }));
           $('#elib-upload-form').reset();
+          updateDropzoneDisplay();
           return;
         }
         const code = payload?.error?.code || '';
@@ -1730,9 +1862,14 @@
         const tags = document.createElement('div');
         tags.className = 'file-tags';
         for (const tag of doc.tags) {
-          const chip = document.createElement('span');
+          const chip = document.createElement('button');
+          chip.type = 'button';
           chip.className = 'tag-chip';
           chip.textContent = tag;
+          chip.addEventListener('click', () => {
+            $('#file-search-query').value = tag;
+            void searchFiles(true);
+          });
           tags.append(chip);
         }
         body.append(tags);
@@ -1926,9 +2063,63 @@
       if (!elibPendingUpload) return;
       sendElibUpload(true);
     });
+    const elibFileInput = $('#elib-file');
+    const elibDropzone = $('#elib-dropzone');
+    if (elibFileInput) elibFileInput.addEventListener('change', updateDropzoneDisplay);
+    if (elibDropzone) {
+      elibDropzone.addEventListener('dragenter', event => {
+        event.preventDefault();
+        elibDropzone.classList.add('is-dragover');
+      });
+      elibDropzone.addEventListener('dragover', event => {
+        event.preventDefault();
+        elibDropzone.classList.add('is-dragover');
+      });
+      elibDropzone.addEventListener('dragleave', event => {
+        if (!event.relatedTarget || !elibDropzone.contains(event.relatedTarget)) {
+          elibDropzone.classList.remove('is-dragover');
+        }
+      });
+      elibDropzone.addEventListener('drop', event => {
+        event.preventDefault();
+        elibDropzone.classList.remove('is-dragover');
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0 || !elibFileInput) return;
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(files[0]);
+          elibFileInput.files = dt.files;
+        } catch {
+          // Fallback when DataTransfer assignment is unsupported
+        }
+        updateDropzoneDisplay();
+      });
+    }
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        const modal = $('#preview-modal');
+        if (modal && !modal.hidden) { modal.hidden = true; return; }
+        const nav = $('#main-nav');
+        if (nav && nav.classList.contains('is-open')) {
+          nav.classList.remove('is-open');
+          $('#mobile-menu')?.setAttribute('aria-expanded', 'false');
+        }
+        return;
+      }
+      if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const active = document.activeElement;
+        const tag = active?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) return;
+        event.preventDefault();
+        if (!$('#view-home').hidden) $('#hero-query')?.focus();
+        else if (!$('#view-search').hidden) (activeSearchTab === 'files' ? $('#file-search-query') : $('#search-query'))?.focus();
+        else if (!$('#view-detail').hidden) $('#detail-code-input')?.focus();
+      }
+    });
 
     // ---- Init from URL ----
     applyLanguage(currentLang);
+    updateLibraryNavBadge();
     void refreshElibAuth();
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
