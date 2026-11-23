@@ -916,6 +916,10 @@
     // for owner+admin (can_view_full).
 
     function appendPreviewAffordances(container, doc) {
+      // Idempotent: a card's actions container gets preview/full buttons
+      // at most once, even if a renderer calls this twice by mistake.
+      if (container.dataset.previewAffordances === '1') return;
+      container.dataset.previewAffordances = '1';
       const aff = previewAffordance(doc);
       if (aff.showPreview) {
         const btn = document.createElement('button');
@@ -1153,8 +1157,7 @@
         const actions = document.createElement('span');
         actions.className = 'recent-file-actions';
         appendPreviewAffordances(actions, doc);
-        appendPreviewAffordances(actions, doc);
-      appendDownloadAffordance(actions, doc);
+        appendDownloadAffordance(actions, doc);
         row.append(fileBadge(kind), main, actions);
         list.append(row);
       }
@@ -2252,6 +2255,7 @@
       }
       const actions = document.createElement('div');
       actions.className = 'file-card-actions';
+      appendPreviewAffordances(actions, doc);
       appendDownloadAffordance(actions, doc);
       card.append(fileBadge(kind), body, actions);
       return card;
