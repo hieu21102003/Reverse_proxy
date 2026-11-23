@@ -63,6 +63,8 @@ Copy-Item .env.example .env
 | `ELIB_BASE_URL` | `http://127.0.0.1:3200` | Elib document service base URL for the `/api/elib/*` proxy (see Elib integration). In Docker, `127.0.0.1` is the container itself — use the shared `elib-net` network (`http://elib-service:3200`, see `.env.server.example`) or run bare-Node |
 | `ELIB_ENABLED` | `true` | Set to `false` to disable the elib proxy (`/api/elib/*` returns 503, Tài liệu view shows a disabled state) |
 | `ELIB_TIMEOUT_MS` | `300000` | Elib proxy timeout for uploads/downloads, 5000–3600000 ms (generous on purpose; not the 10 s VSQI timeout) |
+| `ELIB_CONTACT_TEXT` | empty | Contact text shown at the end of a limited-page document preview ("Liên hệ để được cấp quyền xem toàn bộ"); empty = generic sentence only. Served to the frontend via `GET /api/v1/ui-config` |
+| `ELIB_CONTACT_URL` | empty | Optional http(s)/mailto link for the contact text above |
 | `STANDARDS_DB_ENABLED` | `false` | Enable the standards metadata DB integration (elib `/internal/standards/*`); off = live-proxy behavior unchanged |
 | `STANDARDS_INTERNAL_TOKEN` | empty | Shared secret for elib internal API calls (same value on elib); never logged |
 | `STANDARDS_DB_TIMEOUT_MS` | `2000` | Timeout for internal DB calls, 100–30000 ms (short on purpose; DB errors never fail search) |

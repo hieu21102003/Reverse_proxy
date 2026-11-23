@@ -71,6 +71,22 @@ const envSchema = z.object({
   /** Generous proxy timeout for elib uploads/downloads (not the 10s VSQI timeout). */
   ELIB_TIMEOUT_MS: z.coerce.number().int().min(5000).max(3600000).default(300000),
   /**
+   * Contact channel shown at the end of a limited-page preview
+   * ("Liên hệ để được cấp quyền xem toàn bộ"). Both optional; empty =
+   * the UI shows only the generic sentence. Exposed to the frontend
+   * via GET /api/v1/ui-config (public, non-sensitive by design).
+   */
+  ELIB_CONTACT_TEXT: z.string().trim().max(300).default(''),
+  ELIB_CONTACT_URL: z.string().trim().max(500).default('').refine(value => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' || url.protocol === 'http:' || url.protocol === 'mailto:';
+    } catch {
+      return false;
+    }
+  }, { message: 'ELIB_CONTACT_URL must be an http(s) or mailto URL' }),
+  /**
    * Standards metadata DB (Bước 1, Phase 3): when enabled, search/detail
    * also consult elib's /internal/standards/* API (see
    * src/standards-db/client.ts). Default OFF — behavior is then identical

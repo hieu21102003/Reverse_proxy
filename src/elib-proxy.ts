@@ -56,6 +56,7 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   GET  /api/documents/:id/files/:fileId/download
  *   GET  /api/documents/:id/preview   (limited-page preview, Phase B)
  *   GET  /api/documents/:id/view      (full view, owner+admin, Phase B)
+ *   PATCH /api/documents/:id          (visibility change, admin/owner, Phase A2/B2)
  * Anything else (including elib's /internal/*, which is never under
  * /api/ and must stay unreachable from browsers) is refused here
  * instead of being forwarded.
@@ -70,6 +71,8 @@ const ELIB_ALLOWLIST_EXACT = new Set([
 const ELIB_ALLOWLIST_DOWNLOAD = /^documents\/[^/]+\/files\/[^/]+\/download$/;
 /** Preview/full-view are read-only: GET only, exactly these two shapes. */
 const ELIB_ALLOWLIST_PREVIEW_VIEW = /^documents\/[^/]+\/(preview|view)$/;
+/** Visibility change (Phase A2): PATCH only, exactly documents/<id>. */
+const ELIB_ALLOWLIST_DOCUMENT_PATCH = /^documents\/[^/]+$/;
 
 /**
  * Path-traversal guard for the wildcard segment. Checks both the raw
@@ -87,6 +90,9 @@ function hasTraversal(rawPath: string, wildcard: string): boolean {
 function isAllowlisted(wildcard: string, method: string): boolean {
   if (ELIB_ALLOWLIST_PREVIEW_VIEW.test(wildcard)) {
     return method === 'GET' || method === 'HEAD';
+  }
+  if (ELIB_ALLOWLIST_DOCUMENT_PATCH.test(wildcard)) {
+    return method === 'PATCH';
   }
   return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);
 }

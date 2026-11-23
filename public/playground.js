@@ -437,7 +437,74 @@
     return user ? 'contact' : 'login';
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind };
+  /**
+   * Trạng thái "không có preview" suy từ preview_status (Giai đoạn B2):
+   * trả khóa i18n để viewer hiện thông báo rõ thay vì lỗi trống, hoặc
+   * null khi preview sẵn sàng / chưa rõ trạng thái (khi đó cứ gọi
+   * endpoint preview và map lỗi theo mã ổn định như trước).
+   * PDF 1 trang: elib đánh unsupported + page_count=1 (preview sẽ bằng
+   * toàn bộ nội dung) -> thông báo riêng "không có bản xem trước".
+   */
+  function previewStateKey(doc) {
+    const file = doc?.file;
+    const status = file?.preview_status ?? null;
+    if (status === 'pending' || status === 'processing') return 'previewPreparingLong';
+    if (status === 'failed') return 'previewFailed';
+    if (status === 'unsupported') {
+      const kind = fileKindFromName(file?.original_filename, file?.mime_type);
+      if (kind === 'pdf' && file?.page_count === 1) return 'previewNotAvailable';
+      return 'previewUnsupported';
+    }
+    return null;
+  }
+
+  /** Deep link tài liệu: #doc=<id> (chia sẻ/mở lại đúng tài liệu). */
+  function parseDocDeepLink(hash) {
+    if (typeof hash !== 'string' || !hash) return null;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    const id = params.get('doc');
+    if (!id) return null;
+    const trimmed = id.trim();
+    return trimmed && trimmed.length <= 200 ? trimmed : null;
+  }
+
+  function docDeepLinkHash(id) {
+    return `#doc=${encodeURIComponent(String(id))}`;
+  }
+
+  /**
+   * Ai được đổi mức hiển thị (visibility) — khớp luật phía elib
+   * (PATCH /api/documents/:id: admin hoặc người tạo). List response
+   * của elib có created_by nên nhận diện được chủ tài liệu.
+   */
+  function canChangeVisibility(user, doc) {
+    if (!user || !doc) return false;
+    if (user.role === 'admin') return true;
+    return Boolean(user.id && doc.created_by && user.id === doc.created_by);
+  }
+
+  /** Map mã lỗi ổn định của PATCH visibility sang khóa i18n. */
+  function visibilityErrorKey(status, code) {
+    if (code === 'INVALID_VISIBILITY' || status === 400) return 'visibilityInvalid';
+    if (status === 401) return 'visibilityLoginRequired';
+    if (status === 403) return 'visibilityForbidden';
+    if (status === 404) return 'visibilityNotFound';
+    return 'visibilityFailed';
+  }
+
+  /**
+   * Chuẩn hóa kênh liên hệ từ /api/v1/ui-config cho panel hết preview:
+   * chỉ giữ URL http(s)/mailto (chặn javascript: và các scheme lạ),
+   * text cắt khoảng trắng; rỗng cả hai -> { text: null, url: null }.
+   */
+  function normalizeContact(contact) {
+    const text = typeof contact?.elibContactText === 'string' ? contact.elibContactText.trim() : '';
+    let url = typeof contact?.elibContactUrl === 'string' ? contact.elibContactUrl.trim() : '';
+    if (url && !/^(https?:\/\/|mailto:)/i.test(url)) url = '';
+    return { text: text || null, url: url || null };
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -534,10 +601,17 @@
         viewPreview: 'Xem trước', viewFull: 'Xem toàn bộ', previewPreparing: 'Đang chuẩn bị bản xem trước',
         previewOfPages: 'Xem trước {x}/{y} trang', viewerPage: 'Trang {n}/{total}',
         previewEndTitle: 'Đã hết phần xem trước', previewEndLogin: 'Đăng nhập để xem thêm hoặc tải tài liệu.',
-        previewEndContact: 'Vui lòng liên hệ người tạo tài liệu để xem toàn bộ.',
+        previewEndContact: 'Liên hệ để được cấp quyền xem toàn bộ.',
         previewNotReady: 'Bản xem trước chưa sẵn sàng. Vui lòng thử lại sau ít phút.',
-        previewUnsupported: 'Định dạng tài liệu này chưa hỗ trợ xem trước trực tuyến.',
-        previewNotAvailable: 'Tài liệu này không có bản xem trước. Vui lòng liên hệ người tạo tài liệu để xem toàn bộ.',
+        previewPreparingLong: 'Đang chuẩn bị bản xem trước, vui lòng thử lại sau.',
+        previewFailed: 'Không tạo được bản xem trước cho tài liệu này.',
+        previewUnsupported: 'Định dạng này chưa hỗ trợ xem trước.',
+        previewNotAvailable: 'Tài liệu này không có bản xem trước.',
+        docNoAccess: 'Bạn không có quyền xem tài liệu này.',
+        visibilityLabel: 'Mức hiển thị', visibilityPublic: 'Công khai', visibilityInternal: 'Nội bộ', visibilityPrivate: 'Riêng tư',
+        visibilityUpdated: 'Đã đổi mức hiển thị.', visibilityLoginRequired: 'Vui lòng đăng nhập để đổi mức hiển thị.',
+        visibilityForbidden: 'Bạn không có quyền đổi mức hiển thị của tài liệu này.', visibilityInvalid: 'Mức hiển thị không hợp lệ.',
+        visibilityNotFound: 'Không tìm thấy tài liệu.', visibilityFailed: 'Không đổi được mức hiển thị. Vui lòng thử lại sau.',
         previewNotFound: 'Không tìm thấy tài liệu hoặc bạn không có quyền xem.',
         previewRateLimited: 'Bạn đang xem quá nhanh. Vui lòng chờ một lát rồi thử lại.',
         previewLoadError: 'Không tải được bản xem trước. Vui lòng thử lại sau.',
@@ -630,10 +704,17 @@
         viewPreview: 'Preview', viewFull: 'View full', previewPreparing: 'Preparing preview',
         previewOfPages: 'Preview {x}/{y} pages', viewerPage: 'Page {n}/{total}',
         previewEndTitle: 'End of preview', previewEndLogin: 'Sign in to see more or download the document.',
-        previewEndContact: 'Please contact the document owner to view it in full.',
+        previewEndContact: 'Contact us to request full access.',
         previewNotReady: 'The preview is not ready yet. Please try again in a few minutes.',
-        previewUnsupported: 'This document format does not support online preview yet.',
-        previewNotAvailable: 'This document has no preview. Please contact the document owner to view it in full.',
+        previewPreparingLong: 'The preview is being prepared. Please try again later.',
+        previewFailed: 'Could not create a preview for this document.',
+        previewUnsupported: 'This format does not support preview yet.',
+        previewNotAvailable: 'This document has no preview.',
+        docNoAccess: 'You do not have access to this document.',
+        visibilityLabel: 'Visibility', visibilityPublic: 'Public', visibilityInternal: 'Internal', visibilityPrivate: 'Private',
+        visibilityUpdated: 'Visibility updated.', visibilityLoginRequired: 'Please sign in to change visibility.',
+        visibilityForbidden: 'You do not have permission to change this document\'s visibility.', visibilityInvalid: 'Invalid visibility value.',
+        visibilityNotFound: 'Document not found.', visibilityFailed: 'Could not change visibility. Please try again later.',
         previewNotFound: 'Document not found, or you do not have access to it.',
         previewRateLimited: 'You are viewing too quickly. Please wait a moment and try again.',
         previewLoadError: 'Could not load the preview. Please try again later.',
@@ -909,6 +990,105 @@
       container.append(link);
     }
 
+    // ---- Danh mục tài liệu: deep link, cấu hình liên hệ, đổi visibility (Giai đoạn B2) ----
+    // knownDocs: tài liệu đã thấy qua danh sách (trang chủ / tìm kiếm),
+    // để deep link #doc=<id> mở đúng viewer mà không cần endpoint chi tiết.
+    const knownDocs = new Map();
+    function rememberDoc(doc) {
+      if (doc?.id) knownDocs.set(String(doc.id), doc);
+    }
+
+    // Kênh liên hệ ở panel hết preview, lấy từ env phía Reverse_proxy
+    // qua GET /api/v1/ui-config (công khai, không nhạy cảm). Lỗi -> rỗng.
+    let uiConfig = { elibContactText: '', elibContactUrl: '' };
+    async function loadUiConfig() {
+      try {
+        const res = await fetch('/api/v1/ui-config', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const payload = await res.json();
+        uiConfig = {
+          elibContactText: typeof payload?.elibContactText === 'string' ? payload.elibContactText : '',
+          elibContactUrl: typeof payload?.elibContactUrl === 'string' ? payload.elibContactUrl : ''
+        };
+      } catch { /* giữ mặc định rỗng: chỉ hiện câu chung */ }
+    }
+
+    let viewerDocId = null;
+    function setDocDeepLink(id) {
+      try { history.replaceState(null, '', docDeepLinkHash(id)); } catch { /* bỏ qua */ }
+    }
+    function clearDocDeepLink() {
+      if (!parseDocDeepLink(location.hash)) return;
+      try { history.replaceState(null, '', location.pathname + location.search); } catch { /* bỏ qua */ }
+    }
+
+    async function openDeepLinkedDoc(id) {
+      if (!id) return;
+      const known = knownDocs.get(String(id));
+      if (known) { void openDocViewer(known, 'preview'); return; }
+      // elib chưa có endpoint chi tiết từng tài liệu: mở viewer với id
+      // tối thiểu, endpoint preview tự quyết quyền (404 thống nhất).
+      void openDocViewer({ id: String(id) }, 'preview', { deepLink: true });
+    }
+
+    function openDeepLinkFromHash() {
+      const id = parseDocDeepLink(location.hash);
+      if (id) void openDeepLinkedDoc(id);
+    }
+
+    /** Bấm thẻ/tiêu đề -> mở viewer preview (trừ khi bấm vào nút/link/select bên trong). */
+    function makeCardOpenPreview(element, doc) {
+      element.classList.add('doc-card-clickable');
+      element.addEventListener('click', (event) => {
+        if (event.target.closest('button, a, select, input, textarea, label')) return;
+        void openDocViewer(doc, 'preview');
+      });
+    }
+
+    /** Ô chọn mức hiển thị cho admin/chủ tài liệu (PATCH qua proxy). */
+    function appendVisibilityControl(container, doc) {
+      if (!canChangeVisibility(elibUser, doc)) return;
+      if (container.dataset.visibilityControl === '1') return;
+      container.dataset.visibilityControl = '1';
+      const wrap = document.createElement('span');
+      wrap.className = 'visibility-control';
+      const label = document.createElement('label');
+      label.textContent = t('visibilityLabel');
+      const select = document.createElement('select');
+      select.className = 'visibility-select';
+      select.setAttribute('aria-label', t('visibilityLabel'));
+      for (const value of ['public', 'internal', 'private']) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = t(`visibility${value[0].toUpperCase()}${value.slice(1)}`);
+        select.append(option);
+      }
+      select.value = ['public', 'internal', 'private'].includes(doc.visibility) ? doc.visibility : 'internal';
+      label.append(select);
+      wrap.append(label);
+      select.addEventListener('change', async () => {
+        const previous = doc.visibility;
+        const next = select.value;
+        if (next === previous) return;
+        select.disabled = true;
+        const result = await elibFetchJson(`/documents/${encodeURIComponent(doc.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visibility: next })
+        });
+        select.disabled = false;
+        if (result.status === 200 && result.payload?.document) {
+          doc.visibility = result.payload.document.visibility;
+          select.value = doc.visibility;
+          showToast(t('visibilityUpdated'));
+          return;
+        }
+        select.value = ['public', 'internal', 'private'].includes(previous) ? previous : 'internal';
+        showToast(t(visibilityErrorKey(result.status ?? 0, result.errorCode || null)));
+      });
+      container.append(wrap);
+    }
+
     // ---- Document preview / full viewer (Phase B) ----
     // pdf.js is lazy-loaded from /vendor/pdfjs/ only when a viewer opens;
     // it is NOT part of the initial page bundle. Preview bytes come from
@@ -963,6 +1143,8 @@
     function closeDocViewer() {
       const overlay = $('#doc-viewer');
       if (overlay) overlay.hidden = true;
+      viewerDocId = null;
+      clearDocDeepLink();
       if (viewerState?.observer) viewerState.observer.disconnect();
       if (viewerState?.loadingTask) {
         // Release pdf.js resources (worker document + rendered pages).
@@ -992,7 +1174,7 @@
       return res.arrayBuffer();
     }
 
-    async function openDocViewer(doc, mode) {
+    async function openDocViewer(doc, mode, options = {}) {
       const overlay = $('#doc-viewer');
       const pagesEl = $('#doc-viewer-pages');
       const imgEl = $('#doc-viewer-img');
@@ -1002,6 +1184,8 @@
       const endEl = $('#doc-viewer-end');
       const aff = previewAffordance(doc);
       closeDocViewer();
+      viewerDocId = doc?.id ? String(doc.id) : null;
+      if (viewerDocId) setDocDeepLink(viewerDocId);
       overlay.hidden = false;
       titleEl.textContent = doc.title || doc.file?.original_filename || '';
       endEl.hidden = true;
@@ -1020,8 +1204,18 @@
         pageInfoEl.textContent = '';
       }
       statusEl.hidden = false;
-      statusEl.textContent = t('viewerLoading');
       statusEl.classList.remove('viewer-error');
+
+      // Trạng thái không có preview (pending/failed/unsupported/1 trang):
+      // hiện thông báo rõ ngay trong viewer, không gọi endpoint, không lỗi trống.
+      if (mode === 'preview') {
+        const stateKey = previewStateKey(doc);
+        if (stateKey) {
+          statusEl.textContent = t(stateKey);
+          return;
+        }
+      }
+      statusEl.textContent = t('viewerLoading');
 
       try {
         if (mode === 'image') {
@@ -1108,19 +1302,46 @@
 
         if (mode === 'preview') {
           // End-of-preview panel: no scrolling past the cut pages exists
-          // (the preview PDF simply has no more pages).
+          // (the preview PDF simply has no more pages). Contact channel
+          // comes from /api/v1/ui-config (env phía Reverse_proxy);
+          // empty config -> generic sentence only. No price is shown.
           const kind = endOfPreviewKind(elibUser);
           $('#doc-viewer-end-text').textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
           $('#doc-viewer-end-login').hidden = kind !== 'login';
+          const contact = normalizeContact(uiConfig);
+          const contactEl = $('#doc-viewer-end-contact');
+          if (contactEl) {
+            if (contact.text || contact.url) {
+              contactEl.hidden = false;
+              contactEl.textContent = contact.text || contact.url;
+              if (contact.url) contactEl.href = contact.url;
+              else contactEl.removeAttribute('href');
+            } else {
+              contactEl.hidden = true;
+            }
+          }
           endEl.hidden = false;
         }
       } catch (error) {
         statusEl.hidden = false;
         statusEl.classList.add('viewer-error');
-        statusEl.textContent = t(previewErrorKey(error?.status ?? 0, error?.code ?? null));
+        if (options.deepLink && error?.status === 404) {
+          // Deep link tới tài liệu không có quyền thấy (elib trả 404
+          // thống nhất): thông báo rõ, không lộ nội dung; chưa đăng
+          // nhập thì gợi ý đăng nhập qua panel cuối.
+          statusEl.textContent = t('docNoAccess');
+          if (!elibUser) {
+            $('#doc-viewer-end-text').textContent = t('previewEndLogin');
+            $('#doc-viewer-end-login').hidden = false;
+            endEl.hidden = false;
+          }
+        } else {
+          statusEl.textContent = t(previewErrorKey(error?.status ?? 0, error?.code ?? null));
+        }
       }
     }
 
+    let homeRecentLoaded = false;
     async function loadHomeRecent() {
       const list = $('#home-recent-list');
       const state = $('#home-recent-state');
@@ -1130,6 +1351,7 @@
       state.hidden = true;
       list.replaceChildren();
       const result = await elibFetchJson('/documents?limit=6&offset=0');
+      homeRecentLoaded = true;
       if (skeleton) skeleton.hidden = true;
       if (result.status !== 200 || !result.payload || !Array.isArray(result.payload.data)) {
         state.hidden = false;
@@ -1144,6 +1366,7 @@
       }
       state.hidden = true;
       for (const doc of records) {
+        rememberDoc(doc);
         const row = document.createElement('div');
         row.className = 'recent-row recent-file-row';
         const kind = fileKindFromName(doc.file?.original_filename, doc.file?.mime_type);
@@ -1158,7 +1381,9 @@
         actions.className = 'recent-file-actions';
         appendPreviewAffordances(actions, doc);
         appendDownloadAffordance(actions, doc);
+        appendVisibilityControl(actions, doc);
         row.append(fileBadge(kind), main, actions);
+        makeCardOpenPreview(row, doc);
         list.append(row);
       }
     }
@@ -1940,6 +2165,9 @@
       }
       renderHeaderAuth();
       renderElibUserBar();
+      // Thẻ file render trước khi auth/me xong sẽ thiếu ô chọn visibility
+      // (cần biết admin/chủ): tải lại mục trang chủ một lần khi đã biết user.
+      if (homeRecentLoaded && !$('#view-home').hidden) void loadHomeRecent();
       return { status: elibAuthStatus, result };
     }
 
@@ -2257,7 +2485,9 @@
       actions.className = 'file-card-actions';
       appendPreviewAffordances(actions, doc);
       appendDownloadAffordance(actions, doc);
+      appendVisibilityControl(actions, doc);
       card.append(fileBadge(kind), body, actions);
+      makeCardOpenPreview(card, doc);
       return card;
     }
 
@@ -2299,7 +2529,7 @@
       fileSearchState.offset += data.length;
       fileSearchState.loaded += data.length;
       const container = $('#file-results');
-      for (const doc of data) container.append(renderFileCard(doc));
+      for (const doc of data) { rememberDoc(doc); container.append(renderFileCard(doc)); }
       countEl.textContent = t('fileResultsFound', { n: fileSearchState.total.toLocaleString() });
       empty.hidden = fileSearchState.loaded !== 0;
       if (fileSearchState.loaded === 0) {
@@ -2312,6 +2542,10 @@
     // ---- Events ----
     $('#doc-viewer-close').addEventListener('click', closeDocViewer);
     $('#doc-viewer-end-login').addEventListener('click', () => { closeDocViewer(); showView('documents'); });
+    window.addEventListener('hashchange', () => {
+      const id = parseDocDeepLink(location.hash);
+      if (id && viewerDocId !== id) void openDeepLinkedDoc(id);
+    });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !$('#doc-viewer').hidden) closeDocViewer();
     });
@@ -2515,7 +2749,8 @@
     // ---- Init from URL ----
     applyLanguage(currentLang);
     updateLibraryNavBadge();
-    void refreshElibAuth();
+    void loadUiConfig();
+    void refreshElibAuth().then(() => openDeepLinkFromHash());
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
     if (view === 'detail' && params.get('code')) {
