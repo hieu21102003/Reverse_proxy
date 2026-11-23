@@ -10,7 +10,14 @@ export interface Standard {
   year?: number;
   status?: string;
   detailUrl?: string;
+  /** ICS classification codes (TCVN `ca`); empty when the source has none. */
+  ics: string[];
   source: StandardSource;
+  /** Standards-DB enrichment (only when STANDARDS_DB_ENABLED): when this
+   *  record was last verified against upstream, from the elib metadata DB. */
+  lastVerifiedAt?: string;
+  /** True when this item came from (or was confirmed by) the metadata DB. */
+  fromDb?: boolean;
 }
 
 export type AttributeSourceStrategy =
@@ -225,6 +232,27 @@ export interface RawDetail {
   embeddedData: unknown[];
 }
 
+/**
+ * Standards metadata DB provenance for a detail response (only present
+ * when STANDARDS_DB_ENABLED). The UI uses it to show "kiểm tra lần cuối",
+ * label DB-served data, and warn when the record is past the freshness
+ * threshold (STANDARDS_STALE_DAYS).
+ */
+export interface StandardDbInfo {
+  /** 'db' when this detail was reconstructed from the metadata DB,
+   *  'live' when it came from upstream (DB record may still exist). */
+  servedFrom: 'db' | 'live';
+  /** ISO timestamp of the DB record's last upstream verification. */
+  lastVerifiedAt: string | null;
+  /** True when lastVerifiedAt is older than the freshness threshold
+   *  (or missing): status may be out of date. */
+  stale: boolean;
+  /** Freshness threshold applied, in days (STANDARDS_STALE_DAYS). */
+  staleDays: number;
+  /** Sources that have contributed snapshots to the DB record. */
+  sources: Array<{ source: StandardSource; detailUrl: string | null }>;
+}
+
 export interface StandardDetail {
   // Existing fields — unchanged in name, type, and meaning.
   code: string;
@@ -238,7 +266,11 @@ export interface StandardDetail {
   replacedBy: string | null;
   replaces: string | null;
   detailUrl: string;
+  /** ICS classification codes; empty when the source has none. */
+  ics: string[];
   source: StandardSource;
+  /** Metadata-DB provenance; absent when STANDARDS_DB_ENABLED is off. */
+  dbInfo?: StandardDbInfo;
 
   // Original label/value pairs, in DOM order, duplicates preserved.
   attributes: DetailAttribute[];

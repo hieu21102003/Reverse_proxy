@@ -1,5 +1,8 @@
 import { config } from '../config.js';
 import { VsqiError } from '../errors.js';
+import type { StandardsDbClient, DbLookupResult } from '../standards-db/client.js';
+import { dbInfoFor, detailFromDb, isFreshStandard, mergeSearchWithDb } from '../standards-db/db-detail.js';
+import { lightNormalizeCode } from '../standards-db/light-normalize.js';
 import type { SearchInput, SearchResult, StandardDetail, StandardProvider, StandardSource } from '../types.js';
 
 const STANDARD_SOURCES: readonly string[] = ['VSQI', 'TCVN_VN', 'TCVN_QT'];
@@ -106,21 +109,71 @@ function isStandardDetail(value: StandardDetail, requestedCode: string): boolean
     && typeof value.detailUrl === 'string';
 }
 
+export interface StandardsDbIntegration {
+  client: StandardsDbClient;
+  /** Freshness threshold in days (STANDARDS_STALE_DAYS). */
+  staleDays: number;
+}
+
+/**
+ * True when a DB lookup actually describes the requested code (lookup
+ * falls back to title trigram matching, which must never serve a
+ * detail for a different standard).
+ */
+function lookupMatchesCode(lookup: DbLookupResult, requestedCode: string): boolean {
+  const key = lightNormalizeCode(requestedCode);
+  if (!key?.normalized_code) return false;
+  const standard = lookup.standard;
+  const keyMatches =
+    standard.normalizedCode === key.normalized_code ||
+    (key.year === null && standard.baseKey === key.base_key);
+  // The cached-provider validator compares display codes with its own
+  // normalizeCode; a DB record whose display code differs in spacing
+  // would fail validation, so only serve when they agree.
+  return keyMatches && normalizeCode(standard.codeDisplay) === normalizeCode(requestedCode);
+}
+
+/**
+ * Cache ↔ DB order (STANDARDS_DB_ENABLED on):
+ * 1. In-memory response cache (CACHE_TTL_SECONDS, default 300s) — a hit
+ *    short-circuits everything below, including DB lookups.
+ * 2. Metadata DB (elib /internal/standards/lookup): search merges DB
+ *    editions into the live page; detail is served from DB only when
+ *    the record is `full` and verified within STANDARDS_STALE_DAYS.
+ * 3. Live upstream providers (VSQI + TCVN) — always consulted for
+ *    search, and for detail whenever the DB record is missing/stale.
+ * Live results are ingested back into the DB fire-and-forget (one
+ * ingest batch per results page / detail, grouped by source); ingest
+ * never blocks or fails a response. With the flag off, none of this
+ * runs and behavior is identical to the live-proxy-only service.
+ */
 export class CachedStandardProvider implements StandardProvider {
   constructor(
     private readonly provider: StandardProvider,
-    private readonly cache = new ResponseCache()
+    private readonly cache = new ResponseCache(),
+    private readonly standardsDb?: StandardsDbIntegration
   ) {}
 
   search(input: SearchInput): Promise<SearchResult> {
     const normalizedQuery = input.query.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en');
     const key = `search:${JSON.stringify([normalizedQuery, input.page])}`;
     return this.cache.getOrLoad(key, async () => {
-      const result = await this.provider.search(input);
+      const db = this.standardsDb;
+      const looksLikeCode = db !== undefined && lightNormalizeCode(input.query)?.normalized_code != null;
+      const [result, lookup] = await Promise.all([
+        this.provider.search(input),
+        looksLikeCode && db ? db.client.lookup(input.query) : Promise.resolve(null)
+      ]);
       if (!isSearchResult(result)) {
         throw new VsqiError('VSQI search response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
       }
-      return result;
+      const merged = mergeSearchWithDb(result, lookup);
+      if (db) {
+        // Fire-and-forget: ingest the LIVE items of this page (never
+        // DB-added ones) so elib can upsert + write search_log.
+        db.client.ingestSearch(result.data, input.query, merged.data.length > 0);
+      }
+      return merged;
     }, {
       // A partial result (some source failed) must not be cached: one
       // transient upstream outage would otherwise hide that source's
@@ -133,6 +186,21 @@ export class CachedStandardProvider implements StandardProvider {
     const normalizedCode = normalizeCode(code);
     const key = `detail:${normalizedCode}:${source ?? 'ALL'}`;
     return this.cache.getOrLoad(key, async () => {
+      const db = this.standardsDb;
+      let lookup: DbLookupResult | null = null;
+      if (db && source === undefined) {
+        lookup = await db.client.lookup(normalizedCode);
+        if (lookup && !lookupMatchesCode(lookup, normalizedCode)) lookup = null;
+        if (lookup && isFreshStandard(lookup.standard, db.staleDays)) {
+          const fromDb = detailFromDb(lookup, db.staleDays);
+          if (fromDb) {
+            if (!isStandardDetail(fromDb, normalizedCode)) {
+              throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
+            }
+            return fromDb;
+          }
+        }
+      }
       // Pass no second argument when no source was pinned, so providers
       // that inspect their arguments (and existing callers) see the
       // original one-argument call.
@@ -141,6 +209,12 @@ export class CachedStandardProvider implements StandardProvider {
         : await this.provider.getDetail(normalizedCode, source);
       if (result !== null && !isStandardDetail(result, normalizedCode)) {
         throw new VsqiError('VSQI detail response has an unexpected structure', 'INVALID_UPSTREAM_RESPONSE', 502);
+      }
+      if (result !== null && db) {
+        if (lookup) {
+          result.dbInfo = dbInfoFor(lookup, 'live', db.staleDays);
+        }
+        db.client.ingestDetail(result);
       }
       return result;
     });

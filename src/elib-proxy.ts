@@ -47,11 +47,53 @@ const HOP_BY_HOP = new Set([
 /** Slightly above elib's 200 MB file cap, to allow multipart field overhead. */
 const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
 
+/**
+ * Allowlist of elib API paths reachable through the browser proxy,
+ * enumerated from elib's actual routes (src/routes/*.ts):
+ *   POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
+ *   GET  /api/categories
+ *   POST /api/documents, GET /api/documents
+ *   GET  /api/documents/:id/files/:fileId/download
+ * Anything else (including elib's /internal/*, which is never under
+ * /api/ and must stay unreachable from browsers) is refused here
+ * instead of being forwarded.
+ */
+const ELIB_ALLOWLIST_EXACT = new Set([
+  'auth/login',
+  'auth/logout',
+  'auth/me',
+  'categories',
+  'documents'
+]);
+const ELIB_ALLOWLIST_DOWNLOAD = /^documents\/[^/]+\/files\/[^/]+\/download$/;
+
+/**
+ * Path-traversal guard for the wildcard segment. Checks both the raw
+ * (still percent-encoded) request path and the decoded wildcard:
+ * `..` segments, `%2e` (encoded dot) and `%2f` (encoded slash) are
+ * refused with 400 before anything is forwarded.
+ */
+function hasTraversal(rawPath: string, wildcard: string): boolean {
+  const rawLower = rawPath.toLowerCase();
+  if (rawLower.includes('%2e') || rawLower.includes('%2f') || rawLower.includes('%5c')) return true;
+  const segments = wildcard.split('/');
+  return segments.some(segment => segment === '..' || segment === '.' || segment.includes('\\'));
+}
+
+function isAllowlisted(wildcard: string): boolean {
+  return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);
+}
+
 function forwardRequestHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {};
   for (const [name, value] of Object.entries(headers)) {
     if (value === undefined) continue;
     if (HOP_BY_HOP.has(name.toLowerCase())) continue;
+    // A browser must never be able to inject the internal-API secret:
+    // elib's /internal/* guard trusts this header, so a client-sent
+    // copy is always dropped (our own server-side client sets it
+    // directly on elib-net calls, never through this proxy).
+    if (name.toLowerCase() === 'x-internal-token') continue;
     out[name] = value;
   }
   return out;
@@ -98,6 +140,24 @@ export function registerElibProxy(app: FastifyInstance, overrides: Partial<ElibP
     const wildcard = String((request.params as Record<string, string> | undefined)?.['*'] ?? '');
     const queryIndex = request.url.indexOf('?');
     const queryString = queryIndex >= 0 ? request.url.slice(queryIndex) : '';
+    const rawPath = queryIndex >= 0 ? request.url.slice(0, queryIndex) : request.url;
+    // Fastify's request.url is derived from the raw request line, but
+    // check the untouched raw URL too (some clients/proxies normalize
+    // dot segments in one place but not the other).
+    const rawUrl = String((request.raw as { url?: string }).url ?? '');
+    const rawUrlPath = rawUrl.split('?')[0] ?? '';
+
+    if (hasTraversal(rawPath, wildcard) || hasTraversal(rawUrlPath, wildcard)) {
+      return reply.code(400).send({
+        error: { code: 'ELIB_BAD_PATH', message: 'Đường dẫn không hợp lệ.' }
+      });
+    }
+    if (!isAllowlisted(wildcard)) {
+      return reply.code(404).send({
+        error: { code: 'ELIB_ROUTE_NOT_FOUND', message: 'Đường dẫn tài liệu không tồn tại.' }
+      });
+    }
+
     const target = `${opts.baseUrl}/api/${wildcard}${queryString}`;
 
     const method = request.method.toUpperCase();

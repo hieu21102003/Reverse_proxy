@@ -72,6 +72,8 @@ export function parseSearchHtml(
       ...(parseYear(code) ? { year: parseYear(code) } : {}),
       status,
       ...(detailUrl ? { detailUrl } : {}),
+      // VSQI search rows carry no ICS codes; detail pages do.
+      ics: [],
       source: 'VSQI'
     });
   });

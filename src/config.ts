@@ -69,7 +69,25 @@ const envSchema = z.object({
   /** When false, /api/elib/* returns 503 and the Tài liệu view shows a disabled state. */
   ELIB_ENABLED: z.enum(['true', 'false']).default('true').transform(value => value === 'true'),
   /** Generous proxy timeout for elib uploads/downloads (not the 10s VSQI timeout). */
-  ELIB_TIMEOUT_MS: z.coerce.number().int().min(5000).max(3600000).default(300000)
+  ELIB_TIMEOUT_MS: z.coerce.number().int().min(5000).max(3600000).default(300000),
+  /**
+   * Standards metadata DB (Bước 1, Phase 3): when enabled, search/detail
+   * also consult elib's /internal/standards/* API (see
+   * src/standards-db/client.ts). Default OFF — behavior is then identical
+   * to the live-proxy-only service. Requires STANDARDS_INTERNAL_TOKEN
+   * (shared secret with elib; elib answers 503 without its own copy).
+   */
+  STANDARDS_DB_ENABLED: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
+  /** Shared secret for elib /internal/* calls. Never logged. Empty = unset. */
+  STANDARDS_INTERNAL_TOKEN: z.string().trim().default('').transform(value => value.length > 0 ? value : null),
+  /** Short timeout for internal DB calls — they must never slow search down. */
+  STANDARDS_DB_TIMEOUT_MS: z.coerce.number().int().min(100).max(30000).default(2000),
+  /**
+   * Freshness threshold (days) for serving detail from the metadata DB:
+   * a `full` record verified within this window is served from DB;
+   * older records are re-fetched live (and re-ingested). 0 = never fresh.
+   */
+  STANDARDS_STALE_DAYS: z.coerce.number().int().min(0).max(3650).default(7)
 });
 
 export const config = envSchema.parse(process.env);

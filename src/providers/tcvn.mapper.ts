@@ -158,6 +158,7 @@ export function mapTcvnSearchRecord(
     ...(year !== undefined ? { year } : {}),
     ...(status ? { status } : {}),
     ...(detailUrl ? { detailUrl } : {}),
+    ics: tcvnIcs(record),
     source
   };
 }
@@ -343,6 +344,7 @@ export function mapTcvnDetail(
     replacedBy: str(data, 'rx'),
     replaces: str(data, 'rz'),
     detailUrl,
+    ics: tcvnIcs(data),
     source,
     attributes,
     relations: detailRelations(data, attributes),
