@@ -83,9 +83,10 @@ const envSchema = z.object({
   /** Short timeout for internal DB calls — they must never slow search down. */
   STANDARDS_DB_TIMEOUT_MS: z.coerce.number().int().min(100).max(30000).default(2000),
   /**
-   * Freshness threshold (days) for serving detail from the metadata DB:
-   * a `full` record verified within this window is served from DB;
-   * older records are re-fetched live (and re-ingested). 0 = never fresh.
+   * Freshness threshold (days) for the stale-data warning on
+   * DB-fallback details: a record verified longer ago than this is
+   * flagged `stale` in dbInfo. (DB-first serving was removed
+   * 2026-11-23; this no longer gates serving.) 0 = always stale.
    */
   STANDARDS_STALE_DAYS: z.coerce.number().int().min(0).max(3650).default(7)
 });

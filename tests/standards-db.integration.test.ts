@@ -5,10 +5,15 @@ import { StandardsDbClient, type DbLookupResult } from '../src/standards-db/clie
 import type { StandardDetail, StandardProvider } from '../src/types.js';
 
 /**
- * Standards metadata DB integration (Phase 3) against a stub elib
- * internal API. No live elib/PostgreSQL exists in this sandbox — the
- * stub implements the exact contract of elib's
- * src/routes/internal-standards.ts (token guard, lookup/ingest shapes).
+ * Standards metadata DB integration against a stub elib internal API.
+ * No live elib/PostgreSQL exists in this sandbox — the stub implements
+ * the shared contract (src/standards-db/contract.ts, mirrored from
+ * elib): token guard, multi-source ingest (ONE request per page),
+ * lookup with editions-with-titles + relations + replaces/replacedBy.
+ * Stub payloads are validated against the contract schemas in
+ * tests/standards-db.contract.test.ts; the real elib+Postgres run is
+ * tests/standards-db.live.test.ts (gated, see
+ * docs/standards-db-live-test.md).
  */
 
 const TOKEN = 'test-internal-token';
@@ -59,8 +64,11 @@ function startStubInternal(): Promise<StubInternal> {
         return send(200, lookupFn(url.searchParams.get('q') || ''));
       }
       if (req.method === 'POST' && url.pathname === '/internal/standards/ingest') {
-        const items = Array.isArray(body?.items) ? body.items : [];
-        const respond = () => send(200, { ok: true, stored: items.length, skipped: 0 });
+        const groups = Array.isArray(body?.sources) ? body.sources as Array<{ items?: unknown[] }> : [];
+        const stored = body?.kind === 'detail'
+          ? 1
+          : groups.reduce((sum, group) => sum + (group.items?.length ?? 0), 0);
+        const respond = () => send(200, { ok: true, stored, skipped: 0 });
         if (ingestDelayMs > 0) setTimeout(respond, ingestDelayMs);
         else respond();
         return;
@@ -110,21 +118,35 @@ function lookupPayload(overrides: Partial<DbLookupResult['standard']> = {}): unk
     updatedAt: now,
     ...overrides
   };
+  const edition = (s: typeof standard, id: string) => ({
+    id,
+    normalizedCode: s.normalizedCode,
+    baseKey: s.baseKey,
+    codeDisplay: s.codeDisplay,
+    year: s.year,
+    status: s.status,
+    titleVi: s.titleVi,
+    titleEn: s.titleEn,
+    isAmendment: false,
+    needsReview: false,
+    detailLevel: s.detailLevel,
+    lastVerifiedAt: s.lastVerifiedAt
+  });
   return {
     found: true,
     standard,
-    editions: [{
-      id: standard.id,
-      normalizedCode: standard.normalizedCode,
-      baseKey: standard.baseKey,
-      codeDisplay: standard.codeDisplay,
-      year: standard.year,
-      status: standard.status,
-      isAmendment: false,
-      needsReview: false,
-      detailLevel: standard.detailLevel,
-      lastVerifiedAt: standard.lastVerifiedAt
-    }],
+    editions: [
+      edition(standard, standard.id),
+      edition({
+        ...standard,
+        normalizedCode: 'TCVN9143:2012',
+        codeDisplay: 'TCVN 9143:2012',
+        year: 2012,
+        status: 'Withdrawn',
+        titleVi: 'Công trình thủy lợi. Tính toán đường viền thấm (DB 2012)',
+        titleEn: 'Hydraulic structures (DB 2012)'
+      }, 'std-0')
+    ],
     sources: [{ source: 'TCVN_VN', detailUrl: 'http://tracuu.tcvn.vn/sdomain/front-api/vs-standard/abc', fetchedAt: now }],
     relations: [{
       direction: 'outgoing',
@@ -134,9 +156,44 @@ function lookupPayload(overrides: Partial<DbLookupResult['standard']> = {}): unk
       toBaseKey: 'TCVN9143',
       toId: 'std-0',
       fromId: 'std-1',
-      source: 'TCVN_VN'
-    }]
+      source: 'TCVN_VN',
+      otherNormalizedCode: 'TCVN9143:2012',
+      otherCodeDisplay: 'TCVN 9143:2012'
+    }],
+    replaces: ['TCVN 9143:2012'],
+    replacedBy: null
   };
+}
+
+/** Lookup payload for the withdrawn 2012 edition (replacedBy 2022). */
+function lookupPayload2012(): unknown {
+  const now = new Date().toISOString();
+  const payload = lookupPayload({
+    id: 'std-0',
+    normalizedCode: 'TCVN9143:2012',
+    codeDisplay: 'TCVN 9143:2012',
+    year: 2012,
+    status: 'Withdrawn',
+    titleVi: 'Công trình thủy lợi. Tính toán đường viền thấm (DB 2012)',
+    titleEn: 'Hydraulic structures (DB 2012)',
+    issuedDate: '2012-12-27'
+  }) as Record<string, unknown>;
+  payload.relations = [{
+    direction: 'incoming',
+    type: 'replaces',
+    toCodeRaw: 'TCVN 9143:2012',
+    toNorm: 'TCVN9143:2012',
+    toBaseKey: 'TCVN9143',
+    toId: 'std-0',
+    fromId: 'std-1',
+    source: 'TCVN_VN',
+    otherNormalizedCode: 'TCVN9143:2022',
+    otherCodeDisplay: 'TCVN 9143:2022'
+  }];
+  payload.replaces = ['14 TCN 58-88'];
+  payload.replacedBy = 'TCVN 9143:2022';
+  void now;
+  return payload;
 }
 
 function liveDetail(code: string): StandardDetail {
@@ -186,7 +243,7 @@ describe('standards metadata DB integration (stub elib internal API)', () => {
     return { stub, client, app };
   }
 
-  it('search: live item enriched from DB, live fields win; ingest fired per source', async () => {
+  it('search: live item enriched from DB, live fields win; ONE multi-source ingest request', async () => {
     const provider: StandardProvider = {
       search: async () => ({
         data: [
@@ -204,31 +261,39 @@ describe('standards metadata DB integration (stub elib internal API)', () => {
     const res = await a.inject({ method: 'GET', url: '/api/v1/standards/search?q=TCVN%209143&page=1' });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { data: Array<Record<string, unknown>> };
-    expect(body.data).toHaveLength(2);
-    const enriched = body.data[0] as Record<string, unknown>;
+    // Live 2022 enriched; the 2012 edition (no live counterpart) is
+    // added DB-only ahead of live items; live 5574 untouched.
+    expect(body.data).toHaveLength(3);
+    expect(body.data[0]?.code).toBe('TCVN 9143:2012');
+    expect(body.data[0]?.fromDb).toBe(true);
+    const enriched = body.data[1] as Record<string, unknown>;
+    expect(enriched.code).toBe('TCVN 9143:2022');
     expect(enriched.name).toBe('Tên live thắng'); // live wins
     expect(enriched.fromDb).toBe(true);
     expect(typeof enriched.lastVerifiedAt).toBe('string');
-    expect(body.data[1]?.fromDb).toBeUndefined();
+    expect(body.data[2]?.fromDb).toBeUndefined();
 
-    // lookup carried the token; ingest grouped by source (2 requests),
-    // with query + hadResult, items without `raw`.
+    // lookup carried the token; ingest is ONE multi-source request
+    // (exactly one search_log row elib-side), with query + hadResult,
+    // items without `raw`.
     const lookups = s.requests.filter(r => r.path === '/internal/standards/lookup');
     expect(lookups).toHaveLength(1);
     expect(lookups[0]?.token).toBe(TOKEN);
     await new Promise(resolve => setTimeout(resolve, 50));
     const ingests = s.requests.filter(r => r.path === '/internal/standards/ingest');
-    expect(ingests.map(r => r.body?.source).sort()).toEqual(['TCVN_VN', 'VSQI']);
-    for (const ingest of ingests) {
-      expect(ingest.body?.kind).toBe('search');
-      expect(ingest.body?.query).toBe('TCVN 9143');
-      expect(ingest.body?.hadResult).toBe(true);
-      const items = ingest.body?.items as Array<Record<string, unknown>>;
-      expect(items.every(item => !('raw' in item))).toBe(true);
+    expect(ingests).toHaveLength(1);
+    const ingest = ingests[0] as RecordedRequest;
+    expect(ingest.body?.kind).toBe('search');
+    expect(ingest.body?.query).toBe('TCVN 9143');
+    expect(ingest.body?.hadResult).toBe(true);
+    const groups = ingest.body?.sources as Array<{ source: string; items: Array<Record<string, unknown>> }>;
+    expect(groups.map(group => group.source).sort()).toEqual(['TCVN_VN', 'VSQI']);
+    for (const group of groups) {
+      expect(group.items.every(item => !('raw' in item))).toBe(true);
     }
   });
 
-  it('search: DB-only top standard is added when live has no matching key', async () => {
+  it('search: EVERY DB edition without a live counterpart is added DB-only', async () => {
     const provider: StandardProvider = {
       search: async () => ({
         data: [{ code: 'TCVN 5574:2018', name: 'Kết cấu bê tông', year: 2018, ics: [], source: 'VSQI' as const }],
@@ -241,13 +306,18 @@ describe('standards metadata DB integration (stub elib internal API)', () => {
     s.setLookup(() => lookupPayload());
     const res = await a.inject({ method: 'GET', url: '/api/v1/standards/search?q=TCVN%209143&page=1' });
     const body = res.json() as { data: Array<Record<string, unknown>> };
-    expect(body.data).toHaveLength(2);
+    expect(body.data).toHaveLength(3);
     expect(body.data[0]?.code).toBe('TCVN 9143:2022');
     expect(body.data[0]?.fromDb).toBe(true);
     expect(body.data[0]?.name).toContain('(DB)');
+    expect(body.data[1]?.code).toBe('TCVN 9143:2012');
+    expect(body.data[1]?.fromDb).toBe(true);
+    expect(body.data[1]?.name).toContain('2012');
+    expect(body.data[2]?.code).toBe('TCVN 5574:2018');
+    expect(body.data[2]?.fromDb).toBeUndefined();
   });
 
-  it('detail: fresh full DB record is served from DB without calling live provider', async () => {
+  it('detail: LIVE first — fresh DB record does NOT shadow a live answer; live detail is ingested', async () => {
     let detailCalls = 0;
     const provider: StandardProvider = {
       search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
@@ -258,32 +328,10 @@ describe('standards metadata DB integration (stub elib internal API)', () => {
     const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
     expect(res.statusCode).toBe(200);
     const data = (res.json() as { data: StandardDetail }).data;
-    expect(detailCalls).toBe(0);
-    expect(data.dbInfo?.servedFrom).toBe('db');
-    expect(data.dbInfo?.stale).toBe(false);
-    expect(data.name).toContain('(DB)');
-    expect(data.replaces).toBe('TCVN 9143:2012');
-    expect(data.ics).toEqual(['93.160']);
-    expect(data.attributes.some(attr => attr.label === 'Mã ICS')).toBe(true);
-  });
-
-  it('detail: stale DB record falls back to live, marks stale, and ingests the live detail', async () => {
-    let detailCalls = 0;
-    const provider: StandardProvider = {
-      search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
-      getDetail: async (code) => { detailCalls += 1; return liveDetail(code); }
-    };
-    const { stub: s, app: a } = await makeApp(provider);
-    const stale = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    s.setLookup(() => lookupPayload({ lastVerifiedAt: stale }));
-    const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
-    expect(res.statusCode).toBe(200);
-    const data = (res.json() as { data: StandardDetail }).data;
-    expect(detailCalls).toBe(1);
+    expect(detailCalls).toBe(1); // live consulted first
     expect(data.name).toBe('Tên live');
-    expect(data.dbInfo?.servedFrom).toBe('live');
-    expect(data.dbInfo?.stale).toBe(true);
-    expect(data.dbInfo?.lastVerifiedAt).toBe(stale);
+    expect(data.dbInfo).toBeUndefined(); // no DB lookup on the happy path
+    expect(s.requests.filter(r => r.path === '/internal/standards/lookup')).toHaveLength(0);
     await new Promise(resolve => setTimeout(resolve, 50));
     const ingests = s.requests.filter(r => r.path === '/internal/standards/ingest');
     expect(ingests).toHaveLength(1);
@@ -293,18 +341,62 @@ describe('standards metadata DB integration (stub elib internal API)', () => {
     expect('raw' in detail).toBe(false);
   });
 
-  it('detail: DB miss serves live without dbInfo and still ingests', async () => {
+  it('detail: live not-found falls back to DB — TCVN 9143:2012 shows Withdrawn + replacedBy 2022', async () => {
     const provider: StandardProvider = {
       search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
-      getDetail: async (code) => liveDetail(code)
+      getDetail: async () => null // upstream has no such standard
+    };
+    const { stub: s, app: a } = await makeApp(provider);
+    s.setLookup(() => lookupPayload2012());
+    const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2012' });
+    expect(res.statusCode).toBe(200);
+    const data = (res.json() as { data: StandardDetail }).data;
+    expect(data.status).toBe('Withdrawn');
+    expect(data.replacedBy).toBe('TCVN 9143:2022');
+    expect(data.replaces).toBe('14 TCN 58-88');
+    expect(data.dbInfo?.servedFrom).toBe('db');
+    expect(data.dbInfo?.lastVerifiedAt).toBeTruthy();
+    expect(data.ics).toEqual(['93.160']);
+    expect(data.attributes.some(attr => attr.label === 'Mã ICS')).toBe(true);
+    // No ingest: nothing live was fetched.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(s.requests.filter(r => r.path === '/internal/standards/ingest')).toHaveLength(0);
+  });
+
+  it('detail: live upstream ERROR falls back to DB; without DB hit the original error surfaces', async () => {
+    const provider: StandardProvider = {
+      search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
+      getDetail: async () => { throw new Error('upstream down'); }
+    };
+    const { stub: s, app: a } = await makeApp(provider);
+    s.setLookup(() => lookupPayload());
+    const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
+    expect(res.statusCode).toBe(200);
+    const data = (res.json() as { data: StandardDetail }).data;
+    expect(data.dbInfo?.servedFrom).toBe('db');
+    expect(data.replaces).toBe('TCVN 9143:2012');
+  });
+
+  it('detail: live upstream ERROR + DB miss surfaces the original 502', async () => {
+    const provider: StandardProvider = {
+      search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
+      getDetail: async () => { throw new Error('upstream down'); }
     };
     const { stub: s, app: a } = await makeApp(provider);
     s.setLookup(() => ({ found: false }));
     const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
-    const data = (res.json() as { data: StandardDetail }).data;
-    expect(data.dbInfo).toBeUndefined();
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(s.requests.filter(r => r.path === '/internal/standards/ingest')).toHaveLength(1);
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('detail: live not-found + DB miss stays 404', async () => {
+    const provider: StandardProvider = {
+      search: async () => ({ data: [], pagination: { currentPage: 1 }, source: 'MULTI' as const }),
+      getDetail: async () => null
+    };
+    const { stub: s, app: a } = await makeApp(provider);
+    s.setLookup(() => ({ found: false }));
+    const res = await a.inject({ method: 'GET', url: '/api/v1/standards/TCVN%209143%3A2022' });
+    expect(res.statusCode).toBe(404);
   });
 
   it('ingest never blocks the search response (slow ingest endpoint)', async () => {

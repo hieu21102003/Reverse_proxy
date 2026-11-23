@@ -1,24 +1,44 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 import type { Standard, StandardDetail, StandardSource } from '../types.js';
+import {
+  IngestRequestSchema,
+  LookupResponseSchema,
+  MAX_ITEMS_PER_INGEST,
+  type IngestRequest,
+  type LookupEdition,
+  type LookupRelation,
+  type LookupSource,
+  type LookupStandard,
+  type Detail as ContractDetail,
+  type SearchItem as ContractSearchItem
+} from './contract.js';
 
 /**
  * Client for elib's internal standards-metadata API
  * (POST /internal/standards/ingest, GET /internal/standards/lookup).
  *
- * Contract (elib src/routes/internal-standards.ts):
+ * Contract (shared zod schemas in ./contract.ts — elib is the source
+ * of truth; contract tests in both repos validate the same JSON
+ * fixture so drift fails loudly):
  * - every call needs the X-Internal-Token shared secret; elib answers
  *   503 when its own token env is missing, 401 on mismatch;
- * - ingest body: { kind: 'search'|'detail', source, items?|detail?,
- *   query?, hadResult? } — ONE source per request, max 100 items, 2 MB;
- *   `raw` is stripped by elib's zod schema and never stored (we never
- *   send it either);
- * - search_log is written by elib ONLY on kind='search' ingest, with
- *   hadResult from us;
+ * - search ingest uses the multi-source shape { kind: 'search',
+ *   sources: [{ source, items }, ...], query, hadResult } — ONE
+ *   request per results page, exactly ONE search_log row per search;
+ *   detail ingest stays single-source { kind: 'detail', source,
+ *   detail }; `raw` is stripped by elib's zod schema and never stored
+ *   (we never send it either);
  * - lookup returns { found: false } or { found: true, standard,
- *   editions[], sources[], relations[] } — NOTE: the stored snapshot
- *   payload (attributes/relations as ingested) is NOT exposed; only the
- *   standard fields, edition summaries and relation edges are.
+ *   editions[] (with titles), sources[], relations[] (with
+ *   otherNormalizedCode/otherCodeDisplay), replaces[], replacedBy }.
+ *   The stored snapshot payload (ingested attributes verbatim) is NOT
+ *   exposed; DB-served details synthesize attributes from the
+ *   standard fields (see db-detail.ts).
+ * - request bodies are validated against IngestRequestSchema before
+ *   sending and lookup responses against LookupResponseSchema, so a
+ *   contract drift on either side is caught here (and in tests)
+ *   instead of silently corrupting the DB.
  *
  * Failure policy: the metadata DB is an accelerator, never a
  * dependency. Every error is swallowed (logged once per breaker trip);
@@ -27,66 +47,20 @@ import type { Standard, StandardDetail, StandardSource } from '../types.js';
  * cannot add latency to every search.
  */
 
-export interface DbStandard {
-  id: string;
-  org: string | null;
-  number: string | null;
-  part: string | null;
-  year: number | null;
-  amendment: string | null;
-  suffix: string | null;
-  normalizedCode: string;
-  baseKey: string;
-  codeDisplay: string;
-  titleVi: string | null;
-  titleEn: string | null;
-  status: string;
-  issuedDate: string | null;
-  effectiveDate: string | null;
-  ics: string[] | null;
-  detailLevel: 'stub' | 'summary' | 'full' | 'manual';
-  parseConfidence: number | null;
-  isAmendment: boolean;
-  needsReview: boolean;
-  lastVerifiedAt: string | null;
-  updatedAt: string;
-}
-
-export interface DbEdition {
-  id: string;
-  normalizedCode: string;
-  baseKey: string;
-  codeDisplay: string;
-  year: number | null;
-  status: string;
-  isAmendment: boolean;
-  needsReview: boolean;
-  detailLevel: 'stub' | 'summary' | 'full' | 'manual';
-  lastVerifiedAt: string | null;
-}
-
-export interface DbSourceSnapshot {
-  source: string;
-  detailUrl: string | null;
-  fetchedAt: string;
-}
-
-export interface DbRelation {
-  direction: 'outgoing' | 'incoming';
-  type: string;
-  toCodeRaw: string;
-  toNorm: string;
-  toBaseKey: string | null;
-  toId: string | null;
-  fromId: string;
-  source: string | null;
-}
+export type DbStandard = LookupStandard;
+export type DbEdition = LookupEdition;
+export type DbSourceSnapshot = LookupSource;
+export type DbRelation = LookupRelation;
 
 export interface DbLookupResult {
   standard: DbStandard;
   editions: DbEdition[];
   sources: DbSourceSnapshot[];
   relations: DbRelation[];
+  /** Codes this standard replaces (outgoing 'replaces' edges). */
+  replaces: string[];
+  /** Code of the standard that replaces this one, or null. */
+  replacedBy: string | null;
 }
 
 export interface StandardsDbClientOptions {
@@ -103,11 +77,10 @@ export interface StandardsDbClientOptions {
 
 const DEFAULT_FAILURE_THRESHOLD = 5;
 const DEFAULT_COOLDOWN_MS = 60_000;
-const MAX_ITEMS_PER_INGEST = 100;
 const MAX_ATTRIBUTES = 500;
 const MAX_RELATIONS = 500;
 
-function searchItemPayload(item: Standard): Record<string, unknown> {
+function searchItemPayload(item: Standard): ContractSearchItem {
   return {
     code: item.code,
     name: item.name,
@@ -119,7 +92,7 @@ function searchItemPayload(item: Standard): Record<string, unknown> {
   };
 }
 
-function detailPayload(detail: StandardDetail): Record<string, unknown> {
+function detailPayload(detail: StandardDetail): ContractDetail {
   // Whitelist exactly what elib's detailSchema accepts. `raw` is never
   // sent (elib would strip it anyway); dbInfo is our own annotation.
   return {
@@ -218,19 +191,20 @@ export class StandardsDbClient {
     });
     if (!response) return null;
     try {
-      const body = (await response.json()) as {
-        found?: boolean;
-        standard?: DbStandard;
-        editions?: DbEdition[];
-        sources?: DbSourceSnapshot[];
-        relations?: DbRelation[];
-      };
-      if (!body.found || !body.standard) return null;
+      const parsed = LookupResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        // Contract drift: treat like a failed call (breaker counts it).
+        this.recordFailure('lookup response contract');
+        return null;
+      }
+      if (!parsed.data.found) return null;
       return {
-        standard: body.standard,
-        editions: body.editions ?? [],
-        sources: body.sources ?? [],
-        relations: body.relations ?? []
+        standard: parsed.data.standard,
+        editions: parsed.data.editions,
+        sources: parsed.data.sources,
+        relations: parsed.data.relations,
+        replaces: parsed.data.replaces,
+        replacedBy: parsed.data.replacedBy
       };
     } catch {
       this.recordFailure('lookup response parse');
@@ -238,20 +212,27 @@ export class StandardsDbClient {
     }
   }
 
-  private postIngest(payload: Record<string, unknown>): void {
-    // Fire-and-forget: never awaited by callers, errors only feed the
-    // breaker. The floating promise is intentional.
+  private postIngest(payload: IngestRequest): void {
+    // Validate against the shared contract before sending: a drifted
+    // body is dropped (and counted as a failure) instead of letting
+    // elib 400 it. Fire-and-forget: never awaited by callers.
+    const parsed = IngestRequestSchema.safeParse(payload);
+    if (!parsed.success) {
+      this.recordFailure('ingest request contract');
+      return;
+    }
     void this.call('/internal/standards/ingest', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(parsed.data)
     });
   }
 
   /**
-   * Ingest one results page. Elib accepts ONE source per request, so
-   * items are grouped by source (at most one request per source per
-   * page). hadResult/query ride along so elib can write search_log.
+   * Ingest one results page as ONE multi-source request (elib writes
+   * exactly one search_log row for it). Items are grouped by source;
+   * an empty page still sends one request with no groups so the
+   * search is logged with hadResult=false.
    */
   ingestSearch(items: Standard[], query: string, hadResult: boolean): void {
     if (this.token === null || this.breakerOpen) return;
@@ -261,21 +242,15 @@ export class StandardsDbClient {
       group.push(item);
       bySource.set(item.source, group);
     }
-    if (bySource.size === 0) {
-      // No items (e.g. a search with zero results): still record the
-      // search_log row via an empty ingest under a neutral source.
-      this.postIngest({ kind: 'search', source: 'VSQI', items: [], query, hadResult });
-      return;
-    }
-    for (const [source, group] of bySource) {
-      this.postIngest({
-        kind: 'search',
+    this.postIngest({
+      kind: 'search',
+      sources: [...bySource].map(([source, group]) => ({
         source,
-        items: group.slice(0, MAX_ITEMS_PER_INGEST).map(searchItemPayload),
-        query,
-        hadResult
-      });
-    }
+        items: group.slice(0, MAX_ITEMS_PER_INGEST).map(searchItemPayload)
+      })),
+      query,
+      hadResult
+    });
   }
 
   /** Ingest one live detail (fire-and-forget). */

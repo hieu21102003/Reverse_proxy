@@ -17,13 +17,14 @@ import { lightNormalizeCode } from './light-normalize.js';
  * merging DB hits into live search results.
  *
  * Contract limits (elib lookup response): the stored snapshot payload
- * (ingested attributes/relations verbatim) is NOT exposed — only the
- * standard fields, edition summaries and relation edges. DB-served
+ * (ingested attributes verbatim) is NOT exposed — only the standard
+ * fields, edition summaries (with titles) and relation edges. DB-served
  * details therefore synthesize attributes from the standard fields
  * (same labels as the TCVN mapper) and map relation edges back to
- * DetailRelation. Incoming "replaces" edges cannot name the replacing
- * standard (the payload carries only its id), so `replacedBy` stays
- * null for DB-served details unless an outgoing edge provides it.
+ * DetailRelation. `replacedBy`/`replaces` come from elib's derivations
+ * over the single-direction relation graph (incoming 'replaces' edge =
+ * the standard that replaces this one); incoming edges also carry
+ * otherCodeDisplay/otherNormalizedCode when resolved.
  */
 
 const VALID_SOURCES: readonly string[] = ['VSQI', 'TCVN_VN', 'TCVN_QT'];
@@ -138,15 +139,19 @@ function relationTypeFor(edge: DbRelation): RelationType {
 function synthRelations(lookup: DbLookupResult): DetailRelation[] {
   return lookup.relations.map(edge => {
     const type = relationTypeFor(edge);
-    // Outgoing edges name their target (toCodeRaw). Incoming edges only
-    // carry the other record's id, so no code/text can be shown.
+    // Outgoing edges name their target (toCodeRaw). Incoming edges name
+    // the OTHER end via otherCodeDisplay/otherNormalizedCode when elib
+    // could resolve it; unresolved incoming edges stay codeless.
     const outgoing = edge.direction === 'outgoing';
+    const otherCode = outgoing
+      ? edge.toCodeRaw
+      : edge.otherCodeDisplay ?? edge.otherNormalizedCode;
     return {
       type,
       label: type === 'replaces' ? 'Thay thế cho' : type === 'replacedBy' ? 'Được thay thế bởi' : edge.type,
       labelEn: null,
-      text: outgoing ? edge.toCodeRaw : '',
-      code: outgoing ? edge.toCodeRaw : null,
+      text: otherCode ?? '',
+      code: otherCode ?? null,
       url: null,
       status: null,
       active: null,
@@ -172,9 +177,6 @@ export function detailFromDb(
   const source = sourceEntry.source as StandardSource;
   const detailUrl = sourceEntry.detailUrl ?? '';
   const relations = synthRelations(lookup);
-  const replacesEdge = lookup.relations.find(
-    edge => edge.direction === 'outgoing' && edge.type === 'replaces'
-  );
   return {
     code: standard.codeDisplay,
     name: standard.titleVi,
@@ -184,9 +186,10 @@ export function detailFromDb(
     issuedDate: standard.issuedDate,
     effectiveDate: standard.effectiveDate,
     issuingAgency: null,
-    // Incoming replaces edges do not carry the replacing code (see header).
-    replacedBy: null,
-    replaces: replacesEdge ? replacesEdge.toCodeRaw : null,
+    // Derived by elib from the single-direction relation graph:
+    // replacedBy = incoming 'replaces' edge, replaces = outgoing ones.
+    replacedBy: lookup.replacedBy,
+    replaces: lookup.replaces.length > 0 ? lookup.replaces.join(', ') : null,
     detailUrl,
     ics: standard.ics ?? [],
     source,
@@ -206,9 +209,9 @@ export function itemKey(item: Pick<Standard, 'code' | 'year'>): string | null {
  * Merge a DB lookup into a live search result (same page):
  * - live items whose normalized_code matches a DB edition gain
  *   lastVerifiedAt + fromDb (live fields win on conflict);
- * - the top DB standard is added as an item when no live item carries
- *   its key (other editions have no titles in the lookup payload, so
- *   they only enrich, never appear as standalone items);
+ * - EVERY DB edition with no live counterpart is added as its own
+ *   DB-only item (editions carry titles in the lookup payload),
+ *   newest first, ahead of the live items;
  * - pagination/sources/partialFailures are left untouched.
  */
 export function mergeSearchWithDb(live: SearchResult, lookup: DbLookupResult | null): SearchResult {
@@ -219,11 +222,11 @@ export function mergeSearchWithDb(live: SearchResult, lookup: DbLookupResult | n
   }
   byKey.set(lookup.standard.normalizedCode, lookup.standard.lastVerifiedAt);
 
-  let topPresent = false;
+  const presentKeys = new Set<string>();
   const data = live.data.map(item => {
     const key = itemKey(item);
     if (key === null || !byKey.has(key)) return item;
-    if (key === lookup.standard.normalizedCode) topPresent = true;
+    presentKeys.add(key);
     return {
       ...item,
       fromDb: true,
@@ -231,24 +234,61 @@ export function mergeSearchWithDb(live: SearchResult, lookup: DbLookupResult | n
     };
   });
 
-  if (!topPresent) {
-    const standard = lookup.standard;
-    const sourceEntry = lookup.sources.find(entry => VALID_SOURCES.includes(entry.source));
-    if (sourceEntry) {
-      const dbItem: Standard = {
-        code: standard.codeDisplay,
-        name: standard.titleVi ?? standard.titleEn ?? standard.codeDisplay,
-        ...(standard.titleEn ? { englishName: standard.titleEn } : {}),
-        ...(standard.year !== null ? { year: standard.year } : {}),
-        status: standard.status,
+  // DB-only items: the top standard first (it carries the fullest
+  // fields), then every other edition not already present live.
+  const sourceEntry = lookup.sources.find(entry => VALID_SOURCES.includes(entry.source));
+  if (sourceEntry) {
+    const dbOnly: Standard[] = [];
+    const seen = new Set<string>(presentKeys);
+    const pushEdition = (
+      normalizedCode: string,
+      codeDisplay: string,
+      titleVi: string | null,
+      titleEn: string | null,
+      year: number | null,
+      status: string,
+      lastVerifiedAt: string | null,
+      ics: string[]
+    ) => {
+      if (seen.has(normalizedCode)) return;
+      seen.add(normalizedCode);
+      dbOnly.push({
+        code: codeDisplay,
+        name: titleVi ?? titleEn ?? codeDisplay,
+        ...(titleEn ? { englishName: titleEn } : {}),
+        ...(year !== null ? { year } : {}),
+        status,
         ...(sourceEntry.detailUrl ? { detailUrl: sourceEntry.detailUrl } : {}),
-        ics: standard.ics ?? [],
+        ics,
         source: sourceEntry.source as StandardSource,
         fromDb: true,
-        ...(standard.lastVerifiedAt ? { lastVerifiedAt: standard.lastVerifiedAt } : {})
-      };
-      data.unshift(dbItem);
+        ...(lastVerifiedAt ? { lastVerifiedAt } : {})
+      });
+    };
+    const standard = lookup.standard;
+    pushEdition(
+      standard.normalizedCode,
+      standard.codeDisplay,
+      standard.titleVi,
+      standard.titleEn,
+      standard.year,
+      standard.status,
+      standard.lastVerifiedAt,
+      standard.ics ?? []
+    );
+    for (const edition of lookup.editions) {
+      pushEdition(
+        edition.normalizedCode,
+        edition.codeDisplay,
+        edition.titleVi,
+        edition.titleEn,
+        edition.year,
+        edition.status,
+        edition.lastVerifiedAt,
+        []
+      );
     }
+    data.unshift(...dbOnly);
   }
 
   return { ...live, data };
