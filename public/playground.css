@@ -2008,6 +2008,8 @@ h1 {
 .doc-viewer-end p { margin: 8px 0 12px; }
 .doc-viewer-end-contact { display: block; margin: 0 0 12px; color: var(--green); font-weight: 600; word-break: break-word; }
 .preview-preparing { font-size: 0.85rem; opacity: 0.75; align-self: center; }
+.download-contact-hint { font-size: 0.85rem; opacity: 0.75; align-self: center; }
+.download-contact-link { font-size: 0.85rem; color: var(--green); font-weight: 600; align-self: center; word-break: break-word; }
 .doc-card-clickable { cursor: pointer; }
 .visibility-control { display: inline-flex; align-items: center; font-size: 0.85rem; }
 .visibility-control label { display: inline-flex; align-items: center; gap: 6px; }

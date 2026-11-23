@@ -193,8 +193,10 @@ describe('lazy-load pdf.js + viewer markup', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    // Chế độ preview ẩn tải/in; đóng bằng Esc; giải phóng tài nguyên
-    expect(playgroundJs).toContain("$('#doc-viewer-download').hidden = mode === 'preview'");
+    // Tải/in theo quyền can_download/can_view_full (xem trước luôn ẩn); đóng bằng Esc; giải phóng tài nguyên
+    expect(playgroundJs).toContain('viewerToolbar(doc, mode)');
+    expect(playgroundJs).toContain("$('#doc-viewer-download').hidden = !toolbar.showDownload");
+    expect(playgroundJs).toContain("$('#doc-viewer-print').hidden = !toolbar.showPrint");
     expect(playgroundJs).toContain("event.key === 'Escape'");
     expect(playgroundJs).toContain('loadingTask.destroy()');
     // Hiển thị X/Y trang
