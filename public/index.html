@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=6">
-    <script src="/playground.js?v=6" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=7">
+    <script src="/playground.js?v=7" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -698,5 +698,28 @@
       </div>
     </footer>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Document viewer (Phase B): pdf.js lazy-loaded on open -->
+    <div class="doc-viewer" id="doc-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
+      <div class="doc-viewer-bar">
+        <span class="doc-viewer-title" id="doc-viewer-title"></span>
+        <span class="doc-viewer-pageinfo" id="doc-viewer-pageinfo"></span>
+        <span class="doc-viewer-actions">
+          <button class="button button-secondary button-small" id="doc-viewer-prev" type="button"><span data-i18n="viewerPrev">Trang trước</span></button>
+          <button class="button button-secondary button-small" id="doc-viewer-next" type="button"><span data-i18n="viewerNext">Trang sau</span></button>
+          <a class="button button-secondary button-small" id="doc-viewer-download" href="#" download><span data-i18n="viewerDownload">Tải xuống</span></a>
+          <a class="button button-secondary button-small" id="doc-viewer-print" href="#" target="_blank" rel="noreferrer"><span data-i18n="viewerPrint">In / mở bản gốc</span></a>
+          <button class="button button-primary button-small" id="doc-viewer-close" type="button"><span data-i18n="viewerClose">Đóng</span></button>
+        </span>
+      </div>
+      <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
+      <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
+      <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>
+      <div class="doc-viewer-end" id="doc-viewer-end" hidden>
+        <strong data-i18n="previewEndTitle">Đã hết phần xem trước</strong>
+        <p id="doc-viewer-end-text"></p>
+        <button class="button button-primary button-small" id="doc-viewer-end-login" type="button"><span data-i18n="login">Đăng nhập</span></button>
+      </div>
+    </div>
   </body>
 </html>

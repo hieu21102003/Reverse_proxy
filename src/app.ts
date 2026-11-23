@@ -170,6 +170,32 @@ export async function createApp(
     return reply.send(await readFile(new URL('../public/playground.js', import.meta.url)));
   });
 
+  // pdf.js (vendored locally, lazy-loaded by the document viewer only —
+  // not part of the initial page bundle). Worker is same-origin, which
+  // the helmet CSP allows via script-src 'self' fallback for worker-src.
+  const PDFJS_FILES: Record<string, string> = {
+    'pdf.min.mjs': 'text/javascript; charset=utf-8',
+    'pdf.worker.min.mjs': 'text/javascript; charset=utf-8'
+  };
+  app.get('/vendor/pdfjs/:file', async (request, reply) => {
+    const file = String((request.params as Record<string, string>)['file'] ?? '');
+    const type = PDFJS_FILES[file];
+    if (!type) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });
+    }
+    reply.type(type).header('Cache-Control', 'public, max-age=86400');
+    return reply.send(await readFile(new URL(`../public/vendor/pdfjs/${file}`, import.meta.url)));
+  });
+  app.get('/vendor/pdfjs/standard_fonts/:file', async (request, reply) => {
+    const file = String((request.params as Record<string, string>)['file'] ?? '');
+    // Font file names come from pdf.js itself; accept only plain .pfb names.
+    if (!/^[A-Za-z0-9._-]+\.pfb$/.test(file)) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });
+    }
+    reply.type('application/octet-stream').header('Cache-Control', 'public, max-age=86400');
+    return reply.send(await readFile(new URL(`../public/vendor/pdfjs/standard_fonts/${file}`, import.meta.url)));
+  });
+
   app.get('/api/v1/standards/search', {
     config: { rateLimit: { max: config.RATE_LIMIT_MAX, timeWindow: config.RATE_LIMIT_WINDOW } }
   }, async (request, reply) => {
