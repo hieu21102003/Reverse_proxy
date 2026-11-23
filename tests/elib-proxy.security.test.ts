@@ -199,3 +199,79 @@ describe('Elib proxy — preview/view routes (Phase B)', () => {
     expect(hits).toBe(before);
   });
 });
+
+describe('Elib proxy — PATCH documents/:id đổi visibility (Giai đoạn A2/B2)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let hits = 0;
+  let lastMethod = '';
+  let lastBody = '';
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastMethod = req.method || '';
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        lastBody = Buffer.concat(chunks).toString('utf8');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ document: { id: 'd1', visibility: 'public' } }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('PATCH /api/elib/documents/:id được cho qua, body JSON giữ nguyên', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/elib/documents/d1',
+      headers: { 'content-type': 'application/json', cookie: 'elib_session=good-token' },
+      payload: JSON.stringify({ visibility: 'public' })
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().document.visibility).toBe('public');
+    expect(lastMethod).toBe('PATCH');
+    expect(JSON.parse(lastBody)).toEqual({ visibility: 'public' });
+  });
+
+  it('documents/:id chỉ PATCH: GET/POST/PUT/DELETE bị chặn 404, không forward', async () => {
+    const before = hits;
+    for (const method of ['GET', 'POST', 'PUT', 'DELETE'] as const) {
+      const res = await app.inject({ method, url: '/api/elib/documents/d1' });
+      expect(res.statusCode, method).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('PATCH route khác vẫn bị chặn (preview, view, route lạ)', async () => {
+    const before = hits;
+    // Lưu ý: pattern download từ trước không giới hạn method (hành vi
+    // có sẵn, không đổi ở B2) nên không đưa vào danh sách này.
+    for (const url of [
+      '/api/elib/documents/d1/preview',
+      '/api/elib/documents/d1/view',
+      '/api/elib/documents/d1/extra',
+      '/api/elib/users/u1'
+    ]) {
+      const res = await app.inject({
+        method: 'PATCH',
+        url,
+        headers: { 'content-type': 'application/json' },
+        payload: JSON.stringify({ visibility: 'public' })
+      });
+      expect(res.statusCode, url).toBe(404);
+    }
+    expect(hits).toBe(before);
+  });
+});

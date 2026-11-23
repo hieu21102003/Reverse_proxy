@@ -2006,7 +2006,12 @@ h1 {
 .doc-viewer-img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; margin: 16px auto; }
 .doc-viewer-end { background: #fff; color: #173527; margin: 0 auto 20px; padding: 16px 20px; border-radius: 10px; text-align: center; max-width: 480px; }
 .doc-viewer-end p { margin: 8px 0 12px; }
+.doc-viewer-end-contact { display: block; margin: 0 0 12px; color: var(--green); font-weight: 600; word-break: break-word; }
 .preview-preparing { font-size: 0.85rem; opacity: 0.75; align-self: center; }
+.doc-card-clickable { cursor: pointer; }
+.visibility-control { display: inline-flex; align-items: center; font-size: 0.85rem; }
+.visibility-control label { display: inline-flex; align-items: center; gap: 6px; }
+.visibility-select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: inherit; }
 @media (max-width: 640px) {
   .doc-viewer-bar { padding: 8px 10px; }
   .doc-viewer-pages { padding: 8px; }

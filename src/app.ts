@@ -60,6 +60,8 @@ export async function createApp(
   provider?: StandardProvider,
   options?: {
     elib?: Partial<ElibProxyOptions>;
+    /** Test/override hook for the public UI config (contact channel). */
+    uiConfig?: { elibContactText?: string; elibContactUrl?: string };
     /** Test/override hook for the standards metadata DB integration.
      *  When omitted, the integration is built from config
      *  (STANDARDS_DB_ENABLED etc.) and is off by default. */
@@ -150,6 +152,14 @@ export async function createApp(
     status: 'ok',
     service: 'vsqi-proxy-api',
     timestamp: new Date().toISOString()
+  }));
+
+  // Public UI config for the Smart.Rail frontend: only non-sensitive
+  // display strings (the contact channel shown at the end of a
+  // limited-page document preview). No secrets, no internal URLs.
+  app.get('/api/v1/ui-config', async () => ({
+    elibContactText: options?.uiConfig?.elibContactText ?? config.ELIB_CONTACT_TEXT,
+    elibContactUrl: options?.uiConfig?.elibContactUrl ?? config.ELIB_CONTACT_URL
   }));
 
   // Elib document service proxy: /api/elib/* -> {ELIB_BASE_URL}/api/*
