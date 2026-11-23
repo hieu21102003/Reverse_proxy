@@ -432,6 +432,103 @@
     return 'previewLoadError';
   }
 
+  /**
+   * Kiểm tra cặp mật khẩu phía client (máy chủ vẫn là thẩm quyền):
+   * 8–128 ký tự, hai ô phải khớp. Trả khóa i18n hoặc null khi hợp lệ.
+   */
+  function passwordPairErrorKey(password, confirm) {
+    const value = typeof password === 'string' ? password : '';
+    if (value.length < 8) return 'regPasswordShort';
+    if (value.length > 128) return 'regPasswordLong';
+    if (value !== confirm) return 'regPasswordMismatch';
+    return null;
+  }
+
+  /**
+   * Kiểm tra form đăng ký phía client, khớp luật của elib A3
+   * (username 3–50 không khoảng trắng/@, email hợp lệ, họ tên bắt
+   * buộc). Trả khóa i18n của lỗi đầu tiên hoặc null.
+   */
+  function validateRegistration(input) {
+    const data = input && typeof input === 'object' ? input : {};
+    const username = typeof data.username === 'string' ? data.username.trim() : '';
+    if (username.length < 3 || username.length > 50 || /\s/.test(username) || username.includes('@')) {
+      return 'regUsernameInvalid';
+    }
+    const email = typeof data.email === 'string' ? data.email.trim() : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return 'regEmailInvalid';
+    const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
+    if (!fullName) return 'regFullNameRequired';
+    return passwordPairErrorKey(data.password, data.passwordConfirm);
+  }
+
+  /** Map mã lỗi ổn định của POST /auth/register sang khóa i18n. */
+  function registerErrorKey(status, code) {
+    if (code === 'USERNAME_TAKEN') return 'regUsernameTaken';
+    if (code === 'EMAIL_TAKEN') return 'regEmailTaken';
+    if (code === 'INVALID_USERNAME') return 'regUsernameInvalid';
+    if (code === 'PASSWORD_TOO_SHORT') return 'regPasswordShort';
+    if (code === 'PASSWORD_TOO_LONG') return 'regPasswordLong';
+    if (code === 'PASSWORD_TOO_COMMON') return 'regPasswordCommon';
+    if (code === 'PASSWORD_EQUALS_IDENTITY') return 'regPasswordIdentity';
+    if (code === 'PENDING_LIMIT_REACHED') return 'regPendingLimit';
+    if (code === 'RATE_LIMITED' || code === 'RATE_LIMIT_BANNED' || status === 429) return 'regRateLimited';
+    if (code === 'INVALID_INPUT' || status === 400) return 'regInvalidInput';
+    return 'regFailed';
+  }
+
+  /**
+   * Map lỗi đăng nhập: elib chỉ lộ trạng thái tài khoản SAU khi mật
+   * khẩu đúng (ACCOUNT_PENDING / ACCOUNT_NOT_ACTIVE); sai mật khẩu
+   * và khóa tạm đều là lỗi chung 401 (chống dò tài khoản).
+   */
+  function loginErrorKey(status, code) {
+    if (code === 'ACCOUNT_PENDING') return 'loginPending';
+    if (code === 'ACCOUNT_NOT_ACTIVE') return 'loginNotActive';
+    if (code === 'RATE_LIMITED' || code === 'RATE_LIMIT_BANNED' || status === 429) return 'loginRateLimited';
+    return 'elibLoginFailed';
+  }
+
+  /** Map lỗi đổi mật khẩu (sai mật khẩu hiện tại = 401). */
+  function changePasswordErrorKey(status, code) {
+    if (status === 401) return 'changeWrongCurrent';
+    if (code === 'PASSWORD_TOO_SHORT') return 'regPasswordShort';
+    if (code === 'PASSWORD_TOO_LONG') return 'regPasswordLong';
+    if (code === 'PASSWORD_TOO_COMMON') return 'regPasswordCommon';
+    if (code === 'PASSWORD_EQUALS_IDENTITY') return 'regPasswordIdentity';
+    if (status === 400) return 'regInvalidInput';
+    return 'changeFailed';
+  }
+
+  /** Map mã lỗi ổn định của API quản trị người dùng sang khóa i18n. */
+  function adminErrorKey(status, code) {
+    if (code === 'INVALID_USER_TYPE') return 'adminErrUserType';
+    if (code === 'NOT_PENDING') return 'adminErrNotPending';
+    if (code === 'INVALID_REJECT_REASON') return 'adminErrRejectReason';
+    if (code === 'INVALID_STATUS_TRANSITION') return 'adminErrStatusTransition';
+    if (code === 'CANNOT_MODIFY_SELF') return 'adminErrSelf';
+    if (code === 'LAST_ADMIN') return 'adminErrLastAdmin';
+    if (code === 'EDITOR_REQUIRES_INTERNAL') return 'adminErrEditorInternal';
+    if (code === 'NOT_FOUND' || status === 404) return 'adminErrNotFound';
+    if (status === 401) return 'adminErrLoginRequired';
+    if (status === 403) return 'adminErrForbidden';
+    if (status === 400) return 'regInvalidInput';
+    return 'adminErrFailed';
+  }
+
+  /** Trang quản trị người dùng chỉ dành cho admin. */
+  function isAdminUser(user) {
+    return Boolean(user && user.role === 'admin');
+  }
+
+  /**
+   * Các role được phép gán cho một người dùng: editor chỉ dành cho
+   * người nội bộ (user_type=internal) — khớp luật phía elib.
+   */
+  function roleOptionsForUser(user) {
+    return user && user.user_type === 'internal' ? ['viewer', 'editor', 'admin'] : ['viewer', 'admin'];
+  }
+
   /** Hết trang xem trước: chưa đăng nhập -> mời đăng nhập; đã đăng nhập -> liên hệ chủ tài liệu. */
   function endOfPreviewKind(user) {
     return user ? 'contact' : 'login';
@@ -504,7 +601,7 @@
     return { text: text || null, url: url || null };
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact };
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -573,7 +670,8 @@
         countUnavailable: 'Chưa tra cứu được số lượng', remove: 'Xóa', open: 'Mở', clearRecentDone: 'Đã xóa lịch sử xem',
         networkError: 'Không kết nối được tới máy chủ. Kiểm tra kết nối mạng rồi thử lại.', yearPrefix: 'Năm ban hành',
         documentsTitle: 'Tài liệu thư viện', documentsSubtitle: 'Tải tài liệu lên thư viện số của Viện (dịch vụ elib). Chỉ tài khoản admin hoặc editor mới được tải lên.',
-        elibLoginTitle: 'Đăng nhập thư viện', elibLoginNote: 'Dùng tài khoản do quản trị thư viện cấp. Hệ thống chưa có trang đăng ký.',
+        elibLoginTitle: 'Đăng nhập thư viện', elibLoginNote: 'Đăng nhập bằng email hoặc tên đăng nhập. Chưa có tài khoản? Đăng ký bên dưới, tài khoản sẽ chờ quản trị viên duyệt.',
+        elibIdentifier: 'Email hoặc tên đăng nhập',
         elibEmail: 'Email', elibPassword: 'Mật khẩu', elibLogout: 'Đăng xuất', elibSignedInAs: 'Đã đăng nhập: {email} (quyền: {role})',
         elibNoPermissionTitle: 'Bạn không có quyền upload', elibNoPermissionText: 'Chỉ tài khoản admin hoặc editor mới được tải tài liệu lên. Liên hệ quản trị thư viện nếu bạn cần quyền này.',
         elibUploadTitle: 'Tải tài liệu lên', elibFile: 'File tài liệu', elibFileHint: 'PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG/WEBP, TXT, DWG — tối đa 200 MB. Định dạng được kiểm tra theo nội dung file.',
@@ -612,6 +710,58 @@
         visibilityUpdated: 'Đã đổi mức hiển thị.', visibilityLoginRequired: 'Vui lòng đăng nhập để đổi mức hiển thị.',
         visibilityForbidden: 'Bạn không có quyền đổi mức hiển thị của tài liệu này.', visibilityInvalid: 'Mức hiển thị không hợp lệ.',
         visibilityNotFound: 'Không tìm thấy tài liệu.', visibilityFailed: 'Không đổi được mức hiển thị. Vui lòng thử lại sau.',
+        navAdminUsers: 'Quản trị người dùng',
+        elibShowRegister: 'Chưa có tài khoản? Đăng ký', elibShowLogin: 'Đã có tài khoản? Đăng nhập',
+        elibRegisterTitle: 'Đăng ký tài khoản', elibRegisterNote: 'Tài khoản mới cần được quản trị viên duyệt trước khi đăng nhập. Bạn sẽ được thông báo khi tài khoản được duyệt.',
+        elibRegister: 'Đăng ký', regUsername: 'Tên đăng nhập', regUsernameHint: '3–50 ký tự, không chứa khoảng trắng và ký tự @.',
+        regEmail: 'Email', regPassword: 'Mật khẩu', regPasswordHint: '8–128 ký tự, không dùng mật khẩu phổ biến.',
+        regPasswordConfirm: 'Nhập lại mật khẩu', regFullName: 'Họ tên thật', regDisplayName: 'Tên hiển thị', regOrganization: 'Đơn vị / công ty',
+        regSuccess: 'Đã gửi đăng ký, vui lòng chờ admin duyệt.',
+        regUsernameInvalid: 'Tên đăng nhập phải dài 3–50 ký tự, không chứa khoảng trắng và ký tự @.',
+        regEmailInvalid: 'Email không hợp lệ. Vui lòng kiểm tra lại.',
+        regFullNameRequired: 'Vui lòng nhập họ tên thật.',
+        regPasswordShort: 'Mật khẩu phải có ít nhất 8 ký tự.', regPasswordLong: 'Mật khẩu không được dài quá 128 ký tự.',
+        regPasswordMismatch: 'Hai mật khẩu không khớp. Vui lòng nhập lại.',
+        regPasswordCommon: 'Mật khẩu này quá phổ biến, vui lòng chọn mật khẩu khác khó đoán hơn.',
+        regPasswordIdentity: 'Mật khẩu không được trùng với tên đăng nhập hoặc email.',
+        regUsernameTaken: 'Tên đăng nhập đã được sử dụng. Vui lòng chọn tên khác.',
+        regEmailTaken: 'Email đã được sử dụng. Vui lòng dùng email khác.',
+        regPendingLimit: 'Số tài khoản đang chờ duyệt đã đạt giới hạn. Vui lòng thử lại sau.',
+        regRateLimited: 'Bạn đang thao tác quá nhanh. Vui lòng chờ một lát rồi thử lại.',
+        regInvalidInput: 'Dữ liệu đăng ký không hợp lệ. Vui lòng kiểm tra lại các trường.',
+        regFailed: 'Đăng ký không thành công. Vui lòng thử lại sau.',
+        loginPending: 'Tài khoản của bạn đang chờ quản trị viên duyệt. Vui lòng thử lại sau.',
+        loginNotActive: 'Tài khoản không thể đăng nhập. Vui lòng liên hệ quản trị viên.',
+        loginRateLimited: 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng chờ một lát rồi thử lại.',
+        changePasswordTitle: 'Đổi mật khẩu', changePasswordNote: 'Bạn đang dùng mật khẩu tạm do quản trị viên cấp. Vui lòng đặt mật khẩu mới trước khi tiếp tục sử dụng.',
+        changeCurrentPassword: 'Mật khẩu hiện tại', changeNewPassword: 'Mật khẩu mới', changePasswordSubmit: 'Đổi mật khẩu',
+        changeWrongCurrent: 'Mật khẩu hiện tại không đúng.', changeFailed: 'Không đổi được mật khẩu. Vui lòng thử lại sau.',
+        changeSuccess: 'Đã đổi mật khẩu thành công.',
+        adminUsersTitle: 'Quản trị người dùng', adminUsersSubtitle: 'Duyệt tài khoản đăng ký mới và quản lý người dùng thư viện (elib). Chỉ quản trị viên mới thấy mục này.',
+        adminPendingTitle: 'Tài khoản chờ duyệt', adminPendingEmptyTitle: 'Không có tài khoản nào đang chờ duyệt', adminPendingEmptyText: 'Tài khoản đăng ký mới sẽ xuất hiện tại đây để duyệt.',
+        adminManageTitle: 'Quản lý người dùng', adminStatusFilter: 'Trạng thái',
+        adminManageEmptyTitle: 'Không có người dùng nào ở trạng thái này', adminManageEmptyText: 'Thử chọn trạng thái khác.',
+        userStatusPending: 'Chờ duyệt', userStatusActive: 'Đang hoạt động', userStatusRejected: 'Đã từ chối', userStatusDisabled: 'Đã vô hiệu hóa',
+        adminApprove: 'Duyệt', adminReject: 'Từ chối', adminBulkReject: 'Từ chối các tài khoản đã chọn',
+        adminRejectReasonLabel: 'Lý do từ chối (nội bộ)', adminRejectReasonRequired: 'Vui lòng nhập lý do từ chối (nội bộ).',
+        adminUserTypeLabel: 'Loại người dùng', userTypeInternal: 'Nội bộ', userTypeExternal: 'Khách ngoài', userTypeUnassigned: 'Chưa gán',
+        adminSelectUserType: '— Chọn loại người dùng —', adminInternalEmailHint: 'Email thuộc tên miền công ty',
+        adminRegisteredAt: 'Đăng ký lúc', adminRoleLabel: 'Quyền', roleAdmin: 'Admin', roleEditor: 'Editor', roleViewer: 'Viewer',
+        adminDisable: 'Vô hiệu hóa', adminEnable: 'Kích hoạt lại', adminResetPassword: 'Đặt lại mật khẩu', adminUnlock: 'Mở khóa',
+        adminUpdated: 'Đã cập nhật người dùng.', adminApproved: 'Đã duyệt tài khoản.', adminRejected: 'Đã từ chối tài khoản.',
+        adminBulkRejected: 'Đã từ chối {n} tài khoản.', adminUnlocked: 'Đã mở khóa đăng nhập.',
+        tempPasswordTitle: 'Mật khẩu tạm', tempPasswordNote: 'Mật khẩu tạm này chỉ hiển thị một lần duy nhất. Hãy sao chép và gửi cho người dùng qua kênh an toàn; họ sẽ phải đổi mật khẩu khi đăng nhập.',
+        adminErrUserType: 'Phải chọn loại người dùng (nội bộ hoặc khách ngoài) khi duyệt.',
+        adminErrNotPending: 'Chỉ duyệt/từ chối được tài khoản đang chờ duyệt.',
+        adminErrRejectReason: 'Phải ghi lý do từ chối (nội bộ).',
+        adminErrStatusTransition: 'Không chuyển trạng thái như vậy được. Duyệt dùng nút Duyệt, từ chối dùng nút Từ chối.',
+        adminErrSelf: 'Không thể tự vô hiệu hóa hoặc thay đổi role của chính mình.',
+        adminErrLastAdmin: 'Không thể vô hiệu hóa hoặc hạ role của quản trị viên cuối cùng.',
+        adminErrEditorInternal: 'Chỉ gán role editor cho người dùng nội bộ.',
+        adminErrNotFound: 'Không tìm thấy người dùng.', adminErrLoginRequired: 'Vui lòng đăng nhập lại.',
+        adminErrForbidden: 'Chỉ quản trị viên mới thực hiện được thao tác này.', adminErrFailed: 'Thao tác không thành công. Vui lòng thử lại sau.',
+        adminLoadFailed: 'Không tải được danh sách người dùng. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
+        adminSelectUserFirst: 'Vui lòng chọn ít nhất một tài khoản.',
         previewNotFound: 'Không tìm thấy tài liệu hoặc bạn không có quyền xem.',
         previewRateLimited: 'Bạn đang xem quá nhanh. Vui lòng chờ một lát rồi thử lại.',
         previewLoadError: 'Không tải được bản xem trước. Vui lòng thử lại sau.',
@@ -676,7 +826,8 @@
         countUnavailable: 'Count unavailable', remove: 'Remove', open: 'Open', clearRecentDone: 'Viewing history cleared',
         networkError: 'Unable to reach the server. Check your network connection and retry.', yearPrefix: 'Year',
         documentsTitle: 'Library documents', documentsSubtitle: 'Upload documents to the Institute digital library (elib service). Only admin or editor accounts may upload.',
-        elibLoginTitle: 'Library sign-in', elibLoginNote: 'Use the account issued by the library administrator. There is no registration page yet.',
+        elibLoginTitle: 'Library sign-in', elibLoginNote: 'Sign in with your email or username. No account yet? Register below; an administrator must approve it first.',
+        elibIdentifier: 'Email or username',
         elibEmail: 'Email', elibPassword: 'Password', elibLogout: 'Sign out', elibSignedInAs: 'Signed in: {email} (role: {role})',
         elibNoPermissionTitle: 'You do not have upload permission', elibNoPermissionText: 'Only admin or editor accounts may upload documents. Contact the library administrator if you need this permission.',
         elibUploadTitle: 'Upload a document', elibFile: 'Document file', elibFileHint: 'PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, JPG/PNG/WEBP, TXT, DWG — up to 200 MB. The real format is checked from file content.',
@@ -715,6 +866,58 @@
         visibilityUpdated: 'Visibility updated.', visibilityLoginRequired: 'Please sign in to change visibility.',
         visibilityForbidden: 'You do not have permission to change this document\'s visibility.', visibilityInvalid: 'Invalid visibility value.',
         visibilityNotFound: 'Document not found.', visibilityFailed: 'Could not change visibility. Please try again later.',
+        navAdminUsers: 'User administration',
+        elibShowRegister: 'No account yet? Register', elibShowLogin: 'Already have an account? Sign in',
+        elibRegisterTitle: 'Register an account', elibRegisterNote: 'New accounts must be approved by an administrator before you can sign in. You will be notified once approved.',
+        elibRegister: 'Register', regUsername: 'Username', regUsernameHint: '3–50 characters, no spaces or @.',
+        regEmail: 'Email', regPassword: 'Password', regPasswordHint: '8–128 characters; do not use a common password.',
+        regPasswordConfirm: 'Confirm password', regFullName: 'Full name', regDisplayName: 'Display name', regOrganization: 'Organisation / company',
+        regSuccess: 'Registration submitted. Please wait for an administrator to approve it.',
+        regUsernameInvalid: 'Username must be 3–50 characters with no spaces or @.',
+        regEmailInvalid: 'Invalid email address. Please check it.',
+        regFullNameRequired: 'Please enter your full name.',
+        regPasswordShort: 'Password must be at least 8 characters.', regPasswordLong: 'Password must be at most 128 characters.',
+        regPasswordMismatch: 'The two passwords do not match. Please re-enter them.',
+        regPasswordCommon: 'This password is too common; please choose a harder-to-guess one.',
+        regPasswordIdentity: 'Password must not match your username or email.',
+        regUsernameTaken: 'This username is already taken. Please choose another.',
+        regEmailTaken: 'This email is already in use. Please use another email.',
+        regPendingLimit: 'The pending-approval limit has been reached. Please try again later.',
+        regRateLimited: 'You are doing this too quickly. Please wait a moment and try again.',
+        regInvalidInput: 'Invalid registration data. Please check the fields.',
+        regFailed: 'Registration failed. Please try again later.',
+        loginPending: 'Your account is awaiting administrator approval. Please try again later.',
+        loginNotActive: 'This account cannot sign in. Please contact an administrator.',
+        loginRateLimited: 'Too many sign-in attempts. Please wait a moment and try again.',
+        changePasswordTitle: 'Change password', changePasswordNote: 'You are using a temporary password issued by an administrator. Please set a new password before continuing.',
+        changeCurrentPassword: 'Current password', changeNewPassword: 'New password', changePasswordSubmit: 'Change password',
+        changeWrongCurrent: 'The current password is incorrect.', changeFailed: 'Could not change the password. Please try again later.',
+        changeSuccess: 'Password changed successfully.',
+        adminUsersTitle: 'User administration', adminUsersSubtitle: 'Approve new registrations and manage library users (elib). Only administrators see this section.',
+        adminPendingTitle: 'Accounts awaiting approval', adminPendingEmptyTitle: 'No accounts are awaiting approval', adminPendingEmptyText: 'New registrations will appear here for approval.',
+        adminManageTitle: 'Manage users', adminStatusFilter: 'Status',
+        adminManageEmptyTitle: 'No users with this status', adminManageEmptyText: 'Try a different status.',
+        userStatusPending: 'Pending', userStatusActive: 'Active', userStatusRejected: 'Rejected', userStatusDisabled: 'Disabled',
+        adminApprove: 'Approve', adminReject: 'Reject', adminBulkReject: 'Reject selected accounts',
+        adminRejectReasonLabel: 'Rejection reason (internal)', adminRejectReasonRequired: 'Please enter a rejection reason (internal).',
+        adminUserTypeLabel: 'User type', userTypeInternal: 'Internal', userTypeExternal: 'External', userTypeUnassigned: 'Unassigned',
+        adminSelectUserType: '— Select user type —', adminInternalEmailHint: 'Email belongs to a company domain',
+        adminRegisteredAt: 'Registered', adminRoleLabel: 'Role', roleAdmin: 'Admin', roleEditor: 'Editor', roleViewer: 'Viewer',
+        adminDisable: 'Disable', adminEnable: 'Re-enable', adminResetPassword: 'Reset password', adminUnlock: 'Unlock',
+        adminUpdated: 'User updated.', adminApproved: 'Account approved.', adminRejected: 'Account rejected.',
+        adminBulkRejected: 'Rejected {n} accounts.', adminUnlocked: 'Sign-in unlocked.',
+        tempPasswordTitle: 'Temporary password', tempPasswordNote: 'This temporary password is shown only once. Copy it and send it to the user over a secure channel; they must change it when signing in.',
+        adminErrUserType: 'You must choose a user type (internal or external) when approving.',
+        adminErrNotPending: 'Only pending accounts can be approved or rejected.',
+        adminErrRejectReason: 'A rejection reason (internal) is required.',
+        adminErrStatusTransition: 'That status change is not allowed. Use Approve to approve and Reject to reject.',
+        adminErrSelf: 'You cannot disable or change the role of your own account.',
+        adminErrLastAdmin: 'You cannot disable or demote the last administrator.',
+        adminErrEditorInternal: 'The editor role can only be assigned to internal users.',
+        adminErrNotFound: 'User not found.', adminErrLoginRequired: 'Please sign in again.',
+        adminErrForbidden: 'Only administrators can do this.', adminErrFailed: 'The action failed. Please try again later.',
+        adminLoadFailed: 'Could not load the user list. The document service (elib) may be under maintenance.',
+        adminSelectUserFirst: 'Please select at least one account.',
         previewNotFound: 'Document not found, or you do not have access to it.',
         previewRateLimited: 'You are viewing too quickly. Please wait a moment and try again.',
         previewLoadError: 'Could not load the preview. Please try again later.',
@@ -932,6 +1135,7 @@
       $('#mobile-menu')?.setAttribute('aria-expanded', 'false');
       if (name === 'library') renderLibrary();
       if (name === 'documents') void loadDocumentsView();
+      if (name === 'admin-users') void loadAdminUsersView();
       if (push) {
         const url = new URL(location.href);
         if (name === 'home') { url.search = ''; } else { url.searchParams.set('view', name); if (name !== 'search') { url.searchParams.delete('q'); url.searchParams.delete('page'); } if (name !== 'detail') { url.searchParams.delete('code'); url.searchParams.delete('source'); } }
@@ -2082,6 +2286,7 @@
       if (currentDetail && memory.detail) renderDetailResult(memory.detail);
       if (!$('#view-library').hidden) renderLibrary();
       if (!$('#view-documents').hidden) { renderElibUserBar(); renderElibSession(); }
+      if (!$('#view-admin-users').hidden) void loadAdminUsersView();
     }
 
     // ---- Tài liệu (elib via /api/elib/* proxy) ----
@@ -2141,6 +2346,8 @@
       userInfo.hidden = !loggedIn;
       if (loggedIn) userInfo.textContent = t('headerSignedInAs', { email: elibUser.email || '', role: elibUser.role || '' });
       uploadBtn.hidden = !(loggedIn && (elibUser.role === 'editor' || elibUser.role === 'admin'));
+      const adminNav = $('#nav-admin-users');
+      if (adminNav) adminNav.hidden = !(loggedIn && isAdminUser(elibUser));
       const loginNote = $('#header-login-note');
       if (loginNote) loginNote.hidden = loggedIn;
       // When elib is down/disabled, keep Đăng nhập visible (it opens the
@@ -2165,6 +2372,9 @@
       }
       renderHeaderAuth();
       renderElibUserBar();
+      // Admin: badge số tài khoản đang chờ duyệt trên menu.
+      if (elibAuthStatus === 'ok' && isAdminUser(elibUser)) void refreshPendingBadge();
+      else setPendingBadge(0);
       // Thẻ file render trước khi auth/me xong sẽ thiếu ô chọn visibility
       // (cần biết admin/chủ): tải lại mục trang chủ một lần khi đã biết user.
       if (homeRecentLoaded && !$('#view-home').hidden) void loadHomeRecent();
@@ -2235,6 +2445,8 @@
       setElibBanner('');
       $('#elib-loading').hidden = false;
       $('#elib-login-box').hidden = true;
+      $('#elib-register-box').hidden = true;
+      $('#elib-change-password-box').hidden = true;
       $('#elib-user-bar').hidden = true;
       $('#elib-no-permission').hidden = true;
       $('#elib-upload-form').hidden = true;
@@ -2243,6 +2455,12 @@
       $('#elib-loading').hidden = true;
       if (status === 'ok' && elibUser) {
         renderElibUserBar();
+        // Mật khẩu tạm: chỉ hiện màn đổi mật khẩu (server cũng chặn
+        // mọi API khác cho tới khi đổi xong).
+        if (elibUser.mustChangePassword) {
+          $('#elib-change-password-box').hidden = false;
+          return;
+        }
         if (elibUser.role === 'admin' || elibUser.role === 'editor') {
           $('#elib-upload-form').hidden = false;
           void loadElibCategories();
@@ -2655,17 +2873,18 @@
       const result = await elibFetchJson('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: $('#elib-email').value.trim(), password: $('#elib-password').value })
+        body: JSON.stringify({ identifier: $('#elib-email').value.trim(), password: $('#elib-password').value })
       });
       submit.disabled = false;
       if (result.status === 200) {
         $('#elib-password').value = '';
+        // mustChangePassword: loadDocumentsView sẽ hiện màn đổi mật khẩu.
         void loadDocumentsView();
         void loadHomeRecent();
         return;
       }
       errorBox.hidden = false;
-      errorBox.textContent = result.errorMessage || t('elibLoginFailed');
+      errorBox.textContent = t(loginErrorKey(result.status ?? 0, result.errorCode || null));
     });
     $('#elib-logout-btn').addEventListener('click', async () => {
       await elibFetchJson('/auth/logout', { method: 'POST' });
@@ -2746,6 +2965,326 @@
       }
     });
 
+    // ---- Đăng ký / đổi mật khẩu / quản trị người dùng (Giai đoạn B3) ----
+    function setPendingBadge(count) {
+      const badge = $('#nav-pending-count');
+      if (!badge) return;
+      badge.hidden = !(count > 0);
+      badge.textContent = String(count || 0);
+      const sectionCount = $('#admin-pending-count');
+      if (sectionCount) sectionCount.textContent = String(count || 0);
+    }
+
+    async function refreshPendingBadge() {
+      const result = await elibFetchJson('/admin/users?status=pending');
+      if (result.status === 200 && result.payload) setPendingBadge(result.payload.pendingCount ?? 0);
+    }
+
+    function adminUserMetaLine(user) {
+      const parts = [
+        user.username ? `@${user.username}` : '',
+        user.full_name || '',
+        user.organization || '',
+        user.email || '',
+        user.created_at ? `${t('adminRegisteredAt')}: ${formatDateTime(user.created_at)}` : ''
+      ].filter(Boolean);
+      return parts.join(' · ');
+    }
+
+    function makeAdminButton(labelKey, className, onClick) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = className;
+      btn.textContent = t(labelKey);
+      btn.addEventListener('click', onClick);
+      return btn;
+    }
+
+    async function adminAction(path, options, successKey) {
+      const result = await elibFetchJson(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+      if (result.status >= 200 && result.status < 300) {
+        if (successKey) showToast(t(successKey));
+        return result;
+      }
+      showToast(t(adminErrorKey(result.status ?? 0, result.errorCode || null)));
+      return null;
+    }
+
+    function renderPendingUser(user) {
+      const row = document.createElement('div');
+      row.className = 'admin-user-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'admin-pending-check';
+      checkbox.dataset.userId = user.id;
+      checkbox.setAttribute('aria-label', user.email || user.username || '');
+      const main = document.createElement('div');
+      main.className = 'lib-main';
+      const strong = document.createElement('strong');
+      strong.textContent = dash(user.full_name || user.display_name || user.username || user.email);
+      const small = document.createElement('small');
+      small.textContent = adminUserMetaLine(user);
+      main.append(strong, small);
+      if (user.email_domain_internal) {
+        const hint = document.createElement('span');
+        hint.className = 'badge badge-internal-hint';
+        hint.textContent = t('adminInternalEmailHint');
+        main.append(hint);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'admin-user-actions';
+      const typeSelect = document.createElement('select');
+      typeSelect.className = 'admin-user-type-select';
+      typeSelect.setAttribute('aria-label', t('adminUserTypeLabel'));
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = t('adminSelectUserType');
+      typeSelect.append(placeholder);
+      for (const value of ['internal', 'external']) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = t(value === 'internal' ? 'userTypeInternal' : 'userTypeExternal');
+        typeSelect.append(option);
+      }
+      const approveBtn = makeAdminButton('adminApprove', 'button button-terracotta button-small', async () => {
+        if (!typeSelect.value) { showToast(t('adminErrUserType')); return; }
+        const result = await adminAction(`/admin/users/${encodeURIComponent(user.id)}/approve`, {
+          body: JSON.stringify({ user_type: typeSelect.value })
+        }, 'adminApproved');
+        if (result) void loadAdminUsersView();
+      });
+      approveBtn.disabled = true;
+      typeSelect.addEventListener('change', () => { approveBtn.disabled = !typeSelect.value; });
+      const reasonInput = document.createElement('input');
+      reasonInput.type = 'text';
+      reasonInput.maxLength = 500;
+      reasonInput.className = 'admin-reject-reason-input';
+      reasonInput.placeholder = t('adminRejectReasonLabel');
+      reasonInput.setAttribute('aria-label', t('adminRejectReasonLabel'));
+      const rejectBtn = makeAdminButton('adminReject', 'button button-secondary button-small', async () => {
+        const reason = reasonInput.value.trim();
+        if (!reason) { showToast(t('adminRejectReasonRequired')); return; }
+        const result = await adminAction(`/admin/users/${encodeURIComponent(user.id)}/reject`, {
+          body: JSON.stringify({ reason })
+        }, 'adminRejected');
+        if (result) void loadAdminUsersView();
+      });
+      actions.append(typeSelect, approveBtn, reasonInput, rejectBtn);
+      row.append(checkbox, main, actions);
+      return row;
+    }
+
+    function renderManagedUser(user) {
+      const row = document.createElement('div');
+      row.className = 'admin-user-row';
+      const main = document.createElement('div');
+      main.className = 'lib-main';
+      const strong = document.createElement('strong');
+      strong.textContent = dash(user.full_name || user.display_name || user.username || user.email);
+      const small = document.createElement('small');
+      small.textContent = adminUserMetaLine(user);
+      main.append(strong, small);
+      const actions = document.createElement('div');
+      actions.className = 'admin-user-actions';
+      const patchUser = async (patch) => {
+        const result = await adminAction(`/admin/users/${encodeURIComponent(user.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch)
+        }, 'adminUpdated');
+        if (result) void loadAdminUsersView();
+        return result;
+      };
+      const roleSelect = document.createElement('select');
+      roleSelect.setAttribute('aria-label', t('adminRoleLabel'));
+      for (const role of roleOptionsForUser(user)) {
+        const option = document.createElement('option');
+        option.value = role;
+        option.textContent = t(role === 'admin' ? 'roleAdmin' : role === 'editor' ? 'roleEditor' : 'roleViewer');
+        option.selected = user.role === role;
+        roleSelect.append(option);
+      }
+      roleSelect.addEventListener('change', () => void patchUser({ role: roleSelect.value }));
+      const typeSelect = document.createElement('select');
+      typeSelect.setAttribute('aria-label', t('adminUserTypeLabel'));
+      for (const value of ['internal', 'external']) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = t(value === 'internal' ? 'userTypeInternal' : 'userTypeExternal');
+        option.selected = user.user_type === value;
+        typeSelect.append(option);
+      }
+      typeSelect.addEventListener('change', () => void patchUser({ user_type: typeSelect.value }));
+      actions.append(roleSelect, typeSelect);
+      if (user.status === 'active') {
+        actions.append(makeAdminButton('adminDisable', 'button button-secondary button-small', () => void patchUser({ status: 'disabled' })));
+      } else if (user.status === 'disabled') {
+        actions.append(makeAdminButton('adminEnable', 'button button-secondary button-small', () => void patchUser({ status: 'active' })));
+      }
+      actions.append(makeAdminButton('adminResetPassword', 'button button-secondary button-small', async () => {
+        const result = await adminAction(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, { body: '{}' });
+        const temp = result?.payload?.temporaryPassword;
+        if (temp) {
+          $('#temp-password-value').textContent = temp;
+          $('#temp-password-modal').hidden = false;
+        }
+      }));
+      actions.append(makeAdminButton('adminUnlock', 'button button-secondary button-small', async () => {
+        await adminAction(`/admin/users/${encodeURIComponent(user.id)}/unlock`, { body: '{}' }, 'adminUnlocked');
+      }));
+      row.append(main, actions);
+      return row;
+    }
+
+    async function loadAdminUsersView() {
+      const banner = $('#admin-users-banner');
+      banner.hidden = true;
+      if (!isAdminUser(elibUser)) {
+        banner.hidden = false;
+        banner.textContent = t('adminErrForbidden');
+        return;
+      }
+      $('#admin-users-loading').hidden = false;
+      const pending = await elibFetchJson('/admin/users?status=pending');
+      const filterStatus = $('#admin-status-filter').value || 'active';
+      const managed = await elibFetchJson(`/admin/users?status=${encodeURIComponent(filterStatus)}`);
+      $('#admin-users-loading').hidden = true;
+      if (pending.status !== 200 || !pending.payload) {
+        banner.hidden = false;
+        banner.textContent = pending.status === 401 || pending.status === 403
+          ? t(adminErrorKey(pending.status, pending.errorCode || null))
+          : t('adminLoadFailed');
+        return;
+      }
+      setPendingBadge(pending.payload.pendingCount ?? (pending.payload.users || []).length);
+      const pendingList = $('#admin-pending-list');
+      pendingList.replaceChildren();
+      for (const user of pending.payload.users || []) pendingList.append(renderPendingUser(user));
+      $('#admin-pending-empty').hidden = (pending.payload.users || []).length !== 0;
+      $('#admin-bulk-bar').hidden = (pending.payload.users || []).length === 0;
+      const manageList = $('#admin-manage-list');
+      manageList.replaceChildren();
+      const managedUsers = managed.status === 200 && managed.payload ? (managed.payload.users || []) : [];
+      for (const user of managedUsers) manageList.append(renderManagedUser(user));
+      $('#admin-manage-empty').hidden = managedUsers.length !== 0;
+    }
+
+    $('#admin-status-filter').addEventListener('change', () => void loadAdminUsersView());
+    $('#admin-bulk-reject').addEventListener('click', async () => {
+      const ids = $$('.admin-pending-check').filter(box => box.checked).map(box => box.dataset.userId).filter(Boolean);
+      if (ids.length === 0) { showToast(t('adminSelectUserFirst')); return; }
+      const reason = $('#admin-bulk-reason').value.trim();
+      if (!reason) { showToast(t('adminRejectReasonRequired')); return; }
+      const result = await adminAction('/admin/users/bulk-reject', {
+        body: JSON.stringify({ ids, reason })
+      });
+      if (result) {
+        showToast(t('adminBulkRejected', { n: result.payload?.rejected ?? ids.length }));
+        void loadAdminUsersView();
+      }
+    });
+    $('#temp-password-close').addEventListener('click', () => {
+      $('#temp-password-modal').hidden = true;
+      $('#temp-password-value').textContent = '';
+    });
+    $('#temp-password-modal').addEventListener('click', event => {
+      if (event.target === event.currentTarget) {
+        event.currentTarget.hidden = true;
+        $('#temp-password-value').textContent = '';
+      }
+    });
+    $('#temp-password-copy').addEventListener('click', async () => {
+      const value = $('#temp-password-value').textContent;
+      if (!value) return;
+      try { await navigator.clipboard.writeText(value); showToast(t('copied')); } catch { showToast(t('copyFailed')); }
+    });
+
+    $('#elib-show-register').addEventListener('click', () => {
+      $('#elib-login-box').hidden = true;
+      $('#elib-register-box').hidden = false;
+    });
+    $('#elib-show-login').addEventListener('click', () => {
+      $('#elib-register-box').hidden = true;
+      $('#elib-login-box').hidden = false;
+    });
+    $('#elib-register-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const errorBox = $('#elib-register-error');
+      const successBox = $('#elib-register-success');
+      errorBox.hidden = true;
+      successBox.hidden = true;
+      const input = {
+        username: $('#reg-username').value.trim(),
+        password: $('#reg-password').value,
+        passwordConfirm: $('#reg-password-confirm').value,
+        displayName: $('#reg-displayname').value.trim(),
+        fullName: $('#reg-fullname').value.trim(),
+        organization: $('#reg-organization').value.trim(),
+        email: $('#reg-email').value.trim()
+      };
+      const localError = validateRegistration(input);
+      if (localError) {
+        errorBox.hidden = false;
+        errorBox.textContent = t(localError);
+        return;
+      }
+      const submit = $('#elib-register-submit');
+      submit.disabled = true;
+      const result = await elibFetchJson('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: input.username,
+          password: input.password,
+          displayName: input.displayName || undefined,
+          fullName: input.fullName,
+          organization: input.organization || undefined,
+          email: input.email,
+          website: $('#reg-website').value
+        })
+      });
+      submit.disabled = false;
+      if (result.status === 201) {
+        $('#elib-register-form').reset();
+        successBox.hidden = false;
+        successBox.textContent = t('regSuccess');
+        return;
+      }
+      errorBox.hidden = false;
+      errorBox.textContent = t(registerErrorKey(result.status ?? 0, result.errorCode || null));
+    });
+    $('#elib-change-password-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const errorBox = $('#elib-change-password-error');
+      errorBox.hidden = true;
+      const pairError = passwordPairErrorKey($('#cp-new').value, $('#cp-confirm').value);
+      if (pairError) {
+        errorBox.hidden = false;
+        errorBox.textContent = t(pairError);
+        return;
+      }
+      const submit = $('#elib-change-password-submit');
+      submit.disabled = true;
+      const result = await elibFetchJson('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: $('#cp-current').value, newPassword: $('#cp-new').value })
+      });
+      submit.disabled = false;
+      if (result.status === 200) {
+        $('#elib-change-password-form').reset();
+        showToast(t('changeSuccess'));
+        void loadDocumentsView();
+        void loadHomeRecent();
+        return;
+      }
+      errorBox.hidden = false;
+      errorBox.textContent = t(changePasswordErrorKey(result.status ?? 0, result.errorCode || null));
+    });
+
     // ---- Init from URL ----
     applyLanguage(currentLang);
     updateLibraryNavBadge();
@@ -2761,7 +3300,7 @@
       searchPage.value = params.get('page') || '1';
       showView('search', false);
       void searchStandards();
-    } else if (['categories', 'documents', 'library', 'search', 'detail'].includes(view)) {
+    } else if (['categories', 'documents', 'library', 'search', 'detail', 'admin-users'].includes(view)) {
       showView(view, false);
     } else {
       showView('home', false);

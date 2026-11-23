@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=9">
-    <script src="/playground.js?v=9" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=10">
+    <script src="/playground.js?v=10" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -40,6 +40,11 @@
           <button class="nav-item" data-view="documents" type="button">
             <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
             <span data-i18n="navDocuments">Tài liệu</span>
+          </button>
+          <button class="nav-item" data-view="admin-users" id="nav-admin-users" type="button" hidden>
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span data-i18n="navAdminUsers">Quản trị người dùng</span>
+            <span class="nav-badge" id="nav-pending-count" hidden></span>
           </button>
           <button class="nav-item" data-view="library" type="button">
             <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -591,13 +596,45 @@
 
         <div class="elib-card" id="elib-login-box" hidden>
           <h2 data-i18n="elibLoginTitle">Đăng nhập thư viện</h2>
-          <p class="section-note" data-i18n="elibLoginNote">Dùng tài khoản do quản trị thư viện cấp. Hệ thống chưa có trang đăng ký.</p>
+          <p class="section-note" data-i18n="elibLoginNote">Đăng nhập bằng email hoặc tên đăng nhập. Chưa có tài khoản? Đăng ký bên dưới, tài khoản sẽ chờ quản trị viên duyệt.</p>
           <form id="elib-login-form" class="elib-login-form">
-            <label class="field"><span class="field-label" data-i18n="elibEmail">Email</span><input id="elib-email" type="email" autocomplete="username" required></label>
+            <label class="field"><span class="field-label" data-i18n="elibIdentifier">Email hoặc tên đăng nhập</span><input id="elib-email" type="text" autocomplete="username" required></label>
             <label class="field"><span class="field-label" data-i18n="elibPassword">Mật khẩu</span><input id="elib-password" type="password" autocomplete="current-password" required></label>
             <button class="button button-terracotta" id="elib-login-submit" type="submit"><span data-i18n="login">Đăng nhập</span></button>
           </form>
           <div class="error-banner" id="elib-login-error" hidden></div>
+          <p class="section-note"><button class="link-btn" id="elib-show-register" type="button"><span data-i18n="elibShowRegister">Chưa có tài khoản? Đăng ký</span></button></p>
+        </div>
+
+        <div class="elib-card" id="elib-register-box" hidden>
+          <h2 data-i18n="elibRegisterTitle">Đăng ký tài khoản</h2>
+          <p class="section-note" data-i18n="elibRegisterNote">Tài khoản mới cần được quản trị viên duyệt trước khi đăng nhập. Bạn sẽ được thông báo khi tài khoản được duyệt.</p>
+          <form id="elib-register-form" class="elib-login-form" novalidate>
+            <label class="field"><span class="field-label"><span data-i18n="regUsername">Tên đăng nhập</span> <span class="required">*</span></span><input id="reg-username" type="text" autocomplete="username" maxlength="50" required><span class="field-hint" data-i18n="regUsernameHint">3–50 ký tự, không chứa khoảng trắng và ký tự @.</span></label>
+            <label class="field"><span class="field-label"><span data-i18n="regEmail">Email</span> <span class="required">*</span></span><input id="reg-email" type="email" autocomplete="email" maxlength="254" required></label>
+            <label class="field"><span class="field-label"><span data-i18n="regPassword">Mật khẩu</span> <span class="required">*</span></span><input id="reg-password" type="password" autocomplete="new-password" maxlength="128" required><span class="field-hint" data-i18n="regPasswordHint">8–128 ký tự, không dùng mật khẩu phổ biến.</span></label>
+            <label class="field"><span class="field-label"><span data-i18n="regPasswordConfirm">Nhập lại mật khẩu</span> <span class="required">*</span></span><input id="reg-password-confirm" type="password" autocomplete="new-password" maxlength="128" required></label>
+            <label class="field"><span class="field-label"><span data-i18n="regFullName">Họ tên thật</span> <span class="required">*</span></span><input id="reg-fullname" type="text" autocomplete="name" maxlength="200" required></label>
+            <label class="field"><span class="field-label" data-i18n="regDisplayName">Tên hiển thị</span><input id="reg-displayname" type="text" autocomplete="nickname" maxlength="100"></label>
+            <label class="field"><span class="field-label" data-i18n="regOrganization">Đơn vị / công ty</span><input id="reg-organization" type="text" autocomplete="organization" maxlength="200"></label>
+            <label class="honeypot-field" aria-hidden="true"><span>Website</span><input id="reg-website" type="text" name="website" tabindex="-1" autocomplete="off"></label>
+            <button class="button button-terracotta" id="elib-register-submit" type="submit"><span data-i18n="elibRegister">Đăng ký</span></button>
+          </form>
+          <div class="error-banner" id="elib-register-error" hidden></div>
+          <div class="elib-success" id="elib-register-success" hidden></div>
+          <p class="section-note"><button class="link-btn" id="elib-show-login" type="button"><span data-i18n="elibShowLogin">Đã có tài khoản? Đăng nhập</span></button></p>
+        </div>
+
+        <div class="elib-card" id="elib-change-password-box" hidden>
+          <h2 data-i18n="changePasswordTitle">Đổi mật khẩu</h2>
+          <p class="section-note" data-i18n="changePasswordNote">Bạn đang dùng mật khẩu tạm do quản trị viên cấp. Vui lòng đặt mật khẩu mới trước khi tiếp tục sử dụng.</p>
+          <form id="elib-change-password-form" class="elib-login-form" novalidate>
+            <label class="field"><span class="field-label"><span data-i18n="changeCurrentPassword">Mật khẩu hiện tại</span> <span class="required">*</span></span><input id="cp-current" type="password" autocomplete="current-password" required></label>
+            <label class="field"><span class="field-label"><span data-i18n="changeNewPassword">Mật khẩu mới</span> <span class="required">*</span></span><input id="cp-new" type="password" autocomplete="new-password" maxlength="128" required><span class="field-hint" data-i18n="regPasswordHint">8–128 ký tự, không dùng mật khẩu phổ biến.</span></label>
+            <label class="field"><span class="field-label"><span data-i18n="regPasswordConfirm">Nhập lại mật khẩu</span> <span class="required">*</span></span><input id="cp-confirm" type="password" autocomplete="new-password" maxlength="128" required></label>
+            <button class="button button-terracotta" id="elib-change-password-submit" type="submit"><span data-i18n="changePasswordSubmit">Đổi mật khẩu</span></button>
+          </form>
+          <div class="error-banner" id="elib-change-password-error" hidden></div>
         </div>
 
         <div class="elib-userbar" id="elib-user-bar" hidden>
@@ -661,6 +698,42 @@
         <p class="section-note" data-i18n="elibPhase4Note">Duyệt và quản lý danh sách tài liệu (lọc, sửa, ẩn/xóa, phiên bản mới) sẽ có ở Giai đoạn 4. Hiện tại elib chưa có API danh sách tài liệu.</p>
       </section>
 
+      <!-- Quản trị người dùng (elib, chỉ admin) -->
+      <section class="view-panel" id="view-admin-users" aria-labelledby="admin-users-title" hidden>
+        <div class="page-heading">
+          <div>
+            <h1 id="admin-users-title" data-i18n="adminUsersTitle">Quản trị người dùng</h1>
+            <p class="page-subtitle" data-i18n="adminUsersSubtitle">Duyệt tài khoản đăng ký mới và quản lý người dùng thư viện (elib). Chỉ quản trị viên mới thấy mục này.</p>
+          </div>
+          <div class="endpoint-chip"><span class="method method-get">ELIB</span><code>/api/elib/admin/users</code></div>
+        </div>
+
+        <div class="elib-banner" id="admin-users-banner" hidden role="alert"></div>
+        <div class="loading-skeleton" id="admin-users-loading" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="adminPendingTitle">Tài khoản chờ duyệt</h2><span class="section-count" id="admin-pending-count">0</span></div>
+        <div class="admin-bulk-bar" id="admin-bulk-bar" hidden>
+          <label class="field admin-reject-reason-field"><span class="field-label" data-i18n="adminRejectReasonLabel">Lý do từ chối (nội bộ)</span><input id="admin-bulk-reason" type="text" maxlength="500"></label>
+          <button class="button button-secondary button-small" id="admin-bulk-reject" type="button"><span data-i18n="adminBulkReject">Từ chối các tài khoản đã chọn</span></button>
+        </div>
+        <div class="admin-user-list" id="admin-pending-list"></div>
+        <div class="empty-state" id="admin-pending-empty" hidden><strong data-i18n="adminPendingEmptyTitle">Không có tài khoản nào đang chờ duyệt</strong><p data-i18n="adminPendingEmptyText">Tài khoản đăng ký mới sẽ xuất hiện tại đây để duyệt.</p></div>
+
+        <div class="section-head"><span class="section-bar" aria-hidden="true"></span><h2 data-i18n="adminManageTitle">Quản lý người dùng</h2></div>
+        <div class="admin-filter-row">
+          <label class="field"><span class="field-label" data-i18n="adminStatusFilter">Trạng thái</span>
+            <select id="admin-status-filter">
+              <option value="active" data-i18n="userStatusActive">Đang hoạt động</option>
+              <option value="disabled" data-i18n="userStatusDisabled">Đã vô hiệu hóa</option>
+              <option value="rejected" data-i18n="userStatusRejected">Đã từ chối</option>
+              <option value="pending" data-i18n="userStatusPending">Chờ duyệt</option>
+            </select>
+          </label>
+        </div>
+        <div class="admin-user-list" id="admin-manage-list"></div>
+        <div class="empty-state" id="admin-manage-empty" hidden><strong data-i18n="adminManageEmptyTitle">Không có người dùng nào ở trạng thái này</strong><p data-i18n="adminManageEmptyText">Thử chọn trạng thái khác.</p></div>
+      </section>
+
       <!-- 06 My Library -->
       <section class="view-panel" id="view-library" aria-labelledby="library-title" hidden>
         <h1 id="library-title" data-i18n="libraryTitle">Thư viện cá nhân</h1>
@@ -698,6 +771,23 @@
       </div>
     </footer>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Mật khẩu tạm (admin đặt lại): hiện đúng một lần -->
+    <div class="preview-modal" id="temp-password-modal" hidden role="dialog" aria-modal="true" aria-labelledby="temp-password-title">
+      <div class="preview-card">
+        <div class="preview-head">
+          <h3 id="temp-password-title" data-i18n="tempPasswordTitle">Mật khẩu tạm</h3>
+          <button class="icon-button" id="temp-password-close" type="button" aria-label="Đóng">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <p class="detail-note" data-i18n="tempPasswordNote">Mật khẩu tạm này chỉ hiển thị một lần duy nhất. Hãy sao chép và gửi cho người dùng qua kênh an toàn; họ sẽ phải đổi mật khẩu khi đăng nhập.</p>
+        <div class="temp-password-row">
+          <code id="temp-password-value"></code>
+          <button class="button button-secondary button-small" id="temp-password-copy" type="button"><span data-i18n="copyJson">Sao chép</span></button>
+        </div>
+      </div>
+    </div>
 
     <!-- Document viewer (Phase B): pdf.js lazy-loaded on open -->
     <div class="doc-viewer" id="doc-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
