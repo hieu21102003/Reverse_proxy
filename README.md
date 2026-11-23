@@ -63,6 +63,10 @@ Copy-Item .env.example .env
 | `ELIB_BASE_URL` | `http://127.0.0.1:3200` | Elib document service base URL for the `/api/elib/*` proxy (see Elib integration). In Docker, `127.0.0.1` is the container itself — use the shared `elib-net` network (`http://elib-service:3200`, see `.env.server.example`) or run bare-Node |
 | `ELIB_ENABLED` | `true` | Set to `false` to disable the elib proxy (`/api/elib/*` returns 503, Tài liệu view shows a disabled state) |
 | `ELIB_TIMEOUT_MS` | `300000` | Elib proxy timeout for uploads/downloads, 5000–3600000 ms (generous on purpose; not the 10 s VSQI timeout) |
+| `STANDARDS_DB_ENABLED` | `false` | Enable the standards metadata DB integration (elib `/internal/standards/*`); off = live-proxy behavior unchanged |
+| `STANDARDS_INTERNAL_TOKEN` | empty | Shared secret for elib internal API calls (same value on elib); never logged |
+| `STANDARDS_DB_TIMEOUT_MS` | `2000` | Timeout for internal DB calls, 100–30000 ms (short on purpose; DB errors never fail search) |
+| `STANDARDS_STALE_DAYS` | `7` | Freshness window in days for serving detail from the metadata DB; `0` = never fresh |
 
 Configuration is validated at startup. `VSQI_BASE_URL` must use HTTPS. TLS certificate verification remains enabled. Do not commit `.env` or put credentials in the upstream URL.
 
@@ -129,6 +133,19 @@ Browser ──> nginx (HTTPS) ──> Reverse_proxy :3100 ──/api/elib/*─�
 - UI flow: opening **Tài liệu** calls `GET /api/elib/auth/me`. Signed out → login form (`POST /api/elib/auth/login`). Viewer role → "Bạn không có quyền upload". Admin/editor → upload form (file, title, description, category from `GET /api/elib/categories`, doc_type, language, tags, visibility, status) sent with `XMLHttpRequest` for real progress; `409 DUPLICATE_FILE` offers "Bỏ qua / Vẫn tạo mới" (resubmit with `force=true`). Successful uploads appear in a session-only list with download links (`GET /api/elib/documents/:id/files/:fileId/download`). There is **no document list** yet — elib Phase 1 has no list/search endpoint; browsing/management is Phase 4. The UI says so instead of faking a list.
 - Same-origin requirement: the session cookie only flows when the UI and `/api/elib/*` share an origin (the normal nginx setup). If the header **API BASE URL** points at a different origin, elib login will not persist without CORS credentials — keep the default (current origin) for elib use.
 - Deploying elib: run it separately on the same server, bound to `127.0.0.1:3200` (never public), with its own PostgreSQL and `STORAGE_ROOT`. Steps (from the elib-service README): `npm install` → fill `.env` (`DATABASE_URL`, `STORAGE_ROOT`, `SESSION_SECRET`, `COOKIE_SECURE=true` behind HTTPS, `PORT=3200`) → `npm run migrate` → `npm run seed:categories` → `npm run create-admin` → `npm run build && npm start`. When both run in Docker, they share the fixed-name network `elib-net` (declared in this repo's `docker-compose.yml`; elib's compose joins it as an external network) and Reverse_proxy uses `ELIB_BASE_URL=http://elib-service:3200` (elib's container name) — the old `host.docker.internal` route cannot work because elib only binds host loopback. Start elib before or after Reverse_proxy — the proxy tolerates elib being down (502 banner in the Tài liệu view only). Full runbook: [docs/deploy-server.md](docs/deploy-server.md).
+- Proxy hardening: `/api/elib/*` only forwards an **allowlist** of elib API paths (`auth/login|logout|me`, `categories`, `documents`, `documents/:id/files/:fileId/download`); other paths get `404 ELIB_ROUTE_NOT_FOUND`, traversal attempts (`../`, `%2e%2e`, `%2f`) get `400 ELIB_BAD_PATH`, and a client-sent `X-Internal-Token` header is always stripped (it is the shared secret for elib's internal API and must never be injectable from a browser).
+
+## Standards metadata DB (Bước 1, optional)
+
+With `STANDARDS_DB_ENABLED=true` (+ the same `STANDARDS_INTERNAL_TOKEN` on elib, which must have run migration 003), Reverse_proxy also talks to elib's **internal** metadata API (`/internal/standards/lookup` + `/ingest`, reachable only on `elib-net`, never through the browser proxy). The DB is fed gradually from real searches/details — no crawling.
+
+Order of layers for search/detail:
+
+1. **In-memory response cache** (`CACHE_TTL_SECONDS`, default 300s) — a hit short-circuits everything below.
+2. **Metadata DB** — search merges DB editions into the live page (dedup by light-normalized code, live fields win, DB adds `lastVerifiedAt`/`fromDb`); detail is served from DB only when the record is `full` and verified within `STANDARDS_STALE_DAYS` (default 7).
+3. **Live upstream** (VSQI + TCVN) — always consulted for search; for detail whenever the DB record is missing or stale.
+
+Live results are ingested back fire-and-forget (one batch per results page, grouped by source; `raw` is never sent). Internal calls use a short timeout (`STANDARDS_DB_TIMEOUT_MS`, default 2000ms) behind a circuit breaker (5 consecutive failures → 60s pause); any DB error is logged and swallowed — search/detail never fail because of the DB. Detail responses carry `dbInfo` (`servedFrom`, `lastVerifiedAt`, `stale`, `staleDays`, `sources`) so the UI can show "Kiểm tra lần cuối", label DB-served data, and warn when the record is past the freshness threshold. The UI never links the TCVN front-api JSON `detailUrl` as a public source page; it shows fallback links instead (VSQI page when a VSQI snapshot exists, ISO OBP search, Google search). With the flag off (default), behavior is identical to the live-proxy-only service.
 
 ## Docker deployment
 

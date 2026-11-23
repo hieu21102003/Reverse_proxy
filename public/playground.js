@@ -100,6 +100,8 @@
         history: [],
         other: [],
         source: null,
+        db: null,
+        fallbackLinks: [],
         isEmpty: true
       };
     }
@@ -278,6 +280,43 @@
         }
       : null;
 
+    // Metadata-DB provenance (present only when the API ran with
+    // STANDARDS_DB_ENABLED): drives the "kiểm tra lần cuối" row, the
+    // DB source badge, and the stale-data warning.
+    const dbInfo = (data.dbInfo && typeof data.dbInfo === 'object') ? data.dbInfo : null;
+    const db = dbInfo
+      ? {
+          servedFrom: dbInfo.servedFrom === 'db' ? 'db' : 'live',
+          lastVerifiedAt: firstText(dbInfo.lastVerifiedAt),
+          stale: dbInfo.stale === true,
+          staleDays: Number.isFinite(Number(dbInfo.staleDays)) ? Number(dbInfo.staleDays) : null
+        }
+      : null;
+
+    // Fallback links replace the TCVN front-api detailUrl (a JSON API
+    // URL, not a public page) as the "view at source" affordance:
+    // VSQI page when a VSQI snapshot exists, else ISO OBP + Google
+    // searches by code. A real VSQI detailUrl keeps the normal
+    // source link and needs no fallbacks.
+    const fallbackLinks = [];
+    const isTcvnApiUrl = sourceHost === 'tracuu.tcvn.vn';
+    if (code && (isTcvnApiUrl || !sourceUrl)) {
+      const vsqiSnapshot = Array.isArray(dbInfo?.sources)
+        ? dbInfo.sources.find(entry => entry?.source === 'VSQI' && safeWebUrl(entry?.detailUrl))
+        : null;
+      if (vsqiSnapshot) {
+        fallbackLinks.push({ kind: 'vsqi', url: safeWebUrl(vsqiSnapshot.detailUrl) });
+      }
+      fallbackLinks.push({
+        kind: 'iso-obp',
+        url: `https://www.iso.org/obp/ui/?q=${encodeURIComponent(code)}#search`
+      });
+      fallbackLinks.push({
+        kind: 'google',
+        url: `https://www.google.com/search?q=${encodeURIComponent(code)}`
+      });
+    }
+
     const isEmpty = !code && !titleVi && !titleEn && !statusText && !year
       && general.length === 0 && scope.length === 0 && related.length === 0
       && history.length === 0 && other.length === 0 && !source;
@@ -298,6 +337,8 @@
       other,
       otherLabel: OTHER_ATTRIBUTE_LABEL,
       source,
+      db,
+      fallbackLinks,
       isEmpty
     };
   }
@@ -395,6 +436,9 @@
         detailCodeLabel: 'Số hiệu tiêu chuẩn', detailSourceLabel: 'Nguồn', autoSource: 'Tự động (VSQI → VN → QT)', getDetail: 'Xem chi tiết',
         detailEmptyTitle: 'Chưa chọn tài liệu', detailEmptyText: 'Nhập số hiệu ở trên hoặc chọn một kết quả từ tìm kiếm.',
         coverKind: 'TIÊU CHUẨN', viewAtSource: 'Xem tại nguồn gốc', preview: 'Xem trước thông tin', saveLibrary: 'Lưu vào My Library', savedLibrary: 'Đã lưu ✓', copyLink: 'Sao chép liên kết',
+        lastChecked: 'Kiểm tra lần cuối', fromDb: 'Nguồn: DB nội bộ',
+        staleWarning: 'Bản ghi trong DB nội bộ đã quá {days} ngày chưa kiểm chứng lại với nguồn gốc — tình trạng hiệu lực có thể đã thay đổi.',
+        searchIsoObp: 'Tìm trên ISO OBP', searchGoogle: 'Tìm trên Google',
         noPdfNote: 'API hiện chỉ cung cấp metadata của tiêu chuẩn; chưa có file PDF để xem trực tuyến hoặc tải xuống trong hệ thống này.',
         fieldsTab: 'Thông tin', generalInfo: 'Thông tin chung', scope: 'Phạm vi áp dụng', related: 'Tài liệu liên quan', history: 'Lịch sử soát xét', sourceInfo: 'Thông tin nguồn',
         previewTitle: 'Xem trước thông tin tài liệu', previewNote: 'Đây là bản tóm tắt metadata từ API. Hệ thống chưa có trình xem PDF trực tuyến; vui lòng mở tài liệu tại nguồn gốc.',
@@ -476,6 +520,9 @@
         detailCodeLabel: 'Standard code', detailSourceLabel: 'Source', autoSource: 'Automatic (VSQI → VN → QT)', getDetail: 'View detail',
         detailEmptyTitle: 'No document selected', detailEmptyText: 'Enter a code above or pick a search result.',
         coverKind: 'STANDARD', viewAtSource: 'View at source', preview: 'Preview metadata', saveLibrary: 'Save to My Library', savedLibrary: 'Saved ✓', copyLink: 'Copy link',
+        lastChecked: 'Last verified', fromDb: 'Source: internal DB',
+        staleWarning: 'The internal DB record has not been re-verified against the source for over {days} days — its status may have changed.',
+        searchIsoObp: 'Search on ISO OBP', searchGoogle: 'Search on Google',
         noPdfNote: 'The API provides standard metadata only; there is no PDF to view or download in this system yet.',
         fieldsTab: 'Information', generalInfo: 'General information', scope: 'Scope', related: 'Related documents', history: 'Revision history', sourceInfo: 'Source information',
         previewTitle: 'Document metadata preview', previewNote: 'This is a metadata summary from the API. There is no online PDF viewer yet; please open the document at its source.',
@@ -754,6 +801,13 @@
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
       return date.toLocaleDateString(currentLang === 'en' ? 'en-GB' : 'vi-VN');
+    }
+
+    function formatDateTime(value) {
+      if (!value) return DASH;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      return date.toLocaleString(currentLang === 'en' ? 'en-GB' : 'vi-VN');
     }
 
     function fileBadge(kind) {
@@ -1186,6 +1240,16 @@
       const sourceBadge = $('#detail-source-badge');
       sourceBadge.textContent = data.source || '';
       sourceBadge.hidden = !data.source;
+      const dbBadge = $('#detail-db-badge');
+      const fromDb = model.db?.servedFrom === 'db';
+      dbBadge.textContent = fromDb ? t('fromDb') : '';
+      dbBadge.hidden = !fromDb;
+      const staleWarning = $('#detail-stale-warning');
+      const showStale = model.db?.stale === true;
+      staleWarning.textContent = showStale
+        ? t('staleWarning', { days: model.db.staleDays ?? '' })
+        : '';
+      staleWarning.hidden = !showStale;
 
       const metaRows = $('#detail-meta-rows');
       metaRows.replaceChildren();
@@ -1198,7 +1262,10 @@
         [t('statusLabel'), data.status ?? model.header.status?.text],
         [t('replaces'), data.replaces],
         [t('replacedBy'), data.replacedBy],
-        [t('sourceLabel'), data.source]
+        [t('sourceLabel'), data.source],
+        ...(model.db?.lastVerifiedAt
+          ? [[t('lastChecked'), formatDateTime(model.db.lastVerifiedAt)]]
+          : [])
       ];
       for (const [label, value] of rows) {
         const row = document.createElement('div');
@@ -1214,8 +1281,29 @@
 
       const sourceLink = $('#detail-source-link');
       const safeDetailUrl = safeWebUrl(data.detailUrl);
-      sourceLink.hidden = !safeDetailUrl;
-      if (safeDetailUrl) sourceLink.href = safeDetailUrl;
+      // The TCVN front-api detailUrl is a JSON API endpoint, not a
+      // public page — never present it as "view at source"; the
+      // fallback links (VSQI / ISO OBP / Google) take its place.
+      const isTcvnApiUrl = (() => {
+        if (!safeDetailUrl) return false;
+        try { return new URL(safeDetailUrl).host === 'tracuu.tcvn.vn'; } catch { return false; }
+      })();
+      const showSourceLink = Boolean(safeDetailUrl) && !isTcvnApiUrl;
+      sourceLink.hidden = !showSourceLink;
+      if (showSourceLink) sourceLink.href = safeDetailUrl;
+      const fallbackHost = $('#detail-fallback-links');
+      fallbackHost.replaceChildren();
+      const fallbackLabels = { vsqi: 'viewAtSource', 'iso-obp': 'searchIsoObp', google: 'searchGoogle' };
+      for (const link of model.fallbackLinks || []) {
+        const anchor = document.createElement('a');
+        anchor.className = 'button button-secondary';
+        anchor.href = link.url;
+        anchor.target = '_blank';
+        anchor.rel = 'noreferrer';
+        anchor.textContent = t(fallbackLabels[link.kind] || 'viewAtSource');
+        fallbackHost.append(anchor);
+      }
+      fallbackHost.hidden = (model.fallbackLinks || []).length === 0;
       const saveBtn = $('#detail-save-btn');
       const saveLabel = saveBtn.querySelector('.btn-label') || saveBtn;
       const syncSave = () => {
@@ -1380,8 +1468,14 @@
       }
       const link = $('#preview-source-link');
       const safe = safeWebUrl(data.detailUrl);
-      link.hidden = !safe;
-      if (safe) link.href = safe;
+      // Same rule as the detail page: never link the TCVN front-api
+      // JSON URL as a public source page.
+      let isTcvnApiUrl = false;
+      if (safe) {
+        try { isTcvnApiUrl = new URL(safe).host === 'tracuu.tcvn.vn'; } catch { isTcvnApiUrl = false; }
+      }
+      link.hidden = !safe || isTcvnApiUrl;
+      if (safe && !isTcvnApiUrl) link.href = safe;
       $('#preview-modal').hidden = false;
     }
 

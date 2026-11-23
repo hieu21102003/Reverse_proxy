@@ -33,9 +33,29 @@ export function parseDetailHtml(
   const raw = collectRawDetail($, scope, primaryTable, legacy.code, detailUrl);
   const relations = deriveRelations(attributes, raw.links);
 
+  // ICS codes: VSQI exposes them as "Chỉ số phân loại quốc tế (ICS)"
+  // attributes, which deriveRelations turns into type 'ics' relations
+  // (one per code). Fall back to splitting the attribute value.
+  const ics: string[] = [];
+  for (const relation of relations) {
+    if (relation.type === 'ics' && relation.text && !ics.includes(relation.text)) {
+      ics.push(relation.text);
+    }
+  }
+  if (ics.length === 0) {
+    for (const attribute of attributes) {
+      if (!/ics/i.test(attribute.label) && !/ics/i.test(attribute.labelEn ?? '')) continue;
+      for (const part of (attribute.value ?? '').split(/[,\n]/)) {
+        const code = part.trim();
+        if (code && !ics.includes(code)) ics.push(code);
+      }
+    }
+  }
+
   return {
     ...legacy,
     detailUrl,
+    ics,
     source: 'VSQI',
     attributes,
     relations,

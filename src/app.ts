@@ -7,7 +7,8 @@ import { config } from './config.js';
 import { MergedStandardProvider } from './providers/merged.provider.js';
 import { registerElibProxy, type ElibProxyOptions } from './elib-proxy.js';
 import { VsqiError } from './errors.js';
-import { CachedStandardProvider } from './services/response-cache.js';
+import { CachedStandardProvider, type StandardsDbIntegration } from './services/response-cache.js';
+import { StandardsDbClient } from './standards-db/client.js';
 import type { StandardProvider, StandardSource } from './types.js';
 
 /** Organisation words that may start a standard code. Kept in step with
@@ -55,7 +56,16 @@ const standardCodeSchema = z.string()
 
 const sourceSchema = z.enum(['VSQI', 'TCVN_VN', 'TCVN_QT']);
 
-export async function createApp(provider?: StandardProvider, options?: { elib?: Partial<ElibProxyOptions> }) {
+export async function createApp(
+  provider?: StandardProvider,
+  options?: {
+    elib?: Partial<ElibProxyOptions>;
+    /** Test/override hook for the standards metadata DB integration.
+     *  When omitted, the integration is built from config
+     *  (STANDARDS_DB_ENABLED etc.) and is off by default. */
+    standardsDb?: StandardsDbIntegration;
+  }
+) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
     logger: {
@@ -67,8 +77,21 @@ export async function createApp(provider?: StandardProvider, options?: { elib?: 
     },
     bodyLimit: 16 * 1024
   });
+  const standardsDb: StandardsDbIntegration | undefined =
+    options?.standardsDb ??
+    (config.STANDARDS_DB_ENABLED
+      ? {
+          client: new StandardsDbClient({ logger: app.log }),
+          staleDays: config.STANDARDS_STALE_DAYS
+        }
+      : undefined);
+  if (standardsDb && config.STANDARDS_INTERNAL_TOKEN === null && !options?.standardsDb) {
+    app.log.warn('STANDARDS_DB_ENABLED=true but STANDARDS_INTERNAL_TOKEN is unset; elib will answer 503 and DB features stay inert');
+  }
   const cachedProvider = new CachedStandardProvider(
-    provider ?? new MergedStandardProvider(undefined, app.log)
+    provider ?? new MergedStandardProvider(undefined, app.log),
+    undefined,
+    standardsDb
   );
 
   await app.register(helmet, {

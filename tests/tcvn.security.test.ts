@@ -60,12 +60,15 @@ describe('TCVN detail whitelisting', () => {
       expect(serialized).not.toContain(needle);
     }
     // The output shape is exactly the StandardDetail contract — no extra keys.
+    // (`ics` is part of the contract since the standards metadata DB work;
+    // `dbInfo` is added later by the provider layer, never by the mapper.)
     expect(Object.keys(detail as StandardDetail).sort()).toEqual([
       'attributes',
       'code',
       'detailUrl',
       'effectiveDate',
       'englishName',
+      'ics',
       'issuedDate',
       'issuingAgency',
       'name',
