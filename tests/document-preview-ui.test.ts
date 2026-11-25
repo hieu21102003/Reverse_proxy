@@ -217,6 +217,11 @@ describe('lazy-load pdf.js + viewer markup', () => {
       expect(worker.statusCode).toBe(200);
       const font = await app.inject({ method: 'GET', url: '/vendor/pdfjs/standard_fonts/FoxitFixed.pfb' });
       expect(font.statusCode).toBe(200);
+      // pdf.js maps Helvetica to LiberationSans .ttf — these must serve too.
+      const ttf = await app.inject({ method: 'GET', url: '/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf' });
+      expect(ttf.statusCode).toBe(200);
+      const badFont = await app.inject({ method: 'GET', url: '/vendor/pdfjs/standard_fonts/evil.mjs' });
+      expect(badFont.statusCode).toBe(404);
       const bad = await app.inject({ method: 'GET', url: '/vendor/pdfjs/evil.mjs' });
       expect(bad.statusCode).toBe(404);
       const traversal = await app.inject({ method: 'GET', url: '/vendor/pdfjs/standard_fonts/..%2Fpdf.min.mjs' });

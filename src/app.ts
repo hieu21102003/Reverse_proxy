@@ -198,8 +198,8 @@ export async function createApp(
   });
   app.get('/vendor/pdfjs/standard_fonts/:file', async (request, reply) => {
     const file = String((request.params as Record<string, string>)['file'] ?? '');
-    // Font file names come from pdf.js itself; accept only plain .pfb names.
-    if (!/^[A-Za-z0-9._-]+\.pfb$/.test(file)) {
+    // Font file names come from pdf.js itself; accept only plain .pfb/.ttf names.
+    if (!/^[A-Za-z0-9._-]+\.(pfb|ttf)$/.test(file)) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });
     }
     reply.type('application/octet-stream').header('Cache-Control', 'public, max-age=86400');
