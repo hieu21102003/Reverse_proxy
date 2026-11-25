@@ -59,8 +59,12 @@ function normalizeCode(code: string): string {
  *   `sources`, and the failure is logged. Only when every source fails
  *   does search throw (502).
  * - Detail without a `source` hint tries VSQI, then TCVN_VN, then TCVN_QT;
- *   first hit wins. A provider that throws during detail lookup is skipped
- *   and the next one is tried; if all throw, the first error is rethrown.
+ *   first hit wins. A pinned source is tried first and the others are
+ *   then tried in the same order when it fails or has no such standard,
+ *   so a VSQI 500 does not hide a record TCVN has. A provider that
+ *   throws during detail lookup is skipped and the next one is tried;
+ *   if all throw, the first (pinned) error is rethrown; if at least one
+ *   source answered cleanly with "not found", the result is null.
  */
 export class MergedStandardProvider implements StandardProvider {
   private readonly providers: Record<StandardSource, StandardProvider>;
@@ -218,7 +222,13 @@ export class MergedStandardProvider implements StandardProvider {
   }
 
   async getDetail(code: string, source?: StandardSource): Promise<StandardDetail | null> {
-    const order = source ? [source] : MERGE_ORDER;
+    // A pinned source is tried first, but a failure (or not-found) there
+    // no longer ends the lookup: VSQI returns 500 often, so fall through
+    // to the remaining sources in MERGE_ORDER and return the first hit.
+    // The returned detail keeps the serving source's `source` field.
+    const order: StandardSource[] = source
+      ? [source, ...MERGE_ORDER.filter(name => name !== source)]
+      : MERGE_ORDER;
     let firstError: unknown;
     let anyCompleted = false;
     for (const name of order) {
@@ -228,9 +238,8 @@ export class MergedStandardProvider implements StandardProvider {
         if (found) return found;
       } catch (error) {
         // A single source being down must not hide a record another source
-        // has — unless the caller pinned that source, in which case the
-        // error is theirs to see.
-        if (source) throw error;
+        // has — try the next one. The first error (from the pinned source,
+        // or VSQI when unpinned) is what surfaces if every source fails.
         firstError ??= error;
         this.logger?.warn(
           { source: name, errorCode: errorCode(error) },

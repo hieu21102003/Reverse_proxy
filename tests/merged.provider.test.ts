@@ -245,6 +245,72 @@ describe('merged detail', () => {
     expect(getDetailVsqi).not.toHaveBeenCalled();
   });
 
+  it('falls back to the next source when the pinned source throws', async () => {
+    const getDetailVn = vi.fn(async () => detailFor('TCVN 9143:2022', 'TCVN_VN'));
+    const getDetailQt = vi.fn(async () => detailFor('TCVN 9143:2022', 'TCVN_QT'));
+    const provider = new MergedStandardProvider({
+      VSQI: stub({
+        getDetail: async () => {
+          throw new VsqiError('VSQI failed', 'UPSTREAM_UNAVAILABLE', 500);
+        }
+      }),
+      TCVN_VN: stub({ getDetail: getDetailVn }),
+      TCVN_QT: stub({ getDetail: getDetailQt })
+    });
+    const detail = await provider.getDetail('TCVN 9143:2022', 'VSQI');
+    expect(detail?.source).toBe('TCVN_VN');
+    expect(getDetailQt).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the next source when the pinned source has no such standard', async () => {
+    const provider = new MergedStandardProvider({
+      VSQI: stub({ getDetail: async () => null }),
+      TCVN_VN: stub({ getDetail: async () => null }),
+      TCVN_QT: stub({ getDetail: async () => detailFor('ISO 9001', 'TCVN_QT') })
+    });
+    const detail = await provider.getDetail('ISO 9001', 'VSQI');
+    expect(detail?.source).toBe('TCVN_QT');
+  });
+
+  it('throws the pinned source error when every source throws', async () => {
+    const provider = new MergedStandardProvider({
+      VSQI: stub({
+        getDetail: async () => {
+          throw new VsqiError('VSQI failed', 'VSQI_DOWN', 500);
+        }
+      }),
+      TCVN_VN: stub({
+        getDetail: async () => {
+          throw new VsqiError('TCVN_VN failed', 'TCVN_VN_DOWN', 502);
+        }
+      }),
+      TCVN_QT: stub({
+        getDetail: async () => {
+          throw new VsqiError('TCVN_QT failed', 'TCVN_QT_DOWN', 502);
+        }
+      })
+    });
+    await expect(provider.getDetail('TCVN 9143:2022', 'VSQI'))
+      .rejects.toMatchObject({ code: 'VSQI_DOWN' });
+  });
+
+  it('returns null when a source answers not-found and the others error', async () => {
+    const provider = new MergedStandardProvider({
+      VSQI: stub({ getDetail: async () => null }),
+      TCVN_VN: stub({
+        getDetail: async () => {
+          throw new VsqiError('TCVN_VN failed', 'UPSTREAM_UNAVAILABLE', 502);
+        }
+      }),
+      TCVN_QT: stub({
+        getDetail: async () => {
+          throw new VsqiError('TCVN_QT failed', 'UPSTREAM_UNAVAILABLE', 502);
+        }
+      })
+    });
+    await expect(provider.getDetail('TCVN 9999:2099', 'VSQI')).resolves.toBeNull();
+  });
+
   it('skips a throwing source and returns null only when no source has it', async () => {
     const provider = new MergedStandardProvider({
       VSQI: stub({
