@@ -232,6 +232,12 @@ export class CachedStandardProvider implements StandardProvider {
       }
       if (liveError !== null) throw liveError;
       return null;
+    }, {
+      // A fallback result served by a different source than the pinned
+      // one must not be cached under the pinned source's key: the next
+      // request for the pinned source should try that source again
+      // instead of silently receiving another source's record.
+      shouldCache: (result) => result !== null && (source === undefined || result.source === source)
     });
   }
 }
