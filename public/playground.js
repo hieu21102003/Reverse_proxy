@@ -649,7 +649,85 @@
     return { text: text || null, url: url || null };
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser };
+  /**
+   * Ai được tải file tiêu chuẩn lên — khớp luật phía elib
+   * (canUploadStandardFile: admin hoặc user_type=internal, phải đang
+   * status=active). auth/me trả userType (camelCase) + status.
+   */
+  function canUploadStandardFile(user) {
+    if (!user || typeof user !== 'object') return false;
+    if (user.status !== 'active') return false;
+    return user.role === 'admin' || user.userType === 'internal';
+  }
+
+  /** Đường dẫn elib (sau /api/elib) lấy file theo mã chuẩn như đang hiển thị. */
+  function standardFilesPath(code) {
+    return `/standards/${encodeURIComponent(String(code ?? '').trim())}/files`;
+  }
+
+  /**
+   * Trạng thái mục "File tiêu chuẩn" trên trang chi tiết, suy từ kết
+   * quả elibFetchJson của GET /api/elib/standards/:code/files:
+   * - 'unavailable': elib tắt/lỗi/đang bảo trì, hoặc elib cũ chưa có
+   *   route này (404 ROUTE_NOT_FOUND của handler không khớp route) ->
+   *   ẩn hẳn mục, không hiện lỗi, trang metadata vẫn dùng bình thường.
+   * - 'no-file': elib mới trả 200 mà document=null, hoặc 404 NOT_FOUND
+   *   (tiêu chuẩn chưa có trong DB — tải lên sẽ tạo bản ghi) -> chưa có file.
+   * - 'file-view': có file hiện hành và được xem toàn bộ (can_view_full).
+   * - 'file-noaccess': thấy tài liệu trong danh sách nhưng không được
+   *   xem toàn bộ (vd editor external) — chỉ xem trước nếu có.
+   */
+  function standardFileState(result) {
+    if (!result || typeof result !== 'object') return 'unavailable';
+    if (result.status === 200 && result.payload && typeof result.payload === 'object') {
+      const doc = result.payload.document;
+      if (!doc || typeof doc !== 'object') return 'no-file';
+      return doc.can_view_full === true ? 'file-view' : 'file-noaccess';
+    }
+    if (result.status === 404 && result.errorCode === 'NOT_FOUND') return 'no-file';
+    return 'unavailable';
+  }
+
+  /**
+   * Chuyển payload GET standards/:code/files thành shape tài liệu mà
+   * viewer/nút tải hiện có dùng (file = file hiện hành của elib).
+   */
+  function buildStandardFileDoc(payload) {
+    const doc = payload?.document;
+    if (!doc || typeof doc !== 'object') return null;
+    const current = payload.current_file && typeof payload.current_file === 'object'
+      ? payload.current_file
+      : null;
+    return {
+      id: doc.id,
+      title: doc.title,
+      visibility: doc.visibility,
+      status: doc.status,
+      created_by: doc.created_by ?? null,
+      current_file_id: doc.current_file_id ?? current?.id ?? null,
+      can_view_full: doc.can_view_full === true,
+      can_download: doc.can_download === true,
+      file: current
+    };
+  }
+
+  /** Cảnh báo kiểm tra mã chuẩn: chỉ not_found mới hiện badge cảnh báo. */
+  function codeCheckWarningKey(file) {
+    return file?.code_check_status === 'not_found' ? 'codeCheckNotFound' : null;
+  }
+
+  /** Map mã lỗi ổn định của upload file tiêu chuẩn sang khóa i18n. */
+  function standardUploadErrorKey(status, code) {
+    if (code === 'STANDARD_FILE_MUST_BE_PDF') return 'standardFileMustPdf';
+    if (code === 'INVALID_STANDARD_CODE') return 'standardCodeInvalid';
+    if (code === 'FILE_TOO_LARGE' || status === 413) return 'standardFileTooLarge';
+    if (status === 401) return 'standardUploadLoginRequired';
+    if (status === 403) return 'standardUploadForbidden';
+    if (status === 429) return 'downloadRateLimited';
+    return 'standardUploadFailed';
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -763,6 +841,24 @@
         visibilityUpdated: 'Đã đổi mức hiển thị.', visibilityLoginRequired: 'Vui lòng đăng nhập để đổi mức hiển thị.',
         visibilityForbidden: 'Bạn không có quyền đổi mức hiển thị của tài liệu này.', visibilityInvalid: 'Mức hiển thị không hợp lệ.',
         visibilityNotFound: 'Không tìm thấy tài liệu.', visibilityFailed: 'Không đổi được mức hiển thị. Vui lòng thử lại sau.',
+        standardFileTitle: 'File tiêu chuẩn', standardFileNone: 'Chưa có file PDF cho tiêu chuẩn này.',
+        standardFileView: 'Xem PDF', standardFileUpload: 'Tải file tiêu chuẩn',
+        standardFileUploadHint: 'Chỉ nhận file PDF (tối đa 200 MB). File chỉ hiển thị với người trong tổ chức.',
+        standardFileChoose: 'File PDF', standardVersionLabel: 'Nhãn phiên bản (tùy chọn)',
+        standardVersionLabelPlaceholder: 'Ví dụ: Sửa đổi 1:2023',
+        standardVersion: 'Phiên bản {n}', standardCurrentVersion: 'Bản hiện hành',
+        standardSetCurrent: 'Đặt làm bản hiện hành', standardSetCurrentConfirm: 'Đặt phiên bản này làm bản hiện hành?',
+        standardSetCurrentOk: 'Đã đặt lại phiên bản hiện hành.', standardSetCurrentFailed: 'Không đặt lại được phiên bản hiện hành. Vui lòng thử lại sau.',
+        standardVersionHistory: 'Lịch sử phiên bản', standardUploadedAt: 'Tải lên {date}',
+        codeCheckNotFound: 'Chưa thấy mã chuẩn trong vài trang đầu',
+        standardUploadOk: 'Đã tải file tiêu chuẩn lên thành công.',
+        standardFileMustPdf: 'File tiêu chuẩn chỉ chấp nhận định dạng PDF.',
+        standardCodeInvalid: 'Mã tiêu chuẩn không hợp lệ. Vui lòng kiểm tra lại số hiệu tiêu chuẩn.',
+        standardFileTooLarge: 'File vượt quá dung lượng tối đa cho phép.',
+        standardUploadLoginRequired: 'Vui lòng đăng nhập để tải file tiêu chuẩn.',
+        standardUploadForbidden: 'Chỉ quản trị viên hoặc người trong tổ chức mới tải được file tiêu chuẩn.',
+        standardUploadFailed: 'Tải file tiêu chuẩn không thành công. Vui lòng thử lại sau.',
+        standardNeedFile: 'Vui lòng chọn file PDF để tải lên.', pagesUnit: 'trang',
         navAdminUsers: 'Quản trị người dùng',
         elibShowRegister: 'Chưa có tài khoản? Đăng ký', elibShowLogin: 'Đã có tài khoản? Đăng nhập',
         elibRegisterTitle: 'Đăng ký tài khoản', elibRegisterNote: 'Tài khoản mới cần được quản trị viên duyệt trước khi đăng nhập. Bạn sẽ được thông báo khi tài khoản được duyệt.',
@@ -924,6 +1020,24 @@
         visibilityUpdated: 'Visibility updated.', visibilityLoginRequired: 'Please sign in to change visibility.',
         visibilityForbidden: 'You do not have permission to change this document\'s visibility.', visibilityInvalid: 'Invalid visibility value.',
         visibilityNotFound: 'Document not found.', visibilityFailed: 'Could not change visibility. Please try again later.',
+        standardFileTitle: 'Standard file', standardFileNone: 'No PDF file for this standard yet.',
+        standardFileView: 'View PDF', standardFileUpload: 'Upload standard file',
+        standardFileUploadHint: 'PDF only (max 200 MB). The file is visible to organization members only.',
+        standardFileChoose: 'PDF file', standardVersionLabel: 'Version label (optional)',
+        standardVersionLabelPlaceholder: 'e.g. Amendment 1:2023',
+        standardVersion: 'Version {n}', standardCurrentVersion: 'Current version',
+        standardSetCurrent: 'Set as current version', standardSetCurrentConfirm: 'Set this version as the current version?',
+        standardSetCurrentOk: 'Current version updated.', standardSetCurrentFailed: 'Could not update the current version. Please try again later.',
+        standardVersionHistory: 'Version history', standardUploadedAt: 'Uploaded {date}',
+        codeCheckNotFound: 'Standard code not found in the first pages',
+        standardUploadOk: 'Standard file uploaded successfully.',
+        standardFileMustPdf: 'Standard files must be PDF.',
+        standardCodeInvalid: 'Invalid standard code. Please check the standard number.',
+        standardFileTooLarge: 'The file exceeds the maximum allowed size.',
+        standardUploadLoginRequired: 'Please sign in to upload a standard file.',
+        standardUploadForbidden: 'Only admins or organization members can upload standard files.',
+        standardUploadFailed: 'Standard file upload failed. Please try again later.',
+        standardNeedFile: 'Please choose a PDF file to upload.', pagesUnit: 'pages',
         navAdminUsers: 'User administration',
         elibShowRegister: 'No account yet? Register', elibShowLogin: 'Already have an account? Sign in',
         elibRegisterTitle: 'Register an account', elibRegisterNote: 'New accounts must be approved by an administrator before you can sign in. You will be notified once approved.',
@@ -2264,6 +2378,9 @@
       recordRecent(data);
       empty.hidden = true;
       groups.hidden = false;
+      // Mục "File tiêu chuẩn": tải bất đồng bộ, lỗi elib không ảnh
+      // hưởng phần metadata (mục tự ẩn khi elib tắt/lỗi/cũ).
+      void loadStandardFiles(model.header.code, model);
     }
 
     function openPreview(data, model) {
@@ -2311,6 +2428,401 @@
       link.hidden = !safe || isTcvnApiUrl;
       if (safe && !isTcvnApiUrl) link.href = safe;
       $('#preview-modal').hidden = false;
+    }
+
+    // ---- File tiêu chuẩn trên trang chi tiết (Phase B standard-pdf) ----
+    // GET /api/elib/standards/:code/files qua proxy. elib tắt/lỗi/cũ
+    // (chưa có route) -> ẩn hẳn mục, không hiện lỗi, trang metadata
+    // vẫn dùng bình thường (cùng mẫu graceful như mục trang chủ).
+    let standardFileCache = null; // { key, code, model, result }
+    let standardFileSeq = 0;
+
+    function standardFileCacheKey(code) {
+      return `${code}::${elibUser?.id || 'anon'}`;
+    }
+
+    async function loadStandardFiles(code, model, options = {}) {
+      const section = $('#detail-standard-file-section');
+      if (!section) return;
+      const cleanCode = String(code || '').trim();
+      if (!cleanCode) { section.hidden = true; return; }
+      const key = standardFileCacheKey(cleanCode);
+      if (!options.force && standardFileCache?.key === key) {
+        renderStandardFileSection(standardFileCache.result, model || standardFileCache.model);
+        return;
+      }
+      // Tránh nháy file của tiêu chuẩn trước trong lúc chờ tải.
+      section.hidden = true;
+      const seq = ++standardFileSeq;
+      const result = await elibFetchJson(standardFilesPath(cleanCode));
+      if (seq !== standardFileSeq) return; // đã chuyển sang tiêu chuẩn khác
+      standardFileCache = { key, code: cleanCode, model, result };
+      renderStandardFileSection(result, model);
+    }
+
+    /** Đăng nhập/đăng xuất xong: quyền xem/tải lên đổi -> tải lại mục file. */
+    function reloadStandardFiles() {
+      if (!standardFileCache) return;
+      if ($('#view-detail')?.hidden) return;
+      const { code, model } = standardFileCache;
+      standardFileCache = null;
+      void loadStandardFiles(code, model, { force: true });
+    }
+
+    function renderStandardFileSection(result, model) {
+      const section = $('#detail-standard-file-section');
+      const body = $('#detail-standard-file-body');
+      const note = $('#detail-nopdf-note');
+      if (!section || !body) return;
+      const state = standardFileState(result);
+      const canUpload = canUploadStandardFile(elibUser);
+      const doc = buildStandardFileDoc(result?.payload);
+      const hasFile = state === 'file-view' || state === 'file-noaccess';
+      // Đã có file thì câu "chưa có file PDF" không còn đúng nữa.
+      if (note) note.hidden = hasFile;
+      // Chưa có file mà cũng không có quyền tải lên (ẩn danh/external)
+      // thì ẩn mục: elib trả document=null cả khi có file mà không
+      // được thấy, hiện "chưa có file" sẽ gây hiểu nhầm.
+      if (state === 'unavailable' || (state === 'no-file' && !canUpload)) {
+        section.hidden = true;
+        body.replaceChildren();
+        return;
+      }
+      section.hidden = false;
+      body.replaceChildren();
+      if (hasFile && doc) {
+        rememberDoc(doc);
+        body.append(buildStandardCurrentFile(doc, state));
+        body.append(buildStandardVersionHistory(doc, result.payload));
+      } else {
+        const none = document.createElement('p');
+        none.className = 'standard-file-none';
+        none.textContent = t('standardFileNone');
+        body.append(none);
+      }
+      if (canUpload) body.append(buildStandardUploadBox(model));
+    }
+
+    function buildStandardCurrentFile(doc, state) {
+      const wrap = document.createElement('div');
+      wrap.className = 'standard-file-current';
+      const file = doc.file || {};
+      const info = document.createElement('div');
+      info.className = 'standard-file-info';
+      const name = document.createElement('span');
+      name.className = 'standard-file-name';
+      name.textContent = file.original_filename || doc.title || '';
+      info.append(name);
+      const metaParts = [];
+      if (Number.isInteger(file.version)) {
+        metaParts.push(t('standardVersion', { n: file.version }) + (file.version_label ? ` — ${file.version_label}` : ''));
+      }
+      if (file.file_size !== null && file.file_size !== undefined) metaParts.push(formatBytes(file.file_size));
+      if (Number.isInteger(file.page_count)) metaParts.push(`${file.page_count} ${t('pagesUnit')}`);
+      if (file.uploaded_at || file.created_at) {
+        metaParts.push(t('standardUploadedAt', { date: formatDocDate(file.uploaded_at || file.created_at) }));
+      }
+      if (metaParts.length > 0) {
+        const meta = document.createElement('span');
+        meta.className = 'standard-file-meta';
+        meta.textContent = metaParts.join(' · ');
+        info.append(meta);
+      }
+      const warningKey = codeCheckWarningKey(file);
+      if (warningKey) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-warning';
+        badge.textContent = t(warningKey);
+        info.append(badge);
+      }
+      wrap.append(info);
+
+      const actions = document.createElement('div');
+      actions.className = 'standard-file-actions';
+      if (state === 'file-view') {
+        const viewBtn = document.createElement('button');
+        viewBtn.type = 'button';
+        viewBtn.className = 'button button-primary button-small';
+        viewBtn.textContent = t('standardFileView');
+        viewBtn.addEventListener('click', () => void openDocViewer(doc, 'full'));
+        actions.append(viewBtn);
+      } else {
+        // Thấy tài liệu nhưng không được xem toàn bộ: chỉ xem trước
+        // (nếu đã sẵn sàng), còn lại thông báo rõ.
+        const aff = previewAffordance(doc);
+        if (aff.showPreview) {
+          const previewBtn = document.createElement('button');
+          previewBtn.type = 'button';
+          previewBtn.className = 'button button-primary button-small';
+          previewBtn.textContent = t('viewPreview');
+          previewBtn.addEventListener('click', () => void openDocViewer(doc, 'preview'));
+          actions.append(previewBtn);
+        } else {
+          const noAccess = document.createElement('span');
+          noAccess.className = 'standard-file-noaccess';
+          noAccess.textContent = t('docNoAccess');
+          actions.append(noAccess);
+        }
+      }
+      // Tải bản gốc: chỉ chủ + admin (can_download từ elib); người
+      // nội bộ không phải chủ chỉ xem, không có nút tải.
+      if (doc.can_download === true && elibDownloadPath(doc)) {
+        const downloadBtn = document.createElement('button');
+        downloadBtn.type = 'button';
+        downloadBtn.className = 'button button-secondary button-small';
+        downloadBtn.textContent = t('elibDownload');
+        downloadBtn.addEventListener('click', () => void downloadFile(doc));
+        actions.append(downloadBtn);
+      }
+      if (actions.childElementCount > 0) wrap.append(actions);
+      return wrap;
+    }
+
+    function buildStandardVersionHistory(doc, payload) {
+      const versions = Array.isArray(payload?.versions) ? payload.versions : [];
+      const wrap = document.createElement('div');
+      wrap.className = 'standard-version-history';
+      if (versions.length === 0) return wrap;
+      const heading = document.createElement('h4');
+      heading.className = 'standard-version-heading';
+      heading.textContent = t('standardVersionHistory');
+      wrap.append(heading);
+      const list = document.createElement('ul');
+      list.className = 'standard-version-list';
+      const currentId = doc.current_file_id || doc.file?.id || null;
+      for (const file of versions) {
+        const row = document.createElement('li');
+        row.className = 'standard-version-row';
+        const isCurrent = file.id === currentId;
+        const label = document.createElement('span');
+        label.className = 'standard-version-label';
+        label.textContent = t('standardVersion', { n: file.version ?? '?' }) + (file.version_label ? ` — ${file.version_label}` : '');
+        row.append(label);
+        const metaParts = [];
+        if (file.original_filename) metaParts.push(file.original_filename);
+        if (file.file_size !== null && file.file_size !== undefined) metaParts.push(formatBytes(file.file_size));
+        if (file.uploaded_at || file.created_at) {
+          metaParts.push(t('standardUploadedAt', { date: formatDocDate(file.uploaded_at || file.created_at) }));
+        }
+        if (metaParts.length > 0) {
+          const meta = document.createElement('span');
+          meta.className = 'standard-version-meta';
+          meta.textContent = metaParts.join(' · ');
+          row.append(meta);
+        }
+        const warningKey = codeCheckWarningKey(file);
+        if (warningKey) {
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-warning';
+          badge.textContent = t(warningKey);
+          row.append(badge);
+        }
+        if (isCurrent) {
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-source';
+          badge.textContent = t('standardCurrentVersion');
+          row.append(badge);
+        } else if (isAdminUser(elibUser)) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'button button-secondary button-small';
+          btn.textContent = t('standardSetCurrent');
+          btn.addEventListener('click', () => void setStandardCurrentVersion(doc, file, btn));
+          row.append(btn);
+        }
+        list.append(row);
+      }
+      wrap.append(list);
+      return wrap;
+    }
+
+    async function setStandardCurrentVersion(doc, file, btn) {
+      if (!confirm(t('standardSetCurrentConfirm'))) return;
+      btn.disabled = true;
+      const result = await elibFetchJson(`/documents/${encodeURIComponent(doc.id)}/current-version`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: file.id })
+      });
+      btn.disabled = false;
+      if (result.status === 200 && result.payload?.document) {
+        showToast(t('standardSetCurrentOk'));
+        standardFileCache = null;
+        if (currentDetail) {
+          const model = buildDetailViewModel(currentDetail);
+          void loadStandardFiles(model.header.code, model, { force: true });
+        }
+        return;
+      }
+      showToast(t('standardSetCurrentFailed'));
+    }
+
+    function buildStandardUploadBox(model) {
+      const box = document.createElement('div');
+      box.className = 'standard-upload-box';
+      const title = document.createElement('h4');
+      title.className = 'standard-upload-title';
+      title.textContent = t('standardFileUpload');
+      box.append(title);
+      const hint = document.createElement('p');
+      hint.className = 'standard-upload-hint';
+      hint.textContent = t('standardFileUploadHint');
+      box.append(hint);
+
+      const fileField = document.createElement('label');
+      fileField.className = 'field';
+      const fileLabel = document.createElement('span');
+      fileLabel.className = 'field-label';
+      fileLabel.textContent = t('standardFileChoose');
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.pdf,application/pdf';
+      fileInput.className = 'standard-upload-file';
+      fileField.append(fileLabel, fileInput);
+      box.append(fileField);
+
+      const labelField = document.createElement('label');
+      labelField.className = 'field';
+      const labelText = document.createElement('span');
+      labelText.className = 'field-label';
+      labelText.textContent = t('standardVersionLabel');
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.maxLength = 100;
+      labelInput.placeholder = t('standardVersionLabelPlaceholder');
+      labelInput.className = 'standard-upload-label';
+      labelField.append(labelText, labelInput);
+      box.append(labelField);
+
+      const progress = document.createElement('div');
+      progress.className = 'elib-progress';
+      progress.hidden = true;
+      const track = document.createElement('div');
+      track.className = 'elib-progress-track';
+      const bar = document.createElement('div');
+      bar.className = 'elib-progress-bar';
+      track.append(bar);
+      const progressText = document.createElement('span');
+      progressText.textContent = '0%';
+      progress.append(track, progressText);
+      box.append(progress);
+
+      const errorBox = document.createElement('div');
+      errorBox.className = 'error-banner standard-upload-error';
+      errorBox.hidden = true;
+      box.append(errorBox);
+
+      const duplicateBox = document.createElement('div');
+      duplicateBox.className = 'elib-duplicate';
+      duplicateBox.hidden = true;
+      const duplicateText = document.createElement('p');
+      duplicateBox.append(duplicateText);
+      const duplicateActions = document.createElement('div');
+      duplicateActions.className = 'elib-duplicate-actions';
+      const skipBtn = document.createElement('button');
+      skipBtn.type = 'button';
+      skipBtn.className = 'button button-secondary button-small';
+      skipBtn.textContent = t('elibSkip');
+      const forceBtn = document.createElement('button');
+      forceBtn.type = 'button';
+      forceBtn.className = 'button button-terracotta button-small';
+      forceBtn.textContent = t('elibForce');
+      duplicateActions.append(skipBtn, forceBtn);
+      duplicateBox.append(duplicateActions);
+      box.append(duplicateBox);
+
+      const submit = document.createElement('button');
+      submit.type = 'button';
+      submit.className = 'button button-terracotta';
+      submit.textContent = t('elibUpload');
+      box.append(submit);
+
+      const els = { fileInput, labelInput, progress, bar, progressText, errorBox, duplicateBox, duplicateText, submit };
+      skipBtn.addEventListener('click', () => { duplicateBox.hidden = true; });
+      forceBtn.addEventListener('click', () => sendStandardUpload(model, els, true));
+      submit.addEventListener('click', () => sendStandardUpload(model, els, false));
+      return box;
+    }
+
+    function sendStandardUpload(model, els, force) {
+      const { fileInput, labelInput, progress, bar, progressText, errorBox, duplicateBox, duplicateText, submit } = els;
+      errorBox.hidden = true;
+      if (!force) duplicateBox.hidden = true;
+      const file = fileInput.files?.[0];
+      if (!file) {
+        errorBox.hidden = false;
+        errorBox.textContent = t('standardNeedFile');
+        return;
+      }
+      if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+        errorBox.hidden = false;
+        errorBox.textContent = t('standardFileMustPdf');
+        return;
+      }
+      const code = model?.header?.code || '';
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', (model?.header?.titleVi || model?.header?.titleEn || code).slice(0, 300));
+      formData.append('standard_code', code);
+      if (model?.header?.titleVi) formData.append('standard_title_vi', model.header.titleVi);
+      if (model?.header?.titleEn) formData.append('standard_title_en', model.header.titleEn);
+      const yearMatch = /\b(19|20)\d{2}\b/.exec(String(model?.header?.year || ''));
+      if (yearMatch) formData.append('standard_year', yearMatch[0]);
+      const versionLabel = labelInput.value.trim();
+      if (versionLabel) formData.append('version_label', versionLabel);
+      // File tiêu chuẩn đã mua: xuất bản ngay để người nội bộ thấy được
+      // (visibility bị elib ép 'internal', giá luôn NULL phía máy chủ).
+      formData.append('status', 'published');
+      if (force) formData.append('force', 'true');
+
+      progress.hidden = false;
+      bar.style.width = '0%';
+      progressText.textContent = '0%';
+      submit.disabled = true;
+      submit.classList.add('is-loading');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', elibUrl('/documents'));
+      xhr.withCredentials = true;
+      xhr.upload.addEventListener('progress', event => {
+        if (!event.lengthComputable) return;
+        const percent = Math.round((event.loaded / event.total) * 100);
+        bar.style.width = `${percent}%`;
+        progressText.textContent = `${percent}%`;
+      });
+      xhr.addEventListener('load', () => {
+        submit.disabled = false;
+        submit.classList.remove('is-loading');
+        progress.hidden = true;
+        let payload;
+        try { payload = JSON.parse(xhr.responseText); } catch { payload = undefined; }
+        if (xhr.status === 201 && payload?.document) {
+          duplicateBox.hidden = true;
+          showToast(t('standardUploadOk'));
+          standardFileCache = null;
+          void loadStandardFiles(code, model, { force: true });
+          return;
+        }
+        const code2 = payload?.error?.code || '';
+        const message = payload?.error?.message || `HTTP ${xhr.status}`;
+        if (xhr.status === 409 && code2 === 'DUPLICATE_FILE') {
+          duplicateBox.hidden = false;
+          duplicateText.textContent = message || t('elibDuplicateFallback');
+          return;
+        }
+        const key = standardUploadErrorKey(xhr.status, code2 || null);
+        errorBox.hidden = false;
+        errorBox.textContent = key === 'standardUploadFailed' && payload?.error?.message ? message : t(key);
+        if (xhr.status === 401) void refreshElibAuth();
+      });
+      xhr.addEventListener('error', () => {
+        submit.disabled = false;
+        submit.classList.remove('is-loading');
+        progress.hidden = true;
+        errorBox.hidden = false;
+        errorBox.textContent = t('networkError');
+      });
+      xhr.send(formData);
     }
 
     async function requestDetail(codeOverride, sourceOverride) {
@@ -2499,6 +3011,9 @@
       // (cần biết admin/chủ): tải lại mục trang chủ một lần khi đã biết user.
       if (homeRecentLoaded && !$('#view-home').hidden) void loadHomeRecent();
       reloadFileResultsIfLoaded();
+      // Mục file tiêu chuẩn trên trang chi tiết cũng phụ thuộc quyền
+      // (xem toàn bộ / tải lên): tải lại khi trạng thái đăng nhập đổi.
+      reloadStandardFiles();
       return { status: elibAuthStatus, result };
     }
 

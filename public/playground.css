@@ -1452,6 +1452,26 @@ h1 {
 
 .detail-metadata-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
+/* File tiêu chuẩn trên trang chi tiết (Phase B standard-pdf) */
+.badge-warning { background: #fdf3e7; border-color: #f0c9a6; color: #7c3f12; }
+.standard-file-none { color: var(--muted); margin: 0; }
+.standard-file-current { border: 1px solid var(--line); border-radius: 11px; background: var(--card); box-shadow: var(--shadow-sm); padding: 14px; }
+.standard-file-info { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.standard-file-name { font-weight: 700; word-break: break-word; }
+.standard-file-meta { color: var(--muted); font-size: 13px; }
+.standard-file-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.standard-file-noaccess { color: var(--muted); font-size: 13px; }
+.standard-version-heading { color: var(--green-dark); font-size: 14px; margin: 16px 0 8px; }
+.standard-version-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.standard-version-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; background: var(--card); }
+.standard-version-label { font-weight: 700; }
+.standard-version-meta { color: var(--muted); font-size: 13px; }
+.standard-upload-box { margin-top: 16px; border: 1px dashed var(--line); border-radius: 11px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.standard-upload-title { color: var(--green-dark); font-size: 15px; margin: 0; }
+.standard-upload-hint { color: var(--muted); font-size: 13px; margin: 0; }
+.standard-upload-box .button { align-self: flex-start; }
+.standard-upload-error { margin: 0; }
+
 .meta-field {
   border: 1px solid var(--line);
   border-radius: 11px;
