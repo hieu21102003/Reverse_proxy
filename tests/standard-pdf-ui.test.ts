@@ -218,8 +218,8 @@ describe('gắn DOM: mục file tiêu chuẩn trên trang chi tiết', () => {
     expect(hero).toContain('id="detail-view-pdf-btn"');
     expect(hero).toContain('data-i18n="standardFileView"');
     expect(hero).toContain('hidden');
-    expect(indexHtml).toContain('playground.css?v=17');
-    expect(indexHtml).toContain('playground.js?v=17');
+    expect(indexHtml).toContain('playground.css?v=18');
+    expect(indexHtml).toContain('playground.js?v=18');
   });
 
   it('renderDetailResult tải mục file; refreshElibAuth tải lại khi quyền đổi', () => {

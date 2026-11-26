@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=17">
-    <script src="/playground.js?v=17" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=18">
+    <script src="/playground.js?v=18" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -948,12 +948,13 @@
     </div>
 
     <!-- Document viewer (Phase B): pdf.js lazy-loaded on open -->
-    <div class="doc-viewer" id="doc-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
+    <div class="doc-viewer" id="doc-viewer" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
       <div class="doc-viewer-bar">
         <button class="button button-secondary button-small doc-viewer-toc-toggle" id="doc-viewer-toc-toggle" type="button" hidden aria-expanded="false" aria-controls="doc-viewer-toc"><span data-i18n="tocToggle">Mục lục</span></button>
         <span class="doc-viewer-title" id="doc-viewer-title"></span>
         <span class="doc-viewer-pageinfo" id="doc-viewer-pageinfo"></span>
         <span class="doc-viewer-actions">
+          <button class="button button-secondary button-small" id="doc-viewer-search-toggle" type="button" hidden aria-expanded="false" aria-controls="doc-viewer-search-bar"><span data-i18n="pdfSearchToggle">Tìm</span></button>
           <button class="button button-secondary button-small" id="doc-viewer-prev" type="button"><span data-i18n="viewerPrev">Trang trước</span></button>
           <button class="button button-secondary button-small" id="doc-viewer-next" type="button"><span data-i18n="viewerNext">Trang sau</span></button>
           <a class="button button-secondary button-small" id="doc-viewer-download" href="#" download><span data-i18n="viewerDownload">Tải xuống</span></a>
@@ -964,7 +965,11 @@
       <div class="doc-viewer-body">
         <aside class="doc-viewer-toc" id="doc-viewer-toc" hidden aria-label="Mục lục">
           <div class="doc-viewer-toc-head">
-            <strong data-i18n="tocTitle">Mục lục</strong>
+            <strong id="doc-viewer-sidebar-title" data-i18n="tocTitle">Mục lục</strong>
+            <div class="doc-viewer-sidebar-tabs" id="doc-viewer-sidebar-tabs" role="tablist" hidden>
+              <button class="doc-viewer-sidebar-tab is-active" id="doc-viewer-tab-toc" type="button" role="tab" aria-selected="true"><span data-i18n="tocTitle">Mục lục</span></button>
+              <button class="doc-viewer-sidebar-tab" id="doc-viewer-tab-results" type="button" role="tab" aria-selected="false"><span data-i18n="pdfSearchTabResults">Kết quả</span><span class="doc-viewer-tab-count" id="doc-viewer-tab-results-count" hidden></span></button>
+            </div>
             <button class="doc-viewer-toc-close" id="doc-viewer-toc-close" type="button" aria-label="Đóng mục lục">×</button>
           </div>
           <div class="doc-viewer-toc-search-wrap" id="doc-viewer-toc-search-wrap" hidden>
@@ -975,9 +980,28 @@
             <ul class="doc-viewer-toc-list" id="doc-viewer-toc-list"></ul>
           </nav>
           <div class="doc-viewer-toc-foot" id="doc-viewer-toc-foot" hidden></div>
+          <div class="doc-viewer-results-pane" id="doc-viewer-results-pane" hidden>
+            <p class="doc-viewer-results-status" id="doc-viewer-results-status" hidden></p>
+            <ul class="doc-viewer-results-list" id="doc-viewer-results-list"></ul>
+            <div class="doc-viewer-results-more-wrap" id="doc-viewer-results-more-wrap" hidden>
+              <button class="button button-secondary button-small" id="doc-viewer-results-more" type="button"><span data-i18n="pdfSearchShowMore">Xem thêm kết quả</span></button>
+            </div>
+          </div>
         </aside>
         <div class="doc-viewer-toc-backdrop" id="doc-viewer-toc-backdrop" hidden></div>
         <div class="doc-viewer-stage" id="doc-viewer-stage">
+          <div class="doc-viewer-search-bar" id="doc-viewer-search-bar" hidden role="search" aria-label="Tìm trong tài liệu">
+            <div class="doc-viewer-search-row">
+              <input class="doc-viewer-search-input" id="doc-viewer-search-input" type="search" data-i18n-placeholder="pdfSearchPlaceholder" placeholder="Tìm trong tài liệu..." autocomplete="off">
+              <span class="doc-viewer-search-counter" id="doc-viewer-search-counter" aria-live="polite">0/0</span>
+              <button class="doc-viewer-search-btn" id="doc-viewer-search-prev" type="button" aria-label="Kết quả trước" title="Kết quả trước (Shift+Enter)">↑</button>
+              <button class="doc-viewer-search-btn" id="doc-viewer-search-next" type="button" aria-label="Kết quả tiếp" title="Kết quả tiếp (Enter)">↓</button>
+              <button class="doc-viewer-search-opt" id="doc-viewer-search-case" type="button" aria-pressed="false" aria-label="Phân biệt hoa/thường" title="Phân biệt hoa/thường">Aa</button>
+              <button class="doc-viewer-search-opt is-active" id="doc-viewer-search-diacritics" type="button" aria-pressed="true" aria-label="Bỏ dấu tiếng Việt" title="Bỏ dấu tiếng Việt"><span data-i18n="pdfSearchDiacriticsShort">Bỏ dấu</span></button>
+              <button class="doc-viewer-search-btn doc-viewer-search-close" id="doc-viewer-search-close" type="button" aria-label="Đóng tìm kiếm" title="Đóng (Esc)">×</button>
+            </div>
+            <div class="doc-viewer-search-meta" id="doc-viewer-search-meta" hidden role="status" aria-live="polite"></div>
+          </div>
           <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
           <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
           <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>

@@ -300,8 +300,8 @@ describe('gắn DOM: trang tóm tắt + form nhập tay', () => {
     expect(indexHtml).toContain('id="detail-summary-note"');
     expect(indexHtml).toContain('id="detail-manual-section"');
     expect(indexHtml).toContain('id="detail-manual-body"');
-    expect(indexHtml).toContain('playground.css?v=17');
-    expect(indexHtml).toContain('playground.js?v=17');
+    expect(indexHtml).toContain('playground.css?v=18');
+    expect(indexHtml).toContain('playground.js?v=18');
   });
 
   it('bấm kết quả tìm kiếm/thư viện truyền cả record làm tóm tắt; quan hệ/lịch sử thì không', () => {
