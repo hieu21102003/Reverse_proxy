@@ -58,6 +58,8 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   GET  /api/documents/:id/files/:fileId/download
  *   GET  /api/documents/:id/preview   (limited-page preview, Phase B)
  *   GET  /api/documents/:id/view      (full view, owner+admin, Phase B)
+ *   GET  /api/documents/:id/toc       (PDF TOC for current version)
+ *   GET  /api/documents/:id/files/:fileId/toc (PDF TOC for specific version)
  *   PATCH /api/documents/:id          (visibility change, admin/owner, Phase A2/B2)
  *   GET  /api/standards/:code/files   (standard PDF + versions, Phase B standard-pdf)
  *   PATCH /api/documents/:id/current-version (admin resets current version, Phase B standard-pdf)
@@ -81,6 +83,9 @@ const ELIB_ALLOWLIST_EXACT = new Set([
 const ELIB_ALLOWLIST_DOWNLOAD = /^documents\/[^/]+\/files\/[^/]+\/download$/;
 /** Preview/full-view are read-only: GET only, exactly these two shapes. */
 const ELIB_ALLOWLIST_PREVIEW_VIEW = /^documents\/[^/]+\/(preview|view)$/;
+/** PDF TOC read routes: GET/HEAD only, current version or specific file version. */
+const ELIB_ALLOWLIST_DOCUMENT_TOC = /^documents\/[^/]+\/toc$/;
+const ELIB_ALLOWLIST_FILE_TOC = /^documents\/[^/]+\/files\/[^/]+\/toc$/;
 /** Visibility change (Phase A2): PATCH only, exactly documents/<id>. */
 const ELIB_ALLOWLIST_DOCUMENT_PATCH = /^documents\/[^/]+$/;
 /** Self-registration + forced password change (Phase B3): POST only. */
@@ -117,6 +122,9 @@ function hasTraversal(rawPath: string, wildcard: string): boolean {
 
 function isAllowlisted(wildcard: string, method: string): boolean {
   if (ELIB_ALLOWLIST_PREVIEW_VIEW.test(wildcard)) {
+    return method === 'GET' || method === 'HEAD';
+  }
+  if (ELIB_ALLOWLIST_DOCUMENT_TOC.test(wildcard) || ELIB_ALLOWLIST_FILE_TOC.test(wildcard)) {
     return method === 'GET' || method === 'HEAD';
   }
   if (ELIB_ALLOWLIST_DOCUMENT_PATCH.test(wildcard)) {

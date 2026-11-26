@@ -562,3 +562,200 @@ describe('Elib proxy — metadata nhập tay admin/standards/:code (summary-deta
     expect(hits).toBe(before);
   });
 });
+
+describe('Elib proxy — mục lục PDF (P1)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let hits = 0;
+  let lastMethod = '';
+  let lastPath = '';
+  let lastHeaders: Record<string, string | string[] | undefined> = {};
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastMethod = req.method || '';
+      lastPath = req.url || '';
+      lastHeaders = req.headers;
+
+      const sendJson = (status: number, payload: unknown, headers: Record<string, string> = {}) => {
+        res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers });
+        if (lastMethod === 'HEAD') {
+          res.end();
+          return;
+        }
+        res.end(JSON.stringify(payload));
+      };
+
+      if (lastPath.includes('/documents/forbidden-doc/')) {
+        return sendJson(403, {
+          error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xem tài liệu này' }
+        });
+      }
+      if (lastPath.includes('/documents/missing-doc/')) {
+        return sendJson(404, {
+          error: { code: 'NOT_FOUND', message: 'Không tìm thấy' }
+        });
+      }
+      return sendJson(
+        200,
+        { document_id: 'd1', state: 'ready', displayable: true, nodes: [] },
+        { 'cache-control': 'public, max-age=60' }
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('GET /api/elib/documents/:id/toc và /files/:fileId/toc đi qua, giữ cookie/CSRF/headers', async () => {
+    const routes: Array<[string, string]> = [
+      ['/api/elib/documents/d1/toc', '/api/documents/d1/toc'],
+      ['/api/elib/documents/d1/files/f1/toc', '/api/documents/d1/files/f1/toc']
+    ];
+    for (const [proxyUrl, upstreamPath] of routes) {
+      const res = await app.inject({
+        method: 'GET',
+        url: proxyUrl,
+        headers: {
+          cookie: 'elib_session=good-token',
+          origin: 'https://smartrail.local:8443',
+          host: 'smartrail.local:8443',
+          'x-forwarded-host': 'evil.example.com',
+          'x-internal-token': 'attacker-supplied-secret'
+        }
+      });
+      expect(res.statusCode, proxyUrl).toBe(200);
+      expect(res.headers['cache-control'], proxyUrl).toBe('public, max-age=60');
+      expect(res.json(), proxyUrl).toEqual({
+        document_id: 'd1',
+        state: 'ready',
+        displayable: true,
+        nodes: []
+      });
+      expect(lastMethod).toBe('GET');
+      expect(lastPath).toBe(upstreamPath);
+      expect(lastHeaders.cookie).toBe('elib_session=good-token');
+      expect(lastHeaders.origin).toBe('https://smartrail.local:8443');
+      expect(lastHeaders['x-forwarded-host']).toBe('smartrail.local:8443');
+      expect(lastHeaders['x-internal-token']).toBeUndefined();
+    }
+  });
+
+  it('HEAD trên 2 route đọc TOC được cho qua và giữ cache-control', async () => {
+    const routes: Array<[string, string]> = [
+      ['/api/elib/documents/d1/toc', '/api/documents/d1/toc'],
+      ['/api/elib/documents/d1/files/f1/toc', '/api/documents/d1/files/f1/toc']
+    ];
+    for (const [proxyUrl, upstreamPath] of routes) {
+      const res = await app.inject({ method: 'HEAD', url: proxyUrl });
+      expect(res.statusCode, `HEAD ${proxyUrl}`).toBe(200);
+      expect(res.headers['cache-control'], `HEAD ${proxyUrl}`).toBe('public, max-age=60');
+      expect(lastMethod).toBe('HEAD');
+      expect(lastPath).toBe(upstreamPath);
+    }
+  });
+
+  it('trả nguyên trạng 403 và 404 từ upstream cho 2 route đọc TOC', async () => {
+    const forbiddenRes = await app.inject({
+      method: 'GET',
+      url: '/api/elib/documents/forbidden-doc/toc',
+      headers: { cookie: 'elib_session=user-token' }
+    });
+    expect(forbiddenRes.statusCode).toBe(403);
+    expect(forbiddenRes.json()).toEqual({
+      error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xem tài liệu này' }
+    });
+
+    const missingRes = await app.inject({
+      method: 'GET',
+      url: '/api/elib/documents/missing-doc/files/f1/toc'
+    });
+    expect(missingRes.statusCode).toBe(404);
+    expect(missingRes.json()).toEqual({
+      error: { code: 'NOT_FOUND', message: 'Không tìm thấy' }
+    });
+  });
+
+  it('method sai trên 2 route đọc TOC bị chặn 404 ELIB_ROUTE_NOT_FOUND, không forward', async () => {
+    const before = hits;
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
+      for (const url of ['/api/elib/documents/d1/toc', '/api/elib/documents/d1/files/f1/toc']) {
+        const res = await app.inject({ method, url });
+        expect(res.statusCode, `${method} ${url}`).toBe(404);
+        expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+      }
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('route gần giống với route TOC bị chặn 404 ELIB_ROUTE_NOT_FOUND, không forward', async () => {
+    const before = hits;
+    for (const url of [
+      '/api/elib/documents/d1/toc/extra',
+      '/api/elib/documents/d1/files/f1/toc/extra',
+      '/api/elib/documents/d1/files/f1/toc/manual',
+      '/api/elib/documents/d1/tocs',
+      '/api/elib/documents/d1/files/f1/tocs',
+      '/api/elib/documents/toc',
+      '/api/elib/documents/d1/files/toc',
+      '/api/elib/documents/d1/toc/promote-auto',
+      '/api/elib/documents/d1/toc/reextract'
+    ]) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('route admin TOC vẫn bị chặn 404 ở P1, không forward', async () => {
+    const before = hits;
+    const blocked: Array<[string, string]> = [
+      ['GET', '/api/elib/admin/tocs'],
+      ['GET', '/api/elib/admin/files/f1/toc'],
+      ['PUT', '/api/elib/admin/files/f1/toc/manual'],
+      ['POST', '/api/elib/admin/files/f1/toc/promote-auto'],
+      ['DELETE', '/api/elib/admin/files/f1/toc/manual'],
+      ['POST', '/api/elib/admin/files/f1/toc/reextract']
+    ];
+    for (const [method, url] of blocked) {
+      const res = await app.inject({ method: method as never, url });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('path traversal trên route TOC bị chặn 400 ELIB_BAD_PATH, không forward', async () => {
+    const before = hits;
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const port = (app.server.address() as { port: number }).port;
+    const rawGet = (path: string) => new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+    for (const path of [
+      '/api/elib/documents/d1/../d2/toc',
+      '/api/elib/documents/d1/files/%2e%2e/toc',
+      '/api/elib/documents/d1%2ftoc'
+    ]) {
+      const res = await rawGet(path);
+      expect(res.status, path).toBe(400);
+      expect(JSON.parse(res.body).error.code).toBe('ELIB_BAD_PATH');
+    }
+    expect(hits).toBe(before);
+  });
+});
