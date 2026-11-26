@@ -689,6 +689,21 @@
   }
 
   /**
+   * Hành động của nút PDF trên thẻ header trang chi tiết, suy từ
+   * trạng thái file tiêu chuẩn (standardFileState) + doc hiện hành:
+   * - 'full': có file và được xem toàn bộ -> nút "Xem PDF".
+   * - 'preview': thấy file nhưng không được xem toàn bộ, bản xem
+   *   trước đã sẵn sàng -> nút "Xem trước".
+   * - null: chưa có file / không thấy file / elib lỗi -> ẩn nút.
+   */
+  function headerPdfAction(state, doc) {
+    if (!doc || typeof doc !== 'object') return null;
+    if (state === 'file-view') return 'full';
+    if (state === 'file-noaccess' && previewAffordance(doc).showPreview) return 'preview';
+    return null;
+  }
+
+  /**
    * Chuyển payload GET standards/:code/files thành shape tài liệu mà
    * viewer/nút tải hiện có dùng (file = file hiện hành của elib).
    */
@@ -1534,7 +1549,7 @@
     return typeof translate === 'function' ? translate(key) : key;
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError };
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, headerPdfAction, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -3827,7 +3842,7 @@
       const section = $('#detail-standard-file-section');
       if (!section) return;
       const cleanCode = String(code || '').trim();
-      if (!cleanCode) { section.hidden = true; return; }
+      if (!cleanCode) { section.hidden = true; renderDetailHeaderPdfButton('unavailable', null); return; }
       const key = standardFileCacheKey(cleanCode);
       if (!options.force && standardFileCache?.key === key) {
         renderStandardFileSection(standardFileCache.result, model || standardFileCache.model);
@@ -3835,6 +3850,7 @@
       }
       // Tránh nháy file của tiêu chuẩn trước trong lúc chờ tải.
       section.hidden = true;
+      renderDetailHeaderPdfButton('unavailable', null);
       const seq = ++standardFileSeq;
       const result = await elibFetchJson(standardFilesPath(cleanCode));
       if (seq !== standardFileSeq) return; // đã chuyển sang tiêu chuẩn khác
@@ -3849,6 +3865,26 @@
       const { code, model } = standardFileCache;
       standardFileCache = null;
       void loadStandardFiles(code, model, { force: true });
+    }
+
+    /**
+     * Nút "Xem PDF" trên thẻ header trang chi tiết: chỉ hiện khi có
+     * file tiêu chuẩn và người dùng được xem (toàn bộ -> "Xem PDF",
+     * chỉ xem trước -> "Xem trước"); mọi trạng thái khác ẩn hẳn.
+     */
+    function renderDetailHeaderPdfButton(state, doc) {
+      const btn = $('#detail-view-pdf-btn');
+      if (!btn) return;
+      const action = headerPdfAction(state, doc);
+      if (!action || !doc) {
+        btn.hidden = true;
+        btn.onclick = null;
+        return;
+      }
+      const label = btn.querySelector('[data-i18n]');
+      if (label) label.textContent = t(action === 'full' ? 'standardFileView' : 'viewPreview');
+      btn.hidden = false;
+      btn.onclick = () => void openDocViewer(doc, action);
     }
 
     function renderStandardFileSection(result, model) {
@@ -3868,10 +3904,12 @@
       if (state === 'unavailable' || (state === 'no-file' && !canUpload)) {
         section.hidden = true;
         body.replaceChildren();
+        renderDetailHeaderPdfButton(state, null);
         return;
       }
       section.hidden = false;
       body.replaceChildren();
+      renderDetailHeaderPdfButton(state, doc);
       if (hasFile && doc) {
         rememberDoc(doc);
         body.append(buildStandardCurrentFile(doc, state));
@@ -3921,14 +3959,10 @@
 
       const actions = document.createElement('div');
       actions.className = 'standard-file-actions';
-      if (state === 'file-view') {
-        const viewBtn = document.createElement('button');
-        viewBtn.type = 'button';
-        viewBtn.className = 'button button-primary button-small';
-        viewBtn.textContent = t('standardFileView');
-        viewBtn.addEventListener('click', () => void openDocViewer(doc, 'full'));
-        actions.append(viewBtn);
-      } else {
+      // Nút "Xem PDF" (toàn bộ) nằm trên thẻ header trang chi tiết
+      // (renderDetailHeaderPdfButton) — ở đây chỉ còn xem trước cho
+      // người không được xem toàn bộ, thông báo và nút tải.
+      if (state !== 'file-view') {
         // Thấy tài liệu nhưng không được xem toàn bộ: chỉ xem trước
         // (nếu đã sẵn sàng), còn lại thông báo rõ.
         const aff = previewAffordance(doc);
