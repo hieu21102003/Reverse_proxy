@@ -414,8 +414,8 @@ describe('PDF in-document search UI & TextLayer controls (S2)', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    expect(indexHtml).toContain('playground.css?v=17');
-    expect(indexHtml).toContain('playground.js?v=17');
+    expect(indexHtml).toContain('playground.css?v=18');
+    expect(indexHtml).toContain('playground.js?v=18');
 
     expect(playgroundCss).toContain('.viewer-text-layer');
     expect(playgroundCss).toContain('.viewer-text-layer.is-selectable');

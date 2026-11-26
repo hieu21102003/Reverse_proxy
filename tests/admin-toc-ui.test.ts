@@ -293,7 +293,7 @@ describe('gắn DOM & hợp đồng tĩnh P3', () => {
   const playgroundCss = readFileSync(new URL('../public/playground.css', import.meta.url), 'utf8');
   const playgroundJs = readFileSync(new URL('../public/playground.js', import.meta.url), 'utf8');
 
-  it('index.html có menu #nav-admin-tocs (ẩn mặc định), màn #view-admin-tocs, bộ lọc, trình sửa, khung viewer và ?v=16', () => {
+  it('index.html có menu #nav-admin-tocs (ẩn mặc định), màn #view-admin-tocs, bộ lọc, trình sửa, khung viewer và ?v=17', () => {
     expect(indexHtml).toMatch(/id="nav-admin-tocs"[^>]*hidden/);
     for (const id of [
       'view-admin-tocs',
@@ -330,8 +330,8 @@ describe('gắn DOM & hợp đồng tĩnh P3', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    expect(indexHtml).toContain('playground.css?v=17');
-    expect(indexHtml).toContain('playground.js?v=17');
+    expect(indexHtml).toContain('playground.css?v=18');
+    expect(indexHtml).toContain('playground.js?v=18');
     expect(indexHtml).not.toContain('pdfjs');
   });
 
