@@ -59,6 +59,8 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   GET  /api/documents/:id/preview   (limited-page preview, Phase B)
  *   GET  /api/documents/:id/view      (full view, owner+admin, Phase B)
  *   PATCH /api/documents/:id          (visibility change, admin/owner, Phase A2/B2)
+ *   GET  /api/standards/:code/files   (standard PDF + versions, Phase B standard-pdf)
+ *   PATCH /api/documents/:id/current-version (admin resets current version, Phase B standard-pdf)
  *   GET  /api/admin/users             (admin user list, Phase B3)
  *   POST /api/admin/users/bulk-reject (Phase B3)
  *   POST /api/admin/users/:id/approve|reject|reset-password|unlock (Phase B3)
@@ -85,6 +87,10 @@ const ELIB_ALLOWLIST_AUTH_POST = new Set(['auth/register', 'auth/change-password
 const ELIB_ALLOWLIST_ADMIN_USERS_LIST = /^admin\/users$/;
 const ELIB_ALLOWLIST_ADMIN_USER_ACTION = /^admin\/users\/[^/]+\/(approve|reject|reset-password|unlock)$/;
 const ELIB_ALLOWLIST_ADMIN_USER_PATCH = /^admin\/users\/[^/]+$/;
+/** Standard PDF files (Phase B standard-pdf): read-only, GET only. */
+const ELIB_ALLOWLIST_STANDARD_FILES = /^standards\/[^/]+\/files$/;
+/** Reset current version (Phase B standard-pdf): PATCH only. */
+const ELIB_ALLOWLIST_CURRENT_VERSION = /^documents\/[^/]+\/current-version$/;
 
 /**
  * Path-traversal guard for the wildcard segment. Checks both the raw
@@ -123,6 +129,14 @@ function isAllowlisted(wildcard: string, method: string): boolean {
     return method === 'GET';
   }
   if (ELIB_ALLOWLIST_ADMIN_USER_PATCH.test(wildcard)) {
+    return method === 'PATCH';
+  }
+  // Phase B standard-pdf: standard file list is read-only; resetting
+  // the current version is PATCH-only (admin enforced by elib).
+  if (ELIB_ALLOWLIST_STANDARD_FILES.test(wildcard)) {
+    return method === 'GET' || method === 'HEAD';
+  }
+  if (ELIB_ALLOWLIST_CURRENT_VERSION.test(wildcard)) {
     return method === 'PATCH';
   }
   return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);

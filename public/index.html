@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=12">
-    <script src="/playground.js?v=12" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=13">
+    <script src="/playground.js?v=13" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -523,7 +523,11 @@
                   <span data-i18n="copyLink">Sao chép liên kết</span>
                 </button>
               </div>
-              <p class="detail-note" data-i18n="noPdfNote">API hiện chỉ cung cấp metadata của tiêu chuẩn; chưa có file PDF để xem trực tuyến hoặc tải xuống trong hệ thống này.</p>
+              <p class="detail-note" id="detail-nopdf-note" data-i18n="noPdfNote">API hiện chỉ cung cấp metadata của tiêu chuẩn; chưa có file PDF để xem trực tuyến hoặc tải xuống trong hệ thống này.</p>
+              <section class="detail-section standard-file-section" id="detail-standard-file-section" hidden>
+                <div class="detail-section-heading"><h3 data-i18n="standardFileTitle">File tiêu chuẩn</h3></div>
+                <div id="detail-standard-file-body"></div>
+              </section>
               <div class="response-tabs" role="tablist" aria-label="Chi tiết">
                 <button class="response-tab is-active" data-response-tab="detail-fields" type="button" role="tab"><span data-i18n="fieldsTab">Thông tin</span></button>
                 <button class="response-tab" data-response-tab="detail-raw" type="button" role="tab"><span data-i18n="rawJson">Raw JSON</span></button>
