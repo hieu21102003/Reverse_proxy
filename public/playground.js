@@ -1534,7 +1534,976 @@
     return typeof translate === 'function' ? translate(key) : key;
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError };
+  // ---- PDF in-document search core (S1) ----
+  const PDF_SEARCH_MIN_QUERY_LENGTH = 2;
+  const PDF_SEARCH_MAX_RESULTS = 2000;
+  const PDF_SEARCH_SNIPPET_MAX_LENGTH = 120;
+  const PDF_SEARCH_BATCH_SIZE = 4;
+  const PDF_SEARCH_NO_TEXT_PROBE_PAGES = 10;
+
+  function medianNumber(values, fallback) {
+    if (!Array.isArray(values) || values.length === 0) return fallback;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function hasValidPdfTransform(transform) {
+    if (!Array.isArray(transform) || transform.length < 6) return false;
+    for (let i = 0; i < 6; i += 1) {
+      if (typeof transform[i] !== 'number' || !Number.isFinite(transform[i])) return false;
+    }
+    return true;
+  }
+
+  function canUseGeometryLayout(indexedItems) {
+    const nonEmpty = [];
+    for (const entry of indexedItems) {
+      if (entry.str.trim() === '') continue;
+      if (!hasValidPdfTransform(entry.item?.transform)) return false;
+      nonEmpty.push(entry);
+    }
+    if (nonEmpty.length === 0) return false;
+    if (nonEmpty.length === 1) return true;
+    const x0 = nonEmpty[0].item.transform[4];
+    const y0 = nonEmpty[0].item.transform[5];
+    for (let i = 1; i < nonEmpty.length; i += 1) {
+      const t = nonEmpty[i].item.transform;
+      if (t[4] !== x0 || t[5] !== y0) return true;
+    }
+    return false;
+  }
+
+  function buildPositionedItems(indexedItems) {
+    const out = [];
+    const spaceItems = [];
+    for (const entry of indexedItems) {
+      const t = entry.item.transform;
+      if (!hasValidPdfTransform(t)) continue;
+      const x0 = t[4];
+      const y = t[5];
+      const fontSize = Math.hypot(t[2], t[3]) || Math.hypot(t[0], t[1]) ||
+        (typeof entry.item.height === 'number' && Number.isFinite(entry.item.height) && entry.item.height > 0 ? entry.item.height : 10);
+      const rawWidth = entry.item.width;
+      const width = typeof rawWidth === 'number' && Number.isFinite(rawWidth) && rawWidth >= 0
+        ? rawWidth
+        : entry.str.length * fontSize * 0.5;
+      const box = {
+        item: entry.item,
+        str: entry.str,
+        itemIndex: entry.itemIndex,
+        x0,
+        x1: x0 + width,
+        y,
+        fontSize
+      };
+      if (entry.str.trim() === '') {
+        if (entry.str.length > 0) spaceItems.push(box);
+      } else {
+        out.push(box);
+      }
+    }
+    return { positioned: out, spaceItems };
+  }
+
+  function clusterVisualRows(positioned) {
+    const sorted = positioned.slice().sort((a, b) => {
+      if (b.y !== a.y) return b.y - a.y;
+      if (a.x0 !== b.x0) return a.x0 - b.x0;
+      return a.itemIndex - b.itemIndex;
+    });
+    const rows = [];
+    for (const box of sorted) {
+      const last = rows[rows.length - 1];
+      if (last) {
+        const tolerance = Math.max(2, Math.min(last.fontSize, box.fontSize) * 0.48);
+        if (Math.abs(box.y - last.anchorY) <= tolerance) {
+          last.items.push(box);
+          continue;
+        }
+      }
+      rows.push({ anchorY: box.y, fontSize: box.fontSize, items: [box] });
+    }
+    for (const row of rows) {
+      row.items.sort((a, b) => (a.x0 !== b.x0 ? a.x0 - b.x0 : a.itemIndex - b.itemIndex));
+      row.y = row.anchorY;
+      row.minX = row.items[0].x0;
+      row.maxX = Math.max(...row.items.map(it => it.x1));
+    }
+    return rows;
+  }
+
+  function detectTwoColumnBlocks(rows, positioned, medianFontSize) {
+    const fallbackBlocks = [{ kind: 'single', rows }];
+    if (rows.length < 4 || positioned.length === 0) {
+      return { twoColumnDetected: false, blocks: fallbackBlocks };
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const box of positioned) {
+      if (box.x0 < minX) minX = box.x0;
+      if (box.x1 > maxX) maxX = box.x1;
+    }
+    const spanX = maxX - minX;
+    const minGutter = Math.max(12, medianFontSize * 1.4);
+    if (!Number.isFinite(spanX) || spanX < 120) {
+      return { twoColumnDetected: false, blocks: fallbackBlocks };
+    }
+
+    const lowSplit = minX + 0.32 * spanX;
+    const highSplit = minX + 0.68 * spanX;
+    const candidateMap = new Map();
+    const addCandidate = (value) => {
+      if (value < lowSplit || value > highSplit) return;
+      const bucket = Math.round(value / 2) * 2;
+      if (!candidateMap.has(bucket)) candidateMap.set(bucket, value);
+    };
+
+    for (const row of rows) {
+      for (let i = 1; i < row.items.length; i += 1) {
+        const prev = row.items[i - 1];
+        const curr = row.items[i];
+        if (curr.x0 - prev.x1 >= minGutter) {
+          addCandidate((prev.x1 + curr.x0) / 2);
+        }
+      }
+    }
+    for (let k = 0; k <= 6; k += 1) {
+      addCandidate(minX + (0.35 + k * 0.05) * spanX);
+    }
+
+    const pageCenterX = minX + spanX / 2;
+    let bestPlan = null;
+
+    for (const splitX of candidateMap.values()) {
+      const classified = rows.map((row) => {
+        let crosses = false;
+        const left = [];
+        const right = [];
+        for (const it of row.items) {
+          if (it.x0 < splitX - 2 && it.x1 > splitX + 2) {
+            crosses = true;
+            break;
+          }
+          const center = (it.x0 + it.x1) / 2;
+          if (center <= splitX) {
+            if (it.x1 > splitX + 2) { crosses = true; break; }
+            left.push(it);
+          } else {
+            if (it.x0 < splitX - 2) { crosses = true; break; }
+            right.push(it);
+          }
+        }
+        if (crosses) return { row, type: 'full', left: [], right: [] };
+        if (left.length > 0 && right.length > 0) {
+          const leftMaxX1 = Math.max(...left.map(it => it.x1));
+          const rightMinX0 = Math.min(...right.map(it => it.x0));
+          if (rightMinX0 - leftMaxX1 < minGutter) {
+            return { row, type: 'full', left: [], right: [] };
+          }
+          return { row, type: 'split', left, right };
+        }
+        if (left.length > 0) return { row, type: 'left', left, right: [] };
+        return { row, type: 'right', left: [], right };
+      });
+
+      const bands = [];
+      let totalTwoColRows = 0;
+      let minQualifiedGutter = Infinity;
+      let i = 0;
+      while (i < classified.length) {
+        if (classified[i].type === 'full') {
+          const singleRows = [];
+          while (i < classified.length && classified[i].type === 'full') {
+            singleRows.push(classified[i].row);
+            i += 1;
+          }
+          bands.push({ kind: 'single', rows: singleRows });
+          continue;
+        }
+        const bandStart = i;
+        while (i < classified.length && classified[i].type !== 'full') i += 1;
+        const bandSlice = classified.slice(bandStart, i);
+        const leftRows = [];
+        const rightRows = [];
+        let splitCount = 0;
+        let bandLeftMinX0 = Infinity;
+        let bandLeftMaxX1 = -Infinity;
+        let bandRightMinX0 = Infinity;
+        let bandRightMaxX1 = -Infinity;
+        let leftMinY = Infinity;
+        let leftMaxY = -Infinity;
+        let rightMinY = Infinity;
+        let rightMaxY = -Infinity;
+
+        for (const item of bandSlice) {
+          if (item.type === 'split') splitCount += 1;
+          if (item.left.length > 0) {
+            leftRows.push({ row: item.row, items: item.left });
+            if (item.row.y < leftMinY) leftMinY = item.row.y;
+            if (item.row.y > leftMaxY) leftMaxY = item.row.y;
+            for (const bx of item.left) {
+              if (bx.x0 < bandLeftMinX0) bandLeftMinX0 = bx.x0;
+              if (bx.x1 > bandLeftMaxX1) bandLeftMaxX1 = bx.x1;
+            }
+          }
+          if (item.right.length > 0) {
+            rightRows.push({ row: item.row, items: item.right });
+            if (item.row.y < rightMinY) rightMinY = item.row.y;
+            if (item.row.y > rightMaxY) rightMaxY = item.row.y;
+            for (const bx of item.right) {
+              if (bx.x0 < bandRightMinX0) bandRightMinX0 = bx.x0;
+              if (bx.x1 > bandRightMaxX1) bandRightMaxX1 = bx.x1;
+            }
+          }
+        }
+
+        const hasYOverlap = leftRows.length > 0 && rightRows.length > 0 &&
+          Math.min(leftMaxY, rightMaxY) >= Math.max(leftMinY, rightMinY) - medianFontSize * 1.5;
+        const bandGutter = bandRightMinX0 - bandLeftMaxX1;
+        const leftWidth = bandLeftMaxX1 - bandLeftMinX0;
+        const rightWidth = bandRightMaxX1 - bandRightMinX0;
+
+        const qualified = leftRows.length >= 2 &&
+          rightRows.length >= 2 &&
+          (hasYOverlap || splitCount >= 2) &&
+          bandGutter >= minGutter &&
+          leftWidth >= spanX * 0.18 &&
+          rightWidth >= spanX * 0.18;
+
+        if (qualified) {
+          totalTwoColRows += bandSlice.length;
+          if (bandGutter < minQualifiedGutter) minQualifiedGutter = bandGutter;
+          bands.push({
+            kind: 'two-col',
+            left: leftRows,
+            right: rightRows
+          });
+        } else {
+          bands.push({ kind: 'single', rows: bandSlice.map(entry => entry.row) });
+        }
+      }
+
+      if (totalTwoColRows === 0) continue;
+      const distCenter = Math.abs(splitX - pageCenterX);
+      const isBetter = !bestPlan ||
+        totalTwoColRows > bestPlan.totalTwoColRows ||
+        (totalTwoColRows === bestPlan.totalTwoColRows && (
+          minQualifiedGutter > bestPlan.minQualifiedGutter ||
+          (minQualifiedGutter === bestPlan.minQualifiedGutter && distCenter < bestPlan.distCenter)
+        ));
+      if (isBetter) {
+        bestPlan = { totalTwoColRows, minQualifiedGutter, distCenter, bands };
+      }
+    }
+
+    if (!bestPlan) {
+      return { twoColumnDetected: false, blocks: fallbackBlocks };
+    }
+
+    const blocks = [];
+    for (const band of bestPlan.bands) {
+      if (band.kind === 'two-col') {
+        blocks.push({ kind: 'col', rows: band.left.map(entry => ({ items: entry.items })) });
+        blocks.push({ kind: 'col', rows: band.right.map(entry => ({ items: entry.items })) });
+      } else {
+        blocks.push({ kind: 'single', rows: band.rows });
+      }
+    }
+    return { twoColumnDetected: true, blocks };
+  }
+
+  function buildGeometryLine(items, spaceItems) {
+    let chars = '';
+    const spans = [];
+    let prev = null;
+    for (const curr of items) {
+      if (prev) {
+        const spaceThreshold = Math.max(1.5, Math.min(prev.fontSize, curr.fontSize) * 0.18);
+        const gap = curr.x0 - prev.x1;
+        const needsGapSpace = gap > spaceThreshold && !/\s$/u.test(chars) && !/^\s/u.test(curr.str);
+        let hasBetweenSpaceItem = false;
+        if (!needsGapSpace && !/\s$/u.test(chars) && !/^\s/u.test(curr.str) && spaceItems.length > 0) {
+          const tol = Math.max(2, Math.min(prev.fontSize, curr.fontSize) * 0.48);
+          for (const sp of spaceItems) {
+            if (Math.abs(sp.y - prev.y) <= tol &&
+              sp.itemIndex > prev.itemIndex &&
+              sp.itemIndex < curr.itemIndex &&
+              sp.x0 >= prev.x0 - 1 &&
+              sp.x0 <= curr.x0 + 1) {
+              hasBetweenSpaceItem = true;
+              break;
+            }
+          }
+        }
+        if (needsGapSpace || hasBetweenSpaceItem) {
+          chars += ' ';
+        }
+      }
+      if (curr.str.length > 0) {
+        const startInLine = chars.length;
+        chars += curr.str;
+        spans.push({
+          startInLine,
+          endInLine: chars.length,
+          itemIndex: curr.itemIndex,
+          itemStart: 0
+        });
+      }
+      prev = curr;
+    }
+    return { chars, spans };
+  }
+
+  function mergeBlockLines(lines) {
+    let buf = '';
+    const blockSpans = [];
+
+    const popLastChar = () => {
+      if (buf.length === 0) return;
+      const newLen = buf.length - 1;
+      buf = buf.slice(0, newLen);
+      while (blockSpans.length > 0 && blockSpans[blockSpans.length - 1].rawStart >= newLen) {
+        blockSpans.pop();
+      }
+      if (blockSpans.length > 0 && blockSpans[blockSpans.length - 1].rawEnd > newLen) {
+        blockSpans[blockSpans.length - 1].rawEnd = newLen;
+      }
+    };
+
+    const appendLine = (line, skipLeadingChars = 0) => {
+      const base = buf.length;
+      const text = skipLeadingChars > 0 ? line.chars.slice(skipLeadingChars) : line.chars;
+      buf += text;
+      for (const s of line.spans) {
+        if (s.endInLine <= skipLeadingChars) continue;
+        const adjStart = Math.max(s.startInLine, skipLeadingChars);
+        const trimDelta = adjStart - s.startInLine;
+        blockSpans.push({
+          rawStart: base + (adjStart - skipLeadingChars),
+          rawEnd: base + (s.endInLine - skipLeadingChars),
+          itemIndex: s.itemIndex,
+          itemStart: s.itemStart + trimDelta
+        });
+      }
+    };
+
+    for (const line of lines) {
+      if (buf.length === 0) {
+        appendLine(line, 0);
+        continue;
+      }
+      const trimmedBuf = buf.replace(/[ \t]+$/g, '');
+      const trimmedNext = line.chars.replace(/^[ \t]+/g, '');
+      const leadWs = line.chars.length - trimmedNext.length;
+
+      if (trimmedNext.length > 0 && /\p{L}\u00AD$/u.test(trimmedBuf) && /^\p{L}/u.test(trimmedNext)) {
+        while (buf.length > trimmedBuf.length - 1) popLastChar();
+        appendLine(line, leadWs);
+      } else if (trimmedNext.length > 0 && /\p{L}[-\u2010]$/u.test(trimmedBuf) && /^\p{Ll}/u.test(trimmedNext)) {
+        while (buf.length > trimmedBuf.length - 1) popLastChar();
+        appendLine(line, leadWs);
+      } else if (trimmedNext.length > 0 && /[\p{L}\d][-\u2010]$/u.test(trimmedBuf) && /^[\p{Lu}\d]/u.test(trimmedNext)) {
+        while (buf.length > trimmedBuf.length) popLastChar();
+        appendLine(line, leadWs);
+      } else {
+        buf += '\n';
+        appendLine(line, 0);
+      }
+    }
+
+    return { text: buf, spans: blockSpans };
+  }
+
+  function joinBlocksToPage(blockEntries) {
+    let rawText = '';
+    const itemSpans = [];
+    for (const block of blockEntries) {
+      if (!block || !block.text) continue;
+      if (rawText.length > 0) rawText += '\n';
+      const offset = rawText.length;
+      rawText += block.text;
+      for (const span of block.spans) {
+        itemSpans.push({
+          rawStart: offset + span.rawStart,
+          rawEnd: offset + span.rawEnd,
+          itemIndex: span.itemIndex,
+          itemStart: span.itemStart
+        });
+      }
+    }
+    const nonSpaceCount = rawText.replace(/[\s\u200B-\u200D\uFEFF\u00AD]/g, '').length;
+    return { rawText, itemSpans, nonSpaceCount };
+  }
+
+  /**
+   * Trích text và bảng ánh xạ về textContent item gốc cho 1 trang PDF:
+   * - Duy trì đúng chỉ số itemIndex như pdf.js TextLayer (tăng cho mọi item có str là chuỗi, kể cả "").
+   * - Suy luận dòng theo tọa độ (hoặc theo hasEOL nếu không có transform), xử lý gạch nối cuối dòng
+   *   và tách hai cột đọc độc lập khi phát hiện khe cột rõ ràng.
+   */
+  function extractPageText(textContent) {
+    const rawItems = Array.isArray(textContent?.items) ? textContent.items : [];
+    const indexedItems = [];
+    let nextItemIndex = 0;
+    for (const item of rawItems) {
+      if (typeof item?.str === 'string') {
+        indexedItems.push({ item, str: item.str, itemIndex: nextItemIndex });
+        nextItemIndex += 1;
+      }
+    }
+    if (indexedItems.length === 0) {
+      return { rawText: '', itemSpans: [], nonSpaceCount: 0, twoColumnDetected: false };
+    }
+
+    if (!canUseGeometryLayout(indexedItems)) {
+      const lines = [];
+      let currentLine = { chars: '', spans: [] };
+      for (const entry of indexedItems) {
+        if (entry.str.length > 0) {
+          const startInLine = currentLine.chars.length;
+          currentLine.chars += entry.str;
+          currentLine.spans.push({
+            startInLine,
+            endInLine: currentLine.chars.length,
+            itemIndex: entry.itemIndex,
+            itemStart: 0
+          });
+        }
+        if (entry.item?.hasEOL) {
+          if (currentLine.chars.length > 0 || lines.length === 0) {
+            lines.push(currentLine);
+          }
+          currentLine = { chars: '', spans: [] };
+        }
+      }
+      if (currentLine.chars.length > 0) lines.push(currentLine);
+      const nonEmptyLines = lines.filter(line => line.chars.length > 0);
+      const merged = nonEmptyLines.length > 0 ? [mergeBlockLines(nonEmptyLines)] : [];
+      return { ...joinBlocksToPage(merged), twoColumnDetected: false };
+    }
+
+    const { positioned, spaceItems } = buildPositionedItems(indexedItems);
+    if (positioned.length === 0) {
+      return { rawText: '', itemSpans: [], nonSpaceCount: 0, twoColumnDetected: false };
+    }
+    const medianFontSize = medianNumber(positioned.map(p => p.fontSize), 10);
+    const rows = clusterVisualRows(positioned);
+    const layout = detectTwoColumnBlocks(rows, positioned, medianFontSize);
+    const blockEntries = [];
+    for (const block of layout.blocks) {
+      const lines = block.rows
+        .map(row => buildGeometryLine(row.items, spaceItems))
+        .filter(line => line.chars.length > 0);
+      if (lines.length > 0) {
+        blockEntries.push(mergeBlockLines(lines));
+      }
+    }
+    return {
+      ...joinBlocksToPage(blockEntries),
+      twoColumnDetected: layout.twoColumnDetected
+    };
+  }
+
+  /**
+   * Chuẩn hóa chuỗi nguồn để tìm kiếm (NFC, tùy chọn caseSensitive / ignoreDiacritics kể cả đ/Đ),
+   * đồng thời giữ Uint32Array ánh xạ từng code unit chuẩn hóa -> [rawStart, rawEnd) trên rawText gốc.
+   */
+  function normalizeSearchTextWithMap(rawText, options = {}) {
+    const str = String(rawText ?? '');
+    const caseSensitive = options.caseSensitive === true;
+    const ignoreDiacritics = options.ignoreDiacritics !== false;
+    const normChars = [];
+    const starts = [];
+    const ends = [];
+
+    let i = 0;
+    while (i < str.length) {
+      const cp = str.codePointAt(i);
+      const step = cp > 0xffff ? 2 : 1;
+      const ch = str.slice(i, i + step);
+
+      if (cp === 0x00ad || cp === 0xfeff || (cp >= 0x200b && cp <= 0x200d)) {
+        i += step;
+        continue;
+      }
+
+      if (/\s/u.test(ch)) {
+        const wsStart = i;
+        i += step;
+        while (i < str.length) {
+          const nextCp = str.codePointAt(i);
+          const nextStep = nextCp > 0xffff ? 2 : 1;
+          const nextCh = str.slice(i, i + nextStep);
+          if (!/\s/u.test(nextCh)) break;
+          i += nextStep;
+        }
+        const wsEnd = i;
+        if (normChars.length > 0 && normChars[normChars.length - 1] === ' ') {
+          ends[ends.length - 1] = wsEnd;
+        } else {
+          normChars.push(' ');
+          starts.push(wsStart);
+          ends.push(wsEnd);
+        }
+        continue;
+      }
+
+      const clusterStart = i;
+      i += step;
+      while (i < str.length) {
+        const nextCp = str.codePointAt(i);
+        const nextStep = nextCp > 0xffff ? 2 : 1;
+        if (!/\p{M}/u.test(String.fromCodePoint(nextCp))) break;
+        i += nextStep;
+      }
+      const clusterEnd = i;
+
+      let piece = str.slice(clusterStart, clusterEnd).normalize('NFC');
+      if (!caseSensitive) {
+        piece = piece.toLowerCase();
+      }
+      if (ignoreDiacritics) {
+        piece = piece
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/đ/g, 'd')
+          .replace(/Đ/g, 'D')
+          .normalize('NFC');
+      }
+      for (let k = 0; k < piece.length; k += 1) {
+        normChars.push(piece[k]);
+        starts.push(clusterStart);
+        ends.push(clusterEnd);
+      }
+    }
+
+    return {
+      text: normChars.join(''),
+      rawStarts: Uint32Array.from(starts),
+      rawEnds: Uint32Array.from(ends)
+    };
+  }
+
+  function normalizeSearchQuery(query, options = {}) {
+    return normalizeSearchTextWithMap(String(query ?? ''), options).text.trim();
+  }
+
+  /**
+   * Ánh xạ khoảng [rawStart, rawEnd) trên rawText về danh sách đoạn { itemIndex, start, end }
+   * trong page.getTextContent().items (tìm kiếm nhị phân O(log K)).
+   */
+  function mapRawRangeToItemRanges(itemSpans, rawStart, rawEnd) {
+    if (!Array.isArray(itemSpans) || itemSpans.length === 0 || !(rawEnd > rawStart)) return [];
+    let lo = 0;
+    let hi = itemSpans.length - 1;
+    let first = itemSpans.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (itemSpans[mid].rawEnd > rawStart) {
+        first = mid;
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    const ranges = [];
+    for (let i = first; i < itemSpans.length; i += 1) {
+      const seg = itemSpans[i];
+      if (seg.rawStart >= rawEnd) break;
+      const overlapStart = Math.max(rawStart, seg.rawStart);
+      const overlapEnd = Math.min(rawEnd, seg.rawEnd);
+      if (overlapEnd > overlapStart) {
+        ranges.push({
+          itemIndex: seg.itemIndex,
+          start: seg.itemStart + (overlapStart - seg.rawStart),
+          end: seg.itemStart + (overlapEnd - seg.rawStart)
+        });
+      }
+    }
+    return ranges;
+  }
+
+  /**
+   * Tạo đoạn trích thuần chữ { prefix, match, suffix, text } (<= maxLength) không chứa HTML
+   * để giao diện tô đậm an toàn bằng DOM textContent.
+   */
+  function buildMatchSnippet(rawText, rawStart, rawEnd, maxLength = PDF_SEARCH_SNIPPET_MAX_LENGTH) {
+    const str = String(rawText ?? '');
+    const limit = Math.max(8, Math.trunc(Number(maxLength) || PDF_SEARCH_SNIPPET_MAX_LENGTH));
+    const safeStart = Math.max(0, Math.min(str.length, Math.trunc(Number(rawStart) || 0)));
+    const safeEnd = Math.max(safeStart, Math.min(str.length, Math.trunc(Number(rawEnd) || safeStart)));
+
+    const rawMatchSlice = str.slice(safeStart, safeEnd).replace(/\s+/g, ' ').trim();
+    const matchText = rawMatchSlice || str.slice(safeStart, safeEnd);
+    if (matchText.length > limit) {
+      const clipped = matchText.slice(0, Math.max(1, limit - 1)) + '…';
+      return { prefix: '', match: clipped, suffix: '', text: clipped };
+    }
+    if (matchText.length === limit) {
+      return { prefix: '', match: matchText, suffix: '', text: matchText };
+    }
+
+    const pad = Math.max(80, limit + 40);
+    const sliceStart = Math.max(0, safeStart - pad);
+    const sliceEnd = Math.min(str.length, safeEnd + pad);
+    const beforeClean = str.slice(sliceStart, safeStart).replace(/\s+/g, ' ').replace(/^\s+/, '');
+    const afterClean = str.slice(safeEnd, sliceEnd).replace(/\s+/g, ' ').replace(/\s+$/, '');
+
+    const budget = limit - matchText.length;
+    let prefixBudget = Math.min(beforeClean.length + (sliceStart > 0 ? 1 : 0), Math.floor(budget * 0.4));
+    const desiredSuffix = afterClean.length + (sliceEnd < str.length ? 1 : 0);
+    if (desiredSuffix < budget - prefixBudget) {
+      prefixBudget = Math.min(beforeClean.length + (sliceStart > 0 ? 1 : 0), budget - desiredSuffix);
+    }
+
+    const needLeftEllipsis = sliceStart > 0 || beforeClean.length > prefixBudget;
+    let prefix = '';
+    if (prefixBudget > 0) {
+      if (!needLeftEllipsis) {
+        prefix = beforeClean;
+      } else if (beforeClean.length === 0) {
+        prefix = '…';
+      } else if (prefixBudget === 1) {
+        prefix = '…';
+      } else {
+        const innerMax = prefixBudget - 1;
+        let sub = beforeClean.length > innerMax ? beforeClean.slice(beforeClean.length - innerMax) : beforeClean;
+        if (beforeClean.length > innerMax) {
+          const spIdx = sub.indexOf(' ');
+          if (spIdx > 0 && spIdx <= Math.min(12, sub.length - 4)) {
+            sub = sub.slice(spIdx + 1);
+          }
+        }
+        prefix = `…${sub}`;
+      }
+    }
+
+    const suffixBudget = budget - prefix.length;
+    const needRightEllipsis = sliceEnd < str.length || afterClean.length > suffixBudget;
+    let suffix = '';
+    if (suffixBudget > 0) {
+      if (!needRightEllipsis) {
+        suffix = afterClean;
+      } else if (afterClean.length === 0) {
+        suffix = '…';
+      } else if (suffixBudget === 1) {
+        suffix = '…';
+      } else {
+        const innerMax = suffixBudget - 1;
+        let sub = afterClean.length > innerMax ? afterClean.slice(0, innerMax) : afterClean;
+        if (afterClean.length > innerMax) {
+          const spIdx = sub.lastIndexOf(' ');
+          if (spIdx >= Math.max(4, sub.length - 12)) {
+            sub = sub.slice(0, spIdx);
+          }
+        }
+        suffix = `${sub}…`;
+      }
+    }
+
+    return {
+      prefix,
+      match: matchText,
+      suffix,
+      text: `${prefix}${matchText}${suffix}`
+    };
+  }
+
+  function searchPageText(pageEntry, normQuery, options = {}) {
+    if (!pageEntry || !pageEntry.rawText || typeof normQuery !== 'string' || normQuery.length < PDF_SEARCH_MIN_QUERY_LENGTH) {
+      return { matches: [], truncated: false };
+    }
+    const maxResults = Math.max(0, Math.trunc(options.maxResults ?? PDF_SEARCH_MAX_RESULTS));
+    if (maxResults === 0) return { matches: [], truncated: false };
+
+    const caseSensitive = options.caseSensitive === true;
+    const ignoreDiacritics = options.ignoreDiacritics !== false;
+    const snippetMaxLength = options.snippetMaxLength ?? PDF_SEARCH_SNIPPET_MAX_LENGTH;
+    const modeKey = `${caseSensitive ? 1 : 0}:${ignoreDiacritics ? 1 : 0}`;
+    if (!pageEntry.normCache || pageEntry.normCache.modeKey !== modeKey) {
+      pageEntry.normCache = {
+        modeKey,
+        ...normalizeSearchTextWithMap(pageEntry.rawText, { caseSensitive, ignoreDiacritics })
+      };
+    }
+
+    const { text: haystack, rawStarts, rawEnds } = pageEntry.normCache;
+    if (!haystack) return { matches: [], truncated: false };
+
+    const matches = [];
+    let pos = 0;
+    let truncated = false;
+    while (pos <= haystack.length - normQuery.length) {
+      const idx = haystack.indexOf(normQuery, pos);
+      if (idx === -1) break;
+      if (matches.length >= maxResults) {
+        truncated = true;
+        break;
+      }
+      const rawStart = rawStarts[idx];
+      const rawEnd = rawEnds[idx + normQuery.length - 1];
+      const pageMatchIndex = matches.length;
+      matches.push({
+        id: `${pageEntry.pageNum}-${pageMatchIndex}`,
+        pageNum: pageEntry.pageNum,
+        pageMatchIndex,
+        rawStart,
+        rawEnd,
+        itemRanges: mapRawRangeToItemRanges(pageEntry.itemSpans, rawStart, rawEnd),
+        snippet: buildMatchSnippet(pageEntry.rawText, rawStart, rawEnd, snippetMaxLength)
+      });
+      pos = idx + normQuery.length;
+    }
+
+    return { matches, truncated };
+  }
+
+  /**
+   * Bộ lập chỉ mục nền theo lô nhỏ và tìm kiếm trong PDF đang mở.
+   * Dừng ngay khi đủ N trang đầu không có lớp chữ (no_text_layer) hoặc khi cancel().
+   */
+  function createPdfSearchEngine(config = {}) {
+    const pdf = config.pdf || null;
+    const batchSize = Math.max(1, Math.trunc(Number(config.batchSize) || PDF_SEARCH_BATCH_SIZE));
+    const noTextProbePages = Math.max(1, Math.trunc(Number(config.noTextProbePages) || PDF_SEARCH_NO_TEXT_PROBE_PAGES));
+    const maxResults = Math.max(1, Math.trunc(Number(config.maxResults) || PDF_SEARCH_MAX_RESULTS));
+    const snippetMaxLength = Math.max(8, Math.trunc(Number(config.snippetMaxLength) || PDF_SEARCH_SNIPPET_MAX_LENGTH));
+    const yieldToMain = typeof config.yieldToMain === 'function'
+      ? config.yieldToMain
+      : () => new Promise(resolve => setTimeout(resolve, 0));
+    const onUpdate = typeof config.onUpdate === 'function' ? config.onUpdate : null;
+
+    const totalPages = Math.max(0, Math.trunc(Number(pdf?.numPages) || 0));
+    const probeLimit = Math.min(totalPages, noTextProbePages);
+    const pageCache = new Map();
+
+    let status = 'idle';
+    let indexedPages = 0;
+    let totalNonSpaceChars = 0;
+    let hasTextLayer = null;
+    let query = '';
+    let normQuery = '';
+    let queryTooShort = false;
+    let searchOptions = { caseSensitive: false, ignoreDiacritics: true };
+    let matches = [];
+    let truncated = false;
+    let cancelled = false;
+    let queryGeneration = 0;
+    let searchedUpToPage = 0;
+    let indexPromise = null;
+
+    const getSnapshot = () => ({
+      status,
+      indexedPages,
+      totalPages,
+      hasTextLayer,
+      query,
+      normQuery,
+      queryTooShort,
+      options: { ...searchOptions },
+      matches: matches.slice(),
+      totalMatches: matches.length,
+      truncated
+    });
+
+    const emit = () => {
+      if (cancelled || !onUpdate) return;
+      onUpdate(getSnapshot());
+    };
+
+    const scanCachedRange = (fromPage, toPage) => {
+      if (!normQuery || normQuery.length < PDF_SEARCH_MIN_QUERY_LENGTH || status === 'no_text_layer') return;
+      for (let p = fromPage; p <= toPage; p += 1) {
+        if (truncated || matches.length >= maxResults) {
+          truncated = true;
+          break;
+        }
+        const entry = pageCache.get(p);
+        if (!entry) break;
+        const remaining = maxResults - matches.length;
+        const res = searchPageText(entry, normQuery, {
+          ...searchOptions,
+          maxResults: remaining,
+          snippetMaxLength
+        });
+        for (const match of res.matches) {
+          matches.push(match);
+        }
+        if (res.truncated) {
+          truncated = true;
+        }
+        searchedUpToPage = p;
+      }
+    };
+
+    const startIndexing = () => {
+      if (cancelled) return Promise.resolve(getSnapshot());
+      if (status === 'ready' || status === 'no_text_layer') {
+        return Promise.resolve(getSnapshot());
+      }
+      if (indexPromise) return indexPromise;
+      if (!pdf || totalPages === 0 || typeof pdf.getPage !== 'function') {
+        status = 'no_text_layer';
+        hasTextLayer = false;
+        emit();
+        return Promise.resolve(getSnapshot());
+      }
+
+      status = 'indexing';
+      indexPromise = (async () => {
+        let nextPage = 1;
+        while (nextPage <= totalPages && !cancelled && status === 'indexing') {
+          let processedInBatch = 0;
+          while (processedInBatch < batchSize && nextPage <= totalPages && !cancelled) {
+            const pageNum = nextPage;
+            nextPage += 1;
+            if (!pageCache.has(pageNum)) {
+              let extracted;
+              try {
+                const page = await pdf.getPage(pageNum);
+                if (cancelled) return getSnapshot();
+                const textContent = typeof page?.getTextContent === 'function'
+                  ? await page.getTextContent()
+                  : { items: [] };
+                if (cancelled) return getSnapshot();
+                extracted = extractPageText(textContent);
+              } catch {
+                if (cancelled) return getSnapshot();
+                extracted = { rawText: '', itemSpans: [], nonSpaceCount: 0, twoColumnDetected: false };
+              }
+              pageCache.set(pageNum, {
+                pageNum,
+                rawText: extracted.rawText,
+                itemSpans: extracted.itemSpans,
+                nonSpaceCount: extracted.nonSpaceCount,
+                twoColumnDetected: extracted.twoColumnDetected,
+                normCache: null
+              });
+              totalNonSpaceChars += extracted.nonSpaceCount;
+              if (totalNonSpaceChars > 0) hasTextLayer = true;
+            }
+            if (pageNum > indexedPages) indexedPages = pageNum;
+            processedInBatch += 1;
+
+            if (probeLimit > 0 && pageNum >= probeLimit && totalNonSpaceChars === 0) {
+              status = 'no_text_layer';
+              hasTextLayer = false;
+              matches = [];
+              truncated = false;
+              searchedUpToPage = indexedPages;
+              emit();
+              return getSnapshot();
+            }
+          }
+
+          if (cancelled) return getSnapshot();
+          const gen = queryGeneration;
+          if (normQuery.length >= PDF_SEARCH_MIN_QUERY_LENGTH && !truncated && indexedPages > searchedUpToPage) {
+            scanCachedRange(searchedUpToPage + 1, indexedPages);
+          }
+          if (cancelled || queryGeneration !== gen) {
+            if (cancelled) return getSnapshot();
+          }
+
+          if (nextPage > totalPages) {
+            status = totalNonSpaceChars === 0 ? 'no_text_layer' : 'ready';
+            hasTextLayer = totalNonSpaceChars > 0;
+            if (status === 'no_text_layer') {
+              matches = [];
+              truncated = false;
+            }
+            emit();
+            return getSnapshot();
+          }
+
+          emit();
+          await yieldToMain();
+          if (cancelled) return getSnapshot();
+        }
+        return getSnapshot();
+      })();
+
+      return indexPromise;
+    };
+
+    const setQuery = (nextQuery, nextOptions = {}) => {
+      if (cancelled) return getSnapshot();
+      queryGeneration += 1;
+      query = typeof nextQuery === 'string' ? nextQuery : String(nextQuery ?? '');
+      searchOptions = {
+        caseSensitive: nextOptions.caseSensitive === true,
+        ignoreDiacritics: nextOptions.ignoreDiacritics !== false
+      };
+      normQuery = normalizeSearchQuery(query, searchOptions);
+      queryTooShort = query.trim().length > 0 && normQuery.length < PDF_SEARCH_MIN_QUERY_LENGTH;
+      matches = [];
+      truncated = false;
+      searchedUpToPage = 0;
+
+      if (status === 'no_text_layer') {
+        emit();
+        return getSnapshot();
+      }
+      if (normQuery.length < PDF_SEARCH_MIN_QUERY_LENGTH) {
+        emit();
+        return getSnapshot();
+      }
+
+      if (indexedPages > 0) {
+        scanCachedRange(1, indexedPages);
+      }
+      emit();
+      if (status === 'idle') {
+        void startIndexing();
+      }
+      return getSnapshot();
+    };
+
+    const clearQuery = () => {
+      if (cancelled) return getSnapshot();
+      queryGeneration += 1;
+      query = '';
+      normQuery = '';
+      queryTooShort = false;
+      matches = [];
+      truncated = false;
+      searchedUpToPage = 0;
+      emit();
+      return getSnapshot();
+    };
+
+    const cancel = () => {
+      cancelled = true;
+      status = 'cancelled';
+    };
+
+    const estimateMemoryBytes = () => {
+      let bytes = 0;
+      for (const entry of pageCache.values()) {
+        bytes += (entry.rawText ? entry.rawText.length * 2 : 0);
+        bytes += (entry.itemSpans ? entry.itemSpans.length * 32 : 0);
+        if (entry.normCache) {
+          bytes += (entry.normCache.text ? entry.normCache.text.length * 2 : 0);
+          bytes += entry.normCache.rawStarts ? entry.normCache.rawStarts.byteLength : 0;
+          bytes += entry.normCache.rawEnds ? entry.normCache.rawEnds.byteLength : 0;
+        }
+      }
+      return bytes;
+    };
+
+    return {
+      startIndexing,
+      setQuery,
+      clearQuery,
+      cancel,
+      getSnapshot,
+      getPageCache: pageNum => pageCache.get(pageNum),
+      estimateMemoryBytes
+    };
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError, PDF_SEARCH_MIN_QUERY_LENGTH, PDF_SEARCH_MAX_RESULTS, PDF_SEARCH_SNIPPET_MAX_LENGTH, PDF_SEARCH_BATCH_SIZE, PDF_SEARCH_NO_TEXT_PROBE_PAGES, extractPageText, normalizeSearchTextWithMap, normalizeSearchQuery, mapRawRangeToItemRanges, buildMatchSnippet, searchPageText, createPdfSearchEngine };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
