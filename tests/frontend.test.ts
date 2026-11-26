@@ -66,8 +66,8 @@ describe('Smart.Rail Digital Library static assets', () => {
       expect(page.body).toContain('elib-dropzone');
       expect(page.body).toContain('nav-library-count');
       expect(page.body).toContain('hero-chips');
-      expect(page.body).toContain('playground.css?v=15');
-      expect(page.body).toContain('playground.js?v=15');
+      expect(page.body).toContain('playground.css?v=16');
+      expect(page.body).toContain('playground.js?v=16');
       // No fake mockup numbers may leak into the UI
       expect(page.body).not.toContain('12,480');
       expect(page.body).not.toContain('2.5 MB');

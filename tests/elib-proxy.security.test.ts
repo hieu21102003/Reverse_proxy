@@ -716,24 +716,6 @@ describe('Elib proxy — mục lục PDF (P1)', () => {
     expect(hits).toBe(before);
   });
 
-  it('route admin TOC vẫn bị chặn 404 ở P1, không forward', async () => {
-    const before = hits;
-    const blocked: Array<[string, string]> = [
-      ['GET', '/api/elib/admin/tocs'],
-      ['GET', '/api/elib/admin/files/f1/toc'],
-      ['PUT', '/api/elib/admin/files/f1/toc/manual'],
-      ['POST', '/api/elib/admin/files/f1/toc/promote-auto'],
-      ['DELETE', '/api/elib/admin/files/f1/toc/manual'],
-      ['POST', '/api/elib/admin/files/f1/toc/reextract']
-    ];
-    for (const [method, url] of blocked) {
-      const res = await app.inject({ method: method as never, url });
-      expect(res.statusCode, `${method} ${url}`).toBe(404);
-      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
-    }
-    expect(hits).toBe(before);
-  });
-
   it('path traversal trên route TOC bị chặn 400 ELIB_BAD_PATH, không forward', async () => {
     const before = hits;
     await app.listen({ host: '127.0.0.1', port: 0 });
@@ -751,6 +733,243 @@ describe('Elib proxy — mục lục PDF (P1)', () => {
       '/api/elib/documents/d1/../d2/toc',
       '/api/elib/documents/d1/files/%2e%2e/toc',
       '/api/elib/documents/d1%2ftoc'
+    ]) {
+      const res = await rawGet(path);
+      expect(res.status, path).toBe(400);
+      expect(JSON.parse(res.body).error.code).toBe('ELIB_BAD_PATH');
+    }
+    expect(hits).toBe(before);
+  });
+});
+
+describe('Elib proxy — quản trị mục lục PDF (P3)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let hits = 0;
+  let lastMethod = '';
+  let lastPath = '';
+  let lastBody = '';
+  let lastHeaders: Record<string, string | string[] | undefined> = {};
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastMethod = req.method || '';
+      lastPath = req.url || '';
+      lastHeaders = req.headers;
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        lastBody = Buffer.concat(chunks).toString('utf8');
+        const send = (status: number, payload: unknown) => {
+          res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(payload));
+        };
+        if (lastPath.includes('/files/forbidden-file/')) {
+          return send(403, { error: { code: 'FORBIDDEN', message: 'Chỉ quản trị viên mới quản lý được mục lục tài liệu' } });
+        }
+        if (lastPath.includes('/files/bad-file/')) {
+          return send(400, { error: { code: 'INVALID_PAGE_RANGE', message: 'Số trang vượt ngoài phạm vi' } });
+        }
+        if (lastPath.includes('/files/processing-file/')) {
+          return send(409, { error: { code: 'TOC_ALREADY_PROCESSING', message: 'Tài liệu đang được trích xuất mục lục' } });
+        }
+        return send(200, { ok: true, method: lastMethod, path: lastPath });
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('cho qua đủ 6 route admin TOC với đúng method, giữ query/body/cookie/CSRF/headers', async () => {
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/api/elib/admin/tocs?auto_status=partial&outdated_algorithm=true&limit=20&offset=0',
+      headers: { cookie: 'elib_session=admin-token', 'x-internal-token': 'evil-token' }
+    });
+    expect(listRes.statusCode).toBe(200);
+    expect(lastMethod).toBe('GET');
+    expect(lastPath).toBe('/api/admin/tocs?auto_status=partial&outdated_algorithm=true&limit=20&offset=0');
+    expect(lastHeaders.cookie).toBe('elib_session=admin-token');
+    expect(lastHeaders['x-internal-token']).toBeUndefined();
+
+    const detailRes = await app.inject({
+      method: 'GET',
+      url: '/api/elib/admin/files/f1/toc',
+      headers: { cookie: 'elib_session=admin-token' }
+    });
+    expect(detailRes.statusCode).toBe(200);
+    expect(lastPath).toBe('/api/admin/files/f1/toc');
+
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: '/api/elib/admin/files/f1/toc/manual',
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'elib_session=admin-token',
+        origin: 'https://smartrail.local:8443',
+        host: 'smartrail.local:8443',
+        'x-forwarded-host': 'spoof.example.com'
+      },
+      payload: JSON.stringify({ note: 'Kiểm duyệt', nodes: [{ title: 'Chương 1', level: 1, page_pdf: 2 }] })
+    });
+    expect(putRes.statusCode).toBe(200);
+    expect(lastMethod).toBe('PUT');
+    expect(lastPath).toBe('/api/admin/files/f1/toc/manual');
+    expect(lastHeaders.origin).toBe('https://smartrail.local:8443');
+    expect(lastHeaders['x-forwarded-host']).toBe('smartrail.local:8443');
+    expect(JSON.parse(lastBody)).toEqual({
+      note: 'Kiểm duyệt',
+      nodes: [{ title: 'Chương 1', level: 1, page_pdf: 2 }]
+    });
+
+    const delRes = await app.inject({
+      method: 'DELETE',
+      url: '/api/elib/admin/files/f1/toc/manual',
+      headers: {
+        cookie: 'elib_session=admin-token',
+        origin: 'https://smartrail.local:8443',
+        host: 'smartrail.local:8443'
+      }
+    });
+    expect(delRes.statusCode).toBe(200);
+    expect(lastMethod).toBe('DELETE');
+    expect(lastPath).toBe('/api/admin/files/f1/toc/manual');
+
+    const promoteRes = await app.inject({
+      method: 'POST',
+      url: '/api/elib/admin/files/f1/toc/promote-auto',
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'elib_session=admin-token',
+        origin: 'https://smartrail.local:8443',
+        host: 'smartrail.local:8443'
+      },
+      payload: JSON.stringify({ activate: true })
+    });
+    expect(promoteRes.statusCode).toBe(200);
+    expect(lastMethod).toBe('POST');
+    expect(lastPath).toBe('/api/admin/files/f1/toc/promote-auto');
+    expect(JSON.parse(lastBody)).toEqual({ activate: true });
+
+    const reextractRes = await app.inject({
+      method: 'POST',
+      url: '/api/elib/admin/files/f1/toc/reextract',
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'elib_session=admin-token',
+        origin: 'https://smartrail.local:8443',
+        host: 'smartrail.local:8443'
+      },
+      payload: '{}'
+    });
+    expect(reextractRes.statusCode).toBe(200);
+    expect(lastMethod).toBe('POST');
+    expect(lastPath).toBe('/api/admin/files/f1/toc/reextract');
+  });
+
+  it('truyền nguyên trạng lỗi 403 / 400 / 409 từ upstream', async () => {
+    const r403 = await app.inject({ method: 'GET', url: '/api/elib/admin/files/forbidden-file/toc' });
+    expect(r403.statusCode).toBe(403);
+    expect(r403.json().error.code).toBe('FORBIDDEN');
+
+    const r400 = await app.inject({
+      method: 'PUT',
+      url: '/api/elib/admin/files/bad-file/toc/manual',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ nodes: [] })
+    });
+    expect(r400.statusCode).toBe(400);
+    expect(r400.json().error.code).toBe('INVALID_PAGE_RANGE');
+
+    const r409 = await app.inject({
+      method: 'POST',
+      url: '/api/elib/admin/files/processing-file/toc/reextract',
+      headers: { 'content-type': 'application/json' },
+      payload: '{}'
+    });
+    expect(r409.statusCode).toBe(409);
+    expect(r409.json().error.code).toBe('TOC_ALREADY_PROCESSING');
+  });
+
+  it('method sai trên 6 route admin TOC bị chặn 404 ELIB_ROUTE_NOT_FOUND, không forward', async () => {
+    const before = hits;
+    const blocked: Array<[string, string]> = [
+      ['POST', '/api/elib/admin/tocs'],
+      ['PUT', '/api/elib/admin/tocs'],
+      ['PATCH', '/api/elib/admin/tocs'],
+      ['DELETE', '/api/elib/admin/tocs'],
+      ['POST', '/api/elib/admin/files/f1/toc'],
+      ['PUT', '/api/elib/admin/files/f1/toc'],
+      ['PATCH', '/api/elib/admin/files/f1/toc'],
+      ['DELETE', '/api/elib/admin/files/f1/toc'],
+      ['GET', '/api/elib/admin/files/f1/toc/manual'],
+      ['POST', '/api/elib/admin/files/f1/toc/manual'],
+      ['PATCH', '/api/elib/admin/files/f1/toc/manual'],
+      ['GET', '/api/elib/admin/files/f1/toc/promote-auto'],
+      ['PUT', '/api/elib/admin/files/f1/toc/promote-auto'],
+      ['PATCH', '/api/elib/admin/files/f1/toc/promote-auto'],
+      ['DELETE', '/api/elib/admin/files/f1/toc/promote-auto'],
+      ['GET', '/api/elib/admin/files/f1/toc/reextract'],
+      ['PUT', '/api/elib/admin/files/f1/toc/reextract'],
+      ['PATCH', '/api/elib/admin/files/f1/toc/reextract'],
+      ['DELETE', '/api/elib/admin/files/f1/toc/reextract']
+    ];
+    for (const [method, url] of blocked) {
+      const res = await app.inject({ method: method as never, url });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('route gần giống với route admin TOC bị chặn 404 ELIB_ROUTE_NOT_FOUND, không forward', async () => {
+    const before = hits;
+    const blocked: Array<[string, string]> = [
+      ['GET', '/api/elib/admin/tocs/extra'],
+      ['GET', '/api/elib/admin/toc'],
+      ['GET', '/api/elib/admin/files/f1'],
+      ['GET', '/api/elib/admin/files/f1/toc/extra'],
+      ['PUT', '/api/elib/admin/files/f1/toc/manual/extra'],
+      ['DELETE', '/api/elib/admin/files/f1/toc/manual/extra'],
+      ['POST', '/api/elib/admin/files/f1/toc/promote-auto/extra'],
+      ['POST', '/api/elib/admin/files/f1/toc/reextract/extra'],
+      ['POST', '/api/elib/admin/files/f1/toc/delete'],
+      ['POST', '/api/elib/admin/files/toc/reextract']
+    ];
+    for (const [method, url] of blocked) {
+      const res = await app.inject({ method: method as never, url });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+
+  it('path traversal trên route admin TOC bị chặn 400 ELIB_BAD_PATH, không forward', async () => {
+    const before = hits;
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const port = (app.server.address() as { port: number }).port;
+    const rawGet = (path: string) => new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+    for (const path of [
+      '/api/elib/admin/files/../tocs',
+      '/api/elib/admin/files/%2e%2e/toc',
+      '/api/elib/admin/files/f1%2ftoc'
     ]) {
       const res = await rawGet(path);
       expect(res.status, path).toBe(400);

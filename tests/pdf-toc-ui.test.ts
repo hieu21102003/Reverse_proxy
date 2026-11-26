@@ -504,7 +504,7 @@ describe('gắn DOM & hợp đồng tĩnh P2', () => {
   const playgroundCss = readFileSync(new URL('../public/playground.css', import.meta.url), 'utf8');
   const playgroundJs = readFileSync(new URL('../public/playground.js', import.meta.url), 'utf8');
 
-  it('index.html có đủ phần tử sidebar TOC (nằm dưới toolbar) và bump ?v=15', () => {
+  it('index.html có đủ phần tử sidebar TOC (nằm dưới toolbar) và bump ?v=16', () => {
     for (const id of [
       'doc-viewer-toc-toggle',
       'doc-viewer-toc',
@@ -520,8 +520,8 @@ describe('gắn DOM & hợp đồng tĩnh P2', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    expect(indexHtml).toContain('playground.css?v=15');
-    expect(indexHtml).toContain('playground.js?v=15');
+    expect(indexHtml).toContain('playground.css?v=16');
+    expect(indexHtml).toContain('playground.js?v=16');
   });
 
   it('playground.css có drawer mobile dưới toolbar và style mục khóa/đang đọc', () => {

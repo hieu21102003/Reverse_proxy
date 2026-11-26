@@ -2284,3 +2284,266 @@ h1 {
   background: var(--green-soft);
   word-break: break-all;
 }
+
+/* ---- Quản trị mục lục PDF (P3) ---- */
+.admin-toc-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.admin-toc-check-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.admin-toc-filter-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.admin-toc-summary {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.admin-toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.admin-toc-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.admin-toc-row-main { flex: 1 1 280px; min-width: 0; }
+.admin-toc-row-main strong { display: block; margin-bottom: 3px; word-break: break-word; }
+.admin-toc-row-meta { color: var(--muted); font-size: 0.86rem; display: block; margin-bottom: 6px; }
+.admin-toc-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.badge-toc-ok { background: #dcfce7; color: #166534; }
+.badge-toc-warn { background: #fef3c7; color: #92400e; }
+.badge-toc-err { background: #fee2e2; color: #991b1b; }
+.badge-toc-manual { background: #dbeafe; color: #1e40af; }
+.badge-toc-outdated { background: #fae8ff; color: #86198f; }
+.admin-toc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+.admin-toc-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin-toc-detail-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.admin-toc-meta-box {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+.admin-toc-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+.admin-toc-editor-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.admin-toc-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.admin-toc-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.admin-toc-card-head h3 { margin: 0; font-size: 1rem; }
+.admin-toc-auto-info { font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+.admin-toc-auto-tree {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  background: #13291e;
+  color: #e8f2ec;
+}
+.admin-toc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.admin-toc-reextract-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--terracotta, #c2410c);
+  background: #fff7ed;
+  color: #7c2d12;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.admin-toc-note-field { margin-bottom: 10px; }
+.admin-toc-row-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.admin-toc-editor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-toc-editor-row {
+  display: grid;
+  grid-template-columns: 32px minmax(140px, 1fr) 74px 76px auto;
+  gap: 6px;
+  align-items: center;
+  margin-left: calc(var(--toc-indent, 0) * 14px);
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf8;
+}
+.admin-toc-row-idx {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.admin-toc-editor-row input,
+.admin-toc-editor-row select {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  min-width: 0;
+}
+.admin-toc-row-btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.admin-toc-mini-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: inherit;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.admin-toc-mini-btn:hover:not(:disabled) { background: var(--green-soft); }
+.admin-toc-mini-btn:disabled { opacity: 0.4; cursor: default; }
+.admin-toc-editor-empty {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.admin-toc-preview-col {
+  position: sticky;
+  top: 80px;
+}
+.admin-toc-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.admin-toc-preview-head h3 { margin: 0; font-size: 1rem; }
+.admin-toc-preview-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-toc-preview-controls input {
+  width: 64px;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: center;
+}
+.admin-toc-version-warn {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.84rem;
+}
+.admin-toc-pdf-status {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.admin-toc-pdf-status.viewer-error { color: #b91c1c; }
+.admin-toc-pdf-canvas-wrap {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  background: #10241a;
+  border-radius: 8px;
+  padding: 10px;
+}
+#admin-toc-pdf-canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  background: #fff;
+}
+@media (max-width: 1024px) {
+  .admin-toc-workspace { grid-template-columns: 1fr; }
+  .admin-toc-preview-col { position: static; }
+}
+@media (max-width: 640px) {
+  .admin-toc-editor-row {
+    grid-template-columns: 1fr 1fr;
+    margin-left: calc(var(--toc-indent, 0) * 6px);
+  }
+  .admin-toc-row-idx { grid-column: 1 / -1; text-align: left; }
+  .admin-toc-editor-title { grid-column: 1 / -1; }
+  .admin-toc-row-btns { grid-column: 1 / -1; }
+}
