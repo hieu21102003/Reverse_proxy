@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=14">
-    <script src="/playground.js?v=14" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=15">
+    <script src="/playground.js?v=15" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -801,6 +801,7 @@
     <!-- Document viewer (Phase B): pdf.js lazy-loaded on open -->
     <div class="doc-viewer" id="doc-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
       <div class="doc-viewer-bar">
+        <button class="button button-secondary button-small doc-viewer-toc-toggle" id="doc-viewer-toc-toggle" type="button" hidden aria-expanded="false" aria-controls="doc-viewer-toc"><span data-i18n="tocToggle">Mục lục</span></button>
         <span class="doc-viewer-title" id="doc-viewer-title"></span>
         <span class="doc-viewer-pageinfo" id="doc-viewer-pageinfo"></span>
         <span class="doc-viewer-actions">
@@ -811,14 +812,33 @@
           <button class="button button-primary button-small" id="doc-viewer-close" type="button"><span data-i18n="viewerClose">Đóng</span></button>
         </span>
       </div>
-      <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
-      <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
-      <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>
-      <div class="doc-viewer-end" id="doc-viewer-end" hidden>
-        <strong data-i18n="previewEndTitle">Đã hết phần xem trước</strong>
-        <p id="doc-viewer-end-text"></p>
-        <a class="doc-viewer-end-contact" id="doc-viewer-end-contact" target="_blank" rel="noreferrer" hidden></a>
-        <button class="button button-primary button-small" id="doc-viewer-end-login" type="button"><span data-i18n="login">Đăng nhập</span></button>
+      <div class="doc-viewer-body">
+        <aside class="doc-viewer-toc" id="doc-viewer-toc" hidden aria-label="Mục lục">
+          <div class="doc-viewer-toc-head">
+            <strong data-i18n="tocTitle">Mục lục</strong>
+            <button class="doc-viewer-toc-close" id="doc-viewer-toc-close" type="button" aria-label="Đóng mục lục">×</button>
+          </div>
+          <div class="doc-viewer-toc-search-wrap" id="doc-viewer-toc-search-wrap" hidden>
+            <input class="doc-viewer-toc-search" id="doc-viewer-toc-search" type="search" data-i18n-placeholder="tocSearchPlaceholder" placeholder="Tìm trong mục lục..." autocomplete="off">
+          </div>
+          <p class="doc-viewer-toc-status" id="doc-viewer-toc-status" hidden></p>
+          <nav class="doc-viewer-toc-nav" id="doc-viewer-toc-nav" aria-label="Danh sách mục lục">
+            <ul class="doc-viewer-toc-list" id="doc-viewer-toc-list"></ul>
+          </nav>
+          <div class="doc-viewer-toc-foot" id="doc-viewer-toc-foot" hidden></div>
+        </aside>
+        <div class="doc-viewer-toc-backdrop" id="doc-viewer-toc-backdrop" hidden></div>
+        <div class="doc-viewer-stage" id="doc-viewer-stage">
+          <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
+          <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
+          <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>
+          <div class="doc-viewer-end" id="doc-viewer-end" hidden>
+            <strong data-i18n="previewEndTitle">Đã hết phần xem trước</strong>
+            <p id="doc-viewer-end-text"></p>
+            <a class="doc-viewer-end-contact" id="doc-viewer-end-contact" target="_blank" rel="noreferrer" hidden></a>
+            <button class="button button-primary button-small" id="doc-viewer-end-login" type="button"><span data-i18n="login">Đăng nhập</span></button>
+          </div>
+        </div>
       </div>
     </div>
   </body>

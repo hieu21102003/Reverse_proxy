@@ -949,7 +949,360 @@
     return 'manualSaveFailed';
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey };
+  // ---- PDF Table of Contents (P2) ----
+  const TOC_POLL_INTERVAL_MS = 4000;
+  const TOC_POLL_MAX_RETRIES = 2;
+
+  /**
+   * Đường dẫn proxy lấy mục lục PDF:
+   * - có fileId tường minh hoặc file đang xem khác current_file_id -> /documents/:id/files/:fileId/toc
+   * - mặc định -> /documents/:id/toc (phiên bản hiện hành).
+   */
+  function elibTocPath(doc, fileId) {
+    const docId = doc?.id ? String(doc.id).trim() : '';
+    if (!docId) return null;
+    const explicitFileId = fileId !== undefined && fileId !== null ? String(fileId).trim() : '';
+    if (explicitFileId) {
+      return `/api/elib/documents/${encodeURIComponent(docId)}/files/${encodeURIComponent(explicitFileId)}/toc`;
+    }
+    const currentId = doc?.current_file_id ? String(doc.current_file_id).trim() : '';
+    const docFileId = doc?.file?.id ? String(doc.file.id).trim() : '';
+    if (currentId && docFileId && docFileId !== currentId) {
+      return `/api/elib/documents/${encodeURIComponent(docId)}/files/${encodeURIComponent(docFileId)}/toc`;
+    }
+    return `/api/elib/documents/${encodeURIComponent(docId)}/toc`;
+  }
+
+  /**
+   * Chuẩn hóa phản hồi API mục lục thành trạng thái hiển thị cho người đọc:
+   * - state='processing' -> hiện thông báo đang tạo và poll tối đa 2 lần.
+   * - displayable=true và có ít nhất 1 node -> ready (ẩn khi nodes rỗng,
+   *   kể cả trường hợp admin lưu nodes: [] với effective_source='manual').
+   * - Mọi trường hợp còn lại (failed/unsupported/not_enabled/partial/needs_ocr,
+   *   404/403/502/503/lỗi mạng) -> hidden lặng lẽ.
+   */
+  function resolveTocViewState(result) {
+    if (!result || typeof result !== 'object' || result.status !== 200 || !result.payload || typeof result.payload !== 'object') {
+      return { kind: 'hidden' };
+    }
+    const payload = result.payload;
+    const state = typeof payload.state === 'string' ? payload.state : null;
+    if (state === 'processing') {
+      return { kind: 'processing' };
+    }
+    const displayable = payload.displayable === true;
+    const rawNodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    if (!displayable || rawNodes.length === 0) {
+      return { kind: 'hidden' };
+    }
+    const effectiveSource = payload.effective_source === 'manual' || payload.effective_source === 'auto'
+      ? payload.effective_source
+      : null;
+    const flags = Array.isArray(payload.flags) ? payload.flags.filter(flag => typeof flag === 'string') : [];
+    return {
+      kind: 'ready',
+      nodes: rawNodes,
+      previewOnly: payload.preview_only === true,
+      effectiveSource,
+      flags,
+      showLevel1Note: flags.includes('contents_level1_only'),
+      showManualBadge: effectiveSource === 'manual'
+    };
+  }
+
+  function shouldPollToc(tocState, retryCount) {
+    const count = Number(retryCount);
+    return Boolean(tocState && tocState.kind === 'processing' && Number.isFinite(count) && count < TOC_POLL_MAX_RETRIES);
+  }
+
+  /** Chỉ hiển thị tối đa 2 nhãn phụ ở chân sidebar; ẩn toàn bộ cờ kỹ thuật khác. */
+  function tocFooterKeys(tocState) {
+    if (!tocState || tocState.kind !== 'ready') return [];
+    const keys = [];
+    if (tocState.showLevel1Note) keys.push('tocSummaryLevel1');
+    if (tocState.showManualBadge) keys.push('tocManualVerified');
+    return keys;
+  }
+
+  /**
+   * Dựng cây mục lục từ mảng phẳng bằng một lượt duyệt stack theo `level`:
+   * - Sắp xếp ổn định theo `sort`.
+   * - Nhảy cấp (vd 1 -> 3) hoặc bắt đầu từ level > 1: gắn vào cha gần nhất có
+   *   level nhỏ hơn, không sinh node ảo trung gian, không crash.
+   * - Đọc trực tiếp cờ `locked` từ backend (khi `previewOnly === false` luôn mở khóa).
+   * - Thêm node ảo "Trang đầu" -> trang 1 ở đầu cây khi cây có ít nhất 1 mục.
+   */
+  function buildTocTree(flatNodes, options = {}) {
+    if (!Array.isArray(flatNodes) || flatNodes.length === 0) return [];
+    const prepared = flatNodes
+      .map((node, origIdx) => ({ node, origIdx }))
+      .filter(item => item.node && typeof item.node === 'object');
+    if (prepared.length === 0) return [];
+
+    prepared.sort((a, b) => {
+      const sa = Number.isFinite(Number(a.node.sort)) ? Number(a.node.sort) : a.origIdx + 1;
+      const sb = Number.isFinite(Number(b.node.sort)) ? Number(b.node.sort) : b.origIdx + 1;
+      return sa !== sb ? sa - sb : a.origIdx - b.origIdx;
+    });
+
+    const roots = [];
+    const stack = [];
+    for (let idx = 0; idx < prepared.length; idx += 1) {
+      const raw = prepared[idx].node;
+      const rawLevel = Math.trunc(Number(raw.level));
+      const level = Number.isFinite(rawLevel) ? Math.min(6, Math.max(1, rawLevel)) : 1;
+      const rawPage = Math.trunc(Number(raw.page_pdf));
+      const pagePdf = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const sort = Number.isFinite(Number(raw.sort)) ? Number(raw.sort) : idx + 1;
+      const locked = options.previewOnly === false ? false : raw.locked === true;
+      const entry = {
+        id: `toc-node-${idx}`,
+        title: typeof raw.title === 'string' ? raw.title : String(raw.title ?? ''),
+        level,
+        page_pdf: pagePdf,
+        sort,
+        source: typeof raw.source === 'string' ? raw.source : null,
+        confidence: typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? raw.confidence : null,
+        locked,
+        virtual: false,
+        children: []
+      };
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+      if (stack.length > 0) {
+        stack[stack.length - 1].children.push(entry);
+      } else {
+        roots.push(entry);
+      }
+      stack.push(entry);
+    }
+
+    if (roots.length > 0 && options.includeFirstPage !== false) {
+      const firstLabel = typeof options.firstPageLabel === 'string' && options.firstPageLabel.trim()
+        ? options.firstPageLabel.trim()
+        : 'Trang đầu';
+      roots.unshift({
+        id: 'toc-virtual-first',
+        title: firstLabel,
+        level: 1,
+        page_pdf: 1,
+        sort: 0,
+        source: null,
+        confidence: null,
+        locked: false,
+        virtual: true,
+        children: []
+      });
+    }
+    return roots;
+  }
+
+  /** Chuẩn hóa chuỗi tiếng Việt để tìm kiếm không phân biệt dấu và hoa/thường. */
+  function normalizeTocSearchText(value) {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[đĐ]/g, 'd')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Lọc cây mục lục theo từ khóa, giữ nhánh cha của các mục con khớp. */
+  function filterTocTree(tree, query) {
+    if (!Array.isArray(tree) || tree.length === 0) return [];
+    const q = normalizeTocSearchText(query);
+    if (!q) return tree;
+    const visit = (nodes) => {
+      const out = [];
+      for (const node of nodes) {
+        const selfMatch = normalizeTocSearchText(node.title).includes(q);
+        const matchedChildren = Array.isArray(node.children) && node.children.length > 0
+          ? visit(node.children)
+          : [];
+        if (selfMatch || matchedChildren.length > 0) {
+          out.push({
+            ...node,
+            children: matchedChildren,
+            matched: selfMatch,
+            autoExpand: matchedChildren.length > 0
+          });
+        }
+      }
+      return out;
+    };
+    return visit(tree);
+  }
+
+  /** Tìm id mục đang đọc gần nhất (unlocked, có page_pdf <= currentPage). */
+  function findActiveTocNodeId(tree, currentPage) {
+    const page = Number(currentPage);
+    if (!Array.isArray(tree) || tree.length === 0 || !Number.isFinite(page) || page < 1) return null;
+    let best = null;
+    const walk = (nodes) => {
+      for (const node of nodes) {
+        if (node && node.locked !== true && Number.isFinite(node.page_pdf) && node.page_pdf <= page) {
+          if (!best || node.page_pdf >= best.page_pdf) best = node;
+        }
+        if (node && Array.isArray(node.children) && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(tree);
+    return best ? best.id : null;
+  }
+
+  /** Quyết định hành động khi bấm vào 1 mục trong sidebar (locked không bao giờ nhảy trang). */
+  function tocNodeClickAction(node, totalLoadedPages) {
+    if (!node || typeof node !== 'object') return { action: 'noop' };
+    if (node.locked === true) return { action: 'locked' };
+    const page = Math.trunc(Number(node.page_pdf));
+    if (!Number.isFinite(page) || page < 1) return { action: 'noop' };
+    if (typeof totalLoadedPages === 'number' && Number.isFinite(totalLoadedPages) && totalLoadedPages > 0 && page > totalLoadedPages) {
+      return { action: 'locked' };
+    }
+    return { action: 'jump', page };
+  }
+
+  /**
+   * Dựng DOM cho cây mục lục bằng textContent/createElement thuần (tuyệt đối
+   * không dùng innerHTML vì tiêu đề mục lục lấy từ PDF không đáng tin cậy).
+   */
+  function createTocListDom(docFactory, nodes, opts = {}) {
+    if (!docFactory || !Array.isArray(nodes) || nodes.length === 0) return [];
+    const labels = opts.labels || {};
+    const collapsedIds = opts.collapsedIds instanceof Set ? opts.collapsedIds : null;
+    const isSearching = Boolean(opts.isSearching);
+    const activeId = opts.activeId || null;
+
+    const makeLockSvg = () => {
+      if (typeof docFactory.createElementNS !== 'function') {
+        const fallback = docFactory.createElement('span');
+        fallback.textContent = '🔒';
+        return fallback;
+      }
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = docFactory.createElementNS(ns, 'svg');
+      svg.setAttribute('width', '12');
+      svg.setAttribute('height', '12');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2.2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.setAttribute('aria-hidden', 'true');
+      const rect = docFactory.createElementNS(ns, 'rect');
+      rect.setAttribute('x', '4');
+      rect.setAttribute('y', '11');
+      rect.setAttribute('width', '16');
+      rect.setAttribute('height', '10');
+      rect.setAttribute('rx', '2');
+      const path = docFactory.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M8 11V7a4 4 0 0 1 8 0v4');
+      svg.append(rect, path);
+      return svg;
+    };
+
+    const buildItems = (items) => items.map((node) => {
+      const li = docFactory.createElement('li');
+      li.className = `toc-item toc-level-${node.level}`;
+      li.setAttribute('data-toc-id', node.id);
+
+      const row = docFactory.createElement('div');
+      row.className = 'toc-row';
+
+      const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+      const isCollapsed = hasChildren && !isSearching && Boolean(collapsedIds && collapsedIds.has(node.id));
+
+      if (hasChildren) {
+        const caret = docFactory.createElement('button');
+        caret.type = 'button';
+        caret.className = 'toc-caret';
+        caret.textContent = isCollapsed ? '▸' : '▾';
+        caret.setAttribute('aria-expanded', String(!isCollapsed));
+        caret.setAttribute('aria-label', isCollapsed ? (labels.expand || 'Mở rộng mục con') : (labels.collapse || 'Thu gọn mục con'));
+        caret.addEventListener('click', (event) => {
+          event?.stopPropagation?.();
+          opts.onToggleCollapse?.(node.id);
+        });
+        row.append(caret);
+      } else {
+        const spacer = docFactory.createElement('span');
+        spacer.className = 'toc-caret-spacer';
+        spacer.setAttribute('aria-hidden', 'true');
+        row.append(spacer);
+      }
+
+      const btn = docFactory.createElement('button');
+      btn.type = 'button';
+      const classes = ['toc-node-btn'];
+      if (node.locked) classes.push('is-locked');
+      if (node.id === activeId) classes.push('is-active');
+      if (node.virtual) classes.push('is-virtual');
+      if (isSearching && node.matched) classes.push('is-match');
+      btn.className = classes.join(' ');
+      btn.setAttribute('data-toc-id', node.id);
+      btn.setAttribute('data-page', String(node.page_pdf));
+      if (node.id === activeId) btn.setAttribute('aria-current', 'location');
+      if (node.locked) {
+        btn.setAttribute('data-locked', 'true');
+        btn.setAttribute('aria-label', `${node.title} — ${labels.lockedLabel || 'Cần quyền xem toàn văn'}`);
+      }
+
+      const titleSpan = docFactory.createElement('span');
+      titleSpan.className = 'toc-node-title';
+      titleSpan.textContent = node.title;
+      btn.append(titleSpan);
+
+      const meta = docFactory.createElement('span');
+      meta.className = 'toc-node-meta';
+      if (node.locked) {
+        const lockSpan = docFactory.createElement('span');
+        lockSpan.className = 'toc-node-lock';
+        lockSpan.setAttribute('aria-hidden', 'true');
+        lockSpan.append(makeLockSvg());
+        meta.append(lockSpan);
+      }
+      const pageSpan = docFactory.createElement('span');
+      pageSpan.className = 'toc-node-page';
+      pageSpan.textContent = String(node.page_pdf);
+      meta.append(pageSpan);
+      btn.append(meta);
+
+      btn.addEventListener('click', () => {
+        const totalLoaded = typeof opts.getTotalLoadedPages === 'function'
+          ? opts.getTotalLoadedPages()
+          : (opts.totalLoadedPages ?? null);
+        const action = tocNodeClickAction(node, totalLoaded);
+        if (action.action === 'locked') {
+          opts.onLocked?.(node);
+          return;
+        }
+        if (action.action === 'jump') {
+          opts.onJump?.(action.page, node);
+        }
+      });
+
+      row.append(btn);
+      li.append(row);
+
+      if (hasChildren) {
+        const ul = docFactory.createElement('ul');
+        ul.className = 'toc-children';
+        ul.hidden = isCollapsed;
+        for (const childLi of buildItems(node.children)) ul.append(childLi);
+        li.append(ul);
+      }
+      return li;
+    });
+
+    return buildItems(nodes);
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -1150,6 +1503,14 @@
         previewLoadError: 'Không tải được bản xem trước. Vui lòng thử lại sau.',
         viewerLoading: 'Đang tải tài liệu...', viewerClose: 'Đóng', viewerPrev: 'Trang trước', viewerNext: 'Trang sau',
         viewerDownload: 'Tải xuống', viewerPrint: 'In / mở bản gốc',
+        tocTitle: 'Mục lục', tocToggle: 'Mục lục', tocClose: 'Đóng mục lục',
+        tocFirstPage: 'Trang đầu', tocProcessing: 'Đang tạo mục lục…',
+        tocSearchPlaceholder: 'Tìm trong mục lục...', tocNoMatches: 'Không có mục phù hợp.',
+        tocSummaryLevel1: 'Mục lục tóm tắt cấp chương/phần',
+        tocManualVerified: 'Mục lục đã kiểm duyệt',
+        tocLockedNotice: 'Mục này cần quyền xem toàn văn tài liệu.',
+        tocExpand: 'Mở rộng mục con', tocCollapse: 'Thu gọn mục con',
+        tocLockedLabel: 'Cần quyền xem toàn văn',
         uploadedOn: 'Ngày tải lên', recentEmpty: 'Chưa có tài liệu nào được tải lên.',
         recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
         heroEyebrow: 'Viện Công nghệ Đường sắt & TOD · Tra cứu trực tuyến',
@@ -1341,6 +1702,14 @@
         previewLoadError: 'Could not load the preview. Please try again later.',
         viewerLoading: 'Loading document...', viewerClose: 'Close', viewerPrev: 'Previous page', viewerNext: 'Next page',
         viewerDownload: 'Download', viewerPrint: 'Print / open original',
+        tocTitle: 'Table of contents', tocToggle: 'Contents', tocClose: 'Close table of contents',
+        tocFirstPage: 'First page', tocProcessing: 'Generating table of contents…',
+        tocSearchPlaceholder: 'Search table of contents...', tocNoMatches: 'No matching headings.',
+        tocSummaryLevel1: 'Summary table of contents (chapter/part level)',
+        tocManualVerified: 'Curated table of contents',
+        tocLockedNotice: 'Full access is required to view this section.',
+        tocExpand: 'Expand subsections', tocCollapse: 'Collapse subsections',
+        tocLockedLabel: 'Full access required',
         uploadedOn: 'Uploaded', recentEmpty: 'No documents have been uploaded yet.',
         recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.',
         heroEyebrow: 'Institute of Railway Technology & TOD · Live Search',
@@ -1819,6 +2188,275 @@
     }
 
     let viewerState = null;
+    let viewerTocSeq = 0;
+    let viewerTocTimer = null;
+    let viewerTocState = null;
+    let viewerTocOpen = false;
+    let viewerEndHighlightTimer = null;
+
+    function isMobileViewer() {
+      return typeof window !== 'undefined' && window.innerWidth <= 768;
+    }
+
+    function applyTocVisibility() {
+      const tocEl = $('#doc-viewer-toc');
+      const toggleBtn = $('#doc-viewer-toc-toggle');
+      const backdropEl = $('#doc-viewer-toc-backdrop');
+      if (!tocEl || !toggleBtn || !backdropEl) return;
+      if (!viewerTocState) {
+        tocEl.hidden = true;
+        tocEl.classList.remove('is-drawer-open');
+        tocEl.removeAttribute('aria-hidden');
+        toggleBtn.hidden = true;
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        backdropEl.hidden = true;
+        return;
+      }
+      toggleBtn.hidden = false;
+      toggleBtn.setAttribute('aria-expanded', String(viewerTocOpen));
+      if (isMobileViewer()) {
+        tocEl.hidden = false;
+        tocEl.classList.toggle('is-drawer-open', viewerTocOpen);
+        tocEl.setAttribute('aria-hidden', String(!viewerTocOpen));
+        backdropEl.hidden = !viewerTocOpen;
+      } else {
+        tocEl.classList.remove('is-drawer-open');
+        tocEl.removeAttribute('aria-hidden');
+        tocEl.hidden = !viewerTocOpen;
+        backdropEl.hidden = true;
+      }
+    }
+
+    function resetViewerToc() {
+      viewerTocSeq += 1;
+      clearTimeout(viewerTocTimer);
+      viewerTocTimer = null;
+      viewerTocState = null;
+      viewerTocOpen = false;
+      const searchWrap = $('#doc-viewer-toc-search-wrap');
+      const searchInput = $('#doc-viewer-toc-search');
+      const statusEl = $('#doc-viewer-toc-status');
+      const listEl = $('#doc-viewer-toc-list');
+      const footEl = $('#doc-viewer-toc-foot');
+      if (searchWrap) searchWrap.hidden = true;
+      if (searchInput) searchInput.value = '';
+      if (statusEl) { statusEl.hidden = true; statusEl.textContent = ''; }
+      if (listEl) listEl.replaceChildren();
+      if (footEl) { footEl.hidden = true; footEl.replaceChildren(); }
+      applyTocVisibility();
+    }
+
+    function showPreviewAccessNotice(highlight = false) {
+      const endEl = $('#doc-viewer-end');
+      const endTextEl = $('#doc-viewer-end-text');
+      const endLoginEl = $('#doc-viewer-end-login');
+      if (!endEl || !endTextEl || !endLoginEl) return;
+      const kind = endOfPreviewKind(elibUser);
+      endTextEl.textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
+      endLoginEl.hidden = kind !== 'login';
+      const contact = normalizeContact(uiConfig);
+      const contactEl = $('#doc-viewer-end-contact');
+      if (contactEl) {
+        if (contact.text || contact.url) {
+          contactEl.hidden = false;
+          contactEl.textContent = contact.text || contact.url;
+          if (contact.url) contactEl.href = contact.url;
+          else contactEl.removeAttribute('href');
+        } else {
+          contactEl.hidden = true;
+        }
+      }
+      endEl.hidden = false;
+      if (highlight) {
+        endEl.classList.add('is-highlighted');
+        clearTimeout(viewerEndHighlightTimer);
+        viewerEndHighlightTimer = setTimeout(() => {
+          endEl.classList.remove('is-highlighted');
+        }, 1800);
+        showToast(t('tocLockedNotice'));
+      }
+    }
+
+    function updateActiveTocHighlight(pageNum) {
+      if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+      const nextId = findActiveTocNodeId(viewerTocState.tree, pageNum);
+      viewerTocState.activeId = nextId;
+      const listEl = $('#doc-viewer-toc-list');
+      if (!listEl) return;
+      for (const btn of listEl.querySelectorAll('.toc-node-btn')) {
+        const isActive = Boolean(nextId && btn.getAttribute('data-toc-id') === nextId);
+        btn.classList.toggle('is-active', isActive);
+        if (isActive) {
+          btn.setAttribute('aria-current', 'location');
+        } else {
+          btn.removeAttribute('aria-current');
+        }
+      }
+    }
+
+    function computeCurrentViewerPage() {
+      const pagesEl = $('#doc-viewer-pages');
+      const canvases = viewerState?.canvases;
+      if (!pagesEl || !Array.isArray(canvases) || canvases.length === 0) return 1;
+      const idx = canvases.findIndex((c) => c.offsetTop + c.offsetHeight > pagesEl.scrollTop + 24);
+      return idx < 0 ? 1 : idx + 1;
+    }
+
+    function jumpToViewerPage(pageNum) {
+      const page = Math.trunc(Number(pageNum));
+      if (!Number.isFinite(page) || page < 1 || !viewerState) return;
+      const canvases = viewerState.canvases;
+      if (!Array.isArray(canvases) || canvases.length === 0) {
+        viewerState.pendingJumpPage = page;
+        viewerState.currentPage = page;
+        updateActiveTocHighlight(page);
+        return;
+      }
+      if (page > canvases.length) {
+        showPreviewAccessNotice(true);
+        return;
+      }
+      const targetCanvas = canvases[page - 1];
+      if (!targetCanvas) return;
+      const pagesEl = $('#doc-viewer-pages');
+      viewerState.currentPage = page;
+      viewerState.pinnedPage = page;
+      clearTimeout(viewerState.pinTimer);
+      viewerState.pinTimer = setTimeout(() => {
+        if (viewerState) viewerState.pinTimer = null, viewerState.pinnedPage = null;
+      }, 900);
+      if (viewerState.mode !== 'preview') {
+        const pageInfoEl = $('#doc-viewer-pageinfo');
+        if (pageInfoEl) pageInfoEl.textContent = t('viewerPage', { n: page, total: canvases.length });
+      }
+      updateActiveTocHighlight(page);
+      if (pagesEl) {
+        pagesEl.scrollTo({ top: Math.max(0, targetCanvas.offsetTop - 8), behavior: 'smooth' });
+      }
+      viewerState.ensurePageRendered?.(page);
+    }
+
+    function renderViewerToc() {
+      const searchWrap = $('#doc-viewer-toc-search-wrap');
+      const statusEl = $('#doc-viewer-toc-status');
+      const listEl = $('#doc-viewer-toc-list');
+      const footEl = $('#doc-viewer-toc-foot');
+      if (!searchWrap || !statusEl || !listEl || !footEl || !viewerTocState) return;
+
+      if (viewerTocState.kind === 'processing') {
+        searchWrap.hidden = true;
+        listEl.replaceChildren();
+        footEl.hidden = true;
+        footEl.replaceChildren();
+        statusEl.hidden = false;
+        statusEl.textContent = t('tocProcessing');
+        return;
+      }
+
+      searchWrap.hidden = false;
+      const query = viewerTocState.query || '';
+      const isSearching = normalizeTocSearchText(query).length > 0;
+      const visibleTree = filterTocTree(viewerTocState.tree, query);
+      if (visibleTree.length === 0 && isSearching) {
+        listEl.replaceChildren();
+        statusEl.hidden = false;
+        statusEl.textContent = t('tocNoMatches');
+      } else {
+        statusEl.hidden = true;
+        statusEl.textContent = '';
+        const items = createTocListDom(document, visibleTree, {
+          activeId: viewerTocState.activeId,
+          collapsedIds: viewerTocState.collapsedIds,
+          isSearching,
+          getTotalLoadedPages: () => viewerState?.totalPages ?? null,
+          labels: {
+            expand: t('tocExpand'),
+            collapse: t('tocCollapse'),
+            lockedLabel: t('tocLockedLabel')
+          },
+          onToggleCollapse: (nodeId) => {
+            if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+            if (viewerTocState.collapsedIds.has(nodeId)) viewerTocState.collapsedIds.delete(nodeId);
+            else viewerTocState.collapsedIds.add(nodeId);
+            renderViewerToc();
+          },
+          onLocked: () => {
+            showPreviewAccessNotice(true);
+            if (isMobileViewer()) {
+              viewerTocOpen = false;
+              applyTocVisibility();
+            }
+          },
+          onJump: (page) => {
+            jumpToViewerPage(page);
+            if (isMobileViewer()) {
+              viewerTocOpen = false;
+              applyTocVisibility();
+            }
+          }
+        });
+        listEl.replaceChildren(...items);
+      }
+
+      const footKeys = tocFooterKeys(viewerTocState);
+      footEl.replaceChildren();
+      for (const key of footKeys) {
+        const badge = document.createElement('span');
+        badge.className = 'toc-foot-badge';
+        badge.textContent = t(key);
+        footEl.append(badge);
+      }
+      footEl.hidden = footKeys.length === 0;
+    }
+
+    async function loadViewerToc(doc, options, seq, retryCount = 0) {
+      const tocPath = elibTocPath(doc, options?.fileId);
+      if (!tocPath) {
+        resetViewerToc();
+        return;
+      }
+      const result = await elibFetchJson(tocPath.replace(/^\/api\/elib/, ''));
+      if (seq !== viewerTocSeq || $('#doc-viewer')?.hidden) return;
+
+      const nextState = resolveTocViewState(result);
+      if (nextState.kind === 'hidden') {
+        resetViewerToc();
+        return;
+      }
+      if (nextState.kind === 'processing') {
+        const wasOpen = Boolean(viewerTocState);
+        viewerTocState = { kind: 'processing' };
+        if (!wasOpen) viewerTocOpen = !isMobileViewer();
+        renderViewerToc();
+        applyTocVisibility();
+        if (shouldPollToc(nextState, retryCount)) {
+          viewerTocTimer = setTimeout(() => {
+            void loadViewerToc(doc, options, seq, retryCount + 1);
+          }, TOC_POLL_INTERVAL_MS);
+        }
+        return;
+      }
+
+      const tree = buildTocTree(nextState.nodes, {
+        previewOnly: nextState.previewOnly,
+        firstPageLabel: t('tocFirstPage')
+      });
+      if (tree.length === 0) {
+        resetViewerToc();
+        return;
+      }
+      const wasOpen = Boolean(viewerTocState);
+      if (!wasOpen) viewerTocOpen = !isMobileViewer();
+      viewerTocState = {
+        ...nextState,
+        tree,
+        query: '',
+        collapsedIds: new Set(),
+        activeId: findActiveTocNodeId(tree, viewerState?.currentPage || 1)
+      };
+      renderViewerToc();
+      applyTocVisibility();
+    }
 
     function closeDocViewer() {
       const overlay = $('#doc-viewer');
@@ -1826,6 +2464,13 @@
       viewerDocId = null;
       viewerDoc = null;
       clearDocDeepLink();
+      resetViewerToc();
+      clearTimeout(viewerEndHighlightTimer);
+      viewerEndHighlightTimer = null;
+      const endEl = $('#doc-viewer-end');
+      if (endEl) endEl.classList.remove('is-highlighted');
+      if (viewerState?.pinTimer) clearTimeout(viewerState.pinTimer);
+      if (viewerState?.scrollRaf) cancelAnimationFrame(viewerState.scrollRaf);
       if (viewerState?.observer) viewerState.observer.disconnect();
       if (viewerState?.loadingTask) {
         // Release pdf.js resources (worker document + rendered pages).
@@ -1919,6 +2564,21 @@
           return;
         }
 
+        viewerState = {
+          loadingTask: null,
+          doc,
+          mode,
+          canvases: [],
+          totalPages: 0,
+          currentPage: 1,
+          pendingJumpPage: null,
+          pinnedPage: null,
+          pinTimer: null,
+          scrollRaf: 0
+        };
+        const tocSeq = ++viewerTocSeq;
+        void loadViewerToc(doc, options, tocSeq, 0);
+
         const pdfjs = await loadPdfjs();
         const url = mode === 'preview' ? elibPreviewPath(doc) : viewUrl;
         let loadingTask;
@@ -1949,36 +2609,71 @@
             withCredentials: true
           });
         }
-        viewerState = { loadingTask, doc, mode };
+        if (!viewerState || overlay.hidden) {
+          loadingTask.destroy().catch(() => undefined);
+          return;
+        }
+        viewerState.loadingTask = loadingTask;
         const pdf = await loadingTask.promise;
+        if (!viewerState || viewerState.loadingTask !== loadingTask) return;
         statusEl.hidden = true;
         const total = pdf.numPages;
+        viewerState.totalPages = total;
         if (mode !== 'preview') {
-          pageInfoEl.textContent = t('viewerPage', { n: total, total });
+          pageInfoEl.textContent = t('viewerPage', { n: 1, total });
         }
-        // Render pages sequentially; preview PDFs are small, full PDFs
-        // render on scroll via IntersectionObserver to stay responsive.
-        const renderPage = async (pageNum, canvas) => {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1.5 });
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        };
+        const firstPage = total >= 1 ? await pdf.getPage(1) : null;
+        if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+        const firstViewport = firstPage ? firstPage.getViewport({ scale: 1.5 }) : null;
+
         const canvases = [];
         for (let n = 1; n <= total; n += 1) {
           const canvas = document.createElement('canvas');
           canvas.className = 'viewer-page';
           canvas.dataset.page = String(n);
+          if (firstViewport) {
+            canvas.style.width = `${firstViewport.width}px`;
+            canvas.style.aspectRatio = `${firstViewport.width} / ${firstViewport.height}`;
+          }
           pagesEl.append(canvas);
           canvases.push(canvas);
         }
-        const observer = new IntersectionObserver((entries) => {
+        viewerState.canvases = canvases;
+
+        const renderedPromises = new Map();
+        let observer = null;
+        const ensurePageRendered = (pageNum) => {
+          if (renderedPromises.has(pageNum)) return renderedPromises.get(pageNum);
+          const canvas = canvases[pageNum - 1];
+          if (!canvas) return Promise.resolve();
+          observer?.unobserve(canvas);
+          const p = (async () => {
+            if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+            const page = pageNum === 1 && firstPage ? firstPage : await pdf.getPage(pageNum);
+            if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+            const viewport = page.getViewport({ scale: 1.5 });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = `${viewport.width}px`;
+            canvas.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            if (viewerState && viewerState.loadingTask === loadingTask && viewerState.pinnedPage === pageNum) {
+              pagesEl.scrollTop = Math.max(0, canvas.offsetTop - 8);
+            }
+          })().catch(() => {
+            renderedPromises.delete(pageNum);
+          });
+          renderedPromises.set(pageNum, p);
+          return p;
+        };
+        viewerState.ensurePageRendered = ensurePageRendered;
+
+        observer = new IntersectionObserver((entries) => {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
             const canvas = entry.target;
             observer.unobserve(canvas);
-            void renderPage(Number(canvas.dataset.page), canvas).catch(() => undefined);
+            void ensurePageRendered(Number(canvas.dataset.page));
           }
         }, { root: pagesEl, rootMargin: '400px' });
         canvases.forEach((c) => observer.observe(c));
@@ -1989,24 +2684,18 @@
           // (the preview PDF simply has no more pages). Contact channel
           // comes from /api/v1/ui-config (env phía Reverse_proxy);
           // empty config -> generic sentence only. No price is shown.
-          const kind = endOfPreviewKind(elibUser);
-          $('#doc-viewer-end-text').textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
-          $('#doc-viewer-end-login').hidden = kind !== 'login';
-          const contact = normalizeContact(uiConfig);
-          const contactEl = $('#doc-viewer-end-contact');
-          if (contactEl) {
-            if (contact.text || contact.url) {
-              contactEl.hidden = false;
-              contactEl.textContent = contact.text || contact.url;
-              if (contact.url) contactEl.href = contact.url;
-              else contactEl.removeAttribute('href');
-            } else {
-              contactEl.hidden = true;
-            }
-          }
-          endEl.hidden = false;
+          showPreviewAccessNotice(false);
+        }
+
+        if (viewerState.pendingJumpPage) {
+          const targetPage = viewerState.pendingJumpPage;
+          viewerState.pendingJumpPage = null;
+          jumpToViewerPage(targetPage);
+        } else {
+          updateActiveTocHighlight(viewerState.currentPage || 1);
         }
       } catch (error) {
+        resetViewerToc();
         statusEl.hidden = false;
         statusEl.classList.add('viewer-error');
         if (options.deepLink && error?.status === 404) {
@@ -3361,6 +4050,13 @@
       if (!$('#view-library').hidden) renderLibrary();
       if (!$('#view-documents').hidden) { renderElibUserBar(); renderElibSession(); }
       if (!$('#view-admin-users').hidden) void loadAdminUsersView();
+      $('#doc-viewer-toc-close')?.setAttribute('aria-label', t('tocClose'));
+      if (!$('#doc-viewer').hidden && viewerTocState) {
+        if (viewerTocState.kind === 'ready' && viewerTocState.tree[0]?.virtual) {
+          viewerTocState.tree[0].title = t('tocFirstPage');
+        }
+        renderViewerToc();
+      }
     }
 
     // ---- Tài liệu (elib via /api/elib/* proxy) ----
@@ -3862,15 +4558,59 @@
       if (event.key === 'Escape' && !$('#doc-viewer').hidden) closeDocViewer();
     });
     const scrollViewerPage = (delta) => {
-      const pagesEl = $('#doc-viewer-pages');
-      const canvases = [...pagesEl.querySelectorAll('canvas')];
-      if (canvases.length === 0) return;
-      const current = canvases.findIndex((c) => c.offsetTop + c.offsetHeight > pagesEl.scrollTop + 10);
-      const target = canvases[Math.min(canvases.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta))];
-      if (target) pagesEl.scrollTo({ top: target.offsetTop, behavior: 'smooth' });
+      const canvases = viewerState?.canvases;
+      if (!Array.isArray(canvases) || canvases.length === 0) return;
+      const current = viewerState?.pinnedPage ?? computeCurrentViewerPage();
+      const targetPage = Math.min(canvases.length, Math.max(1, current + delta));
+      jumpToViewerPage(targetPage);
     };
     $('#doc-viewer-prev').addEventListener('click', () => scrollViewerPage(-1));
     $('#doc-viewer-next').addEventListener('click', () => scrollViewerPage(1));
+    $('#doc-viewer-toc-toggle').addEventListener('click', () => {
+      if (!viewerTocState) return;
+      viewerTocOpen = !viewerTocOpen;
+      applyTocVisibility();
+    });
+    const closeTocDrawer = () => {
+      if (!viewerTocState) return;
+      viewerTocOpen = false;
+      applyTocVisibility();
+    };
+    $('#doc-viewer-toc-close').addEventListener('click', closeTocDrawer);
+    $('#doc-viewer-toc-backdrop').addEventListener('click', closeTocDrawer);
+    $('#doc-viewer-toc-search').addEventListener('input', (event) => {
+      if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+      viewerTocState.query = event.target.value || '';
+      renderViewerToc();
+    });
+    const viewerPagesEl = $('#doc-viewer-pages');
+    viewerPagesEl.addEventListener('scroll', () => {
+      if (!viewerState || viewerState.pinnedPage) return;
+      if (viewerState.scrollRaf) return;
+      viewerState.scrollRaf = requestAnimationFrame(() => {
+        if (!viewerState) return;
+        viewerState.scrollRaf = 0;
+        const page = computeCurrentViewerPage();
+        if (viewerState.currentPage !== page) {
+          viewerState.currentPage = page;
+          if (viewerState.mode !== 'preview' && viewerState.totalPages > 0) {
+            $('#doc-viewer-pageinfo').textContent = t('viewerPage', { n: page, total: viewerState.totalPages });
+          }
+          updateActiveTocHighlight(page);
+        }
+      });
+    }, { passive: true });
+    const clearViewerPin = () => {
+      if (!viewerState) return;
+      viewerState.pinnedPage = null;
+      clearTimeout(viewerState.pinTimer);
+      viewerState.pinTimer = null;
+    };
+    viewerPagesEl.addEventListener('wheel', clearViewerPin, { passive: true });
+    viewerPagesEl.addEventListener('touchstart', clearViewerPin, { passive: true });
+    window.addEventListener('resize', () => {
+      if (!$('#doc-viewer').hidden && viewerTocState) applyTocVisibility();
+    });
     $$('.nav-item').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
     $$('[data-goto-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.gotoView)));
     $('#mobile-menu').addEventListener('click', () => {
