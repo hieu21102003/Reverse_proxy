@@ -330,8 +330,8 @@ describe('gắn DOM & hợp đồng tĩnh P3', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    expect(indexHtml).toContain('playground.css?v=16');
-    expect(indexHtml).toContain('playground.js?v=16');
+    expect(indexHtml).toContain('playground.css?v=17');
+    expect(indexHtml).toContain('playground.js?v=17');
     expect(indexHtml).not.toContain('pdfjs');
   });
 

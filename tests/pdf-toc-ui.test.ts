@@ -520,8 +520,8 @@ describe('gắn DOM & hợp đồng tĩnh P2', () => {
     ]) {
       expect(indexHtml, id).toContain(`id="${id}"`);
     }
-    expect(indexHtml).toContain('playground.css?v=16');
-    expect(indexHtml).toContain('playground.js?v=16');
+    expect(indexHtml).toContain('playground.css?v=17');
+    expect(indexHtml).toContain('playground.js?v=17');
   });
 
   it('playground.css có drawer mobile dưới toolbar và style mục khóa/đang đọc', () => {

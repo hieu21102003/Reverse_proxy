@@ -20,6 +20,7 @@ interface ItemSpan {
 interface ExtractedPage {
   rawText: string;
   itemSpans: ItemSpan[];
+  optionalHyphenOffsets: number[];
   nonSpaceCount: number;
   twoColumnDetected: boolean;
 }
@@ -38,6 +39,10 @@ interface SearchSnapshot {
   status: 'idle' | 'indexing' | 'ready' | 'no_text_layer' | 'cancelled';
   indexedPages: number;
   totalPages: number;
+  pagesWithText: number;
+  emptyTextPages: number;
+  partialNoTextLayer: boolean;
+  provisionalNoText: boolean;
   hasTextLayer: boolean | null;
   query: string;
   normQuery: string;
@@ -180,39 +185,69 @@ describe('PDF in-document search core (S1)', () => {
       ]);
     });
 
-    it('handles multi-line wrapping, soft/hard EOL hyphenation, standard codes, and space-dash punctuation', () => {
+    it('handles multi-line wrapping, bidirectional optional EOL hyphenation, Unicode hyphens, standard codes, and space-dash punctuation', () => {
       const extracted = helpers.extractPageText({
         items: [
-          makeBoxItem('Hệ thống', 50, 720, 45),
-          makeBoxItem('đường sắt inter-', 50, 700, 80),
-          makeBoxItem('national và', 50, 680, 60),
+          makeBoxItem('Hệ thống', 50, 740, 45),
+          makeBoxItem('đường sắt inter-', 50, 720, 80),
+          makeBoxItem('national và self-', 50, 700, 80),
+          makeBoxItem('contained system', 50, 680, 80),
           makeBoxItem('tiêu\u00AD', 50, 660, 25),
           makeBoxItem('chuẩn TCVN-', 50, 640, 65),
-          makeBoxItem('50126', 50, 620, 35),
+          makeBoxItem('50126 và BS EN 50126\u20111:2017', 50, 620, 140),
           makeBoxItem('Đường sắt -', 50, 600, 60),
-          makeBoxItem('TOD đô thị', 50, 580, 65)
+          makeBoxItem('TOD đô thị và mid-line', 50, 580, 120)
         ]
       });
 
-      expect(extracted.rawText).toContain('Hệ thống\nđường sắt international và');
-      expect(extracted.rawText).toContain('tiêuchuẩn');
+      expect(extracted.rawText).toContain('Hệ thống\nđường sắt inter-national và self-contained system');
       expect(extracted.rawText).toContain('TCVN-50126');
       expect(extracted.rawText).toContain('Đường sắt -\nTOD đô thị');
+      expect(extracted.optionalHyphenOffsets.length).toBe(3);
 
       const pageEntry = { pageNum: 1, ...extracted };
-      const resHyphen = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('international'));
-      expect(resHyphen.matches).toHaveLength(1);
-      expect(resHyphen.matches[0].itemRanges).toEqual([
-        { itemIndex: 1, start: 10, end: 15 }, // "inter" from "đường sắt inter-"
-        { itemIndex: 2, start: 0, end: 8 }    // "national" from "national và"
-      ]);
 
+      // Chiều 1: "international" khớp "inter-" + "national" (bỏ qua gạch nối cuối dòng)
+      const resInter = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('international'));
+      expect(resInter.matches).toHaveLength(1);
+      expect(resInter.matches[0].itemRanges).toEqual([
+        { itemIndex: 1, start: 10, end: 16 }, // "inter-"
+        { itemIndex: 2, start: 0, end: 8 }    // "national"
+      ]);
+      // Chiều ngược lại cho cùng từ: "inter-national" cũng khớp
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('inter-national')).matches).toHaveLength(1);
+
+      // Chiều 2: "self-contained" khớp "self-" + "contained" (giữ gạch nối cuối dòng)
+      const resSelfHyphen = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('self-contained'));
+      expect(resSelfHyphen.matches).toHaveLength(1);
+      expect(resSelfHyphen.matches[0].itemRanges).toEqual([
+        { itemIndex: 2, start: 12, end: 17 }, // "self-"
+        { itemIndex: 3, start: 0, end: 9 }    // "contained"
+      ]);
+      // "selfcontained" cũng khớp
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('selfcontained')).matches).toHaveLength(1);
+
+      // Truy vấn kết hợp cả hai trong cùng 1 cụm: "international và self-contained"
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('international va self-contained')).matches).toHaveLength(1);
+
+      // Gạch nối giữa dòng (không phải EOL) vẫn bắt buộc có dấu '-'
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('mid-line')).matches).toHaveLength(1);
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('midline')).matches).toHaveLength(0);
+
+      // Gạch nối mềm \u00AD ở cuối dòng khớp cả hai chiều và ẩn \u00AD trong snippet
+      const resSoft = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('tieuchuan'));
+      expect(resSoft.matches).toHaveLength(1);
+      expect(resSoft.matches[0].snippet.match).not.toContain('\u00AD');
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('tieu-chuan')).matches).toHaveLength(1);
+
+      // Mã chuẩn có gạch nối cuối dòng & non-breaking hyphen \u2011
       const resCode = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('tcvn-50126'));
       expect(resCode.matches).toHaveLength(1);
       expect(resCode.matches[0].itemRanges).toEqual([
-        { itemIndex: 4, start: 6, end: 11 }, // "TCVN-"
-        { itemIndex: 5, start: 0, end: 5 }    // "50126"
+        { itemIndex: 5, start: 6, end: 11 }, // "TCVN-"
+        { itemIndex: 6, start: 0, end: 5 }   // "50126"
       ]);
+      expect(helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('50126-1')).matches).toHaveLength(1);
 
       const resCrossLine = helpers.searchPageText(pageEntry, helpers.normalizeSearchQuery('he thong duong sat'));
       expect(resCrossLine.matches).toHaveLength(1);
@@ -407,48 +442,60 @@ describe('PDF in-document search core (S1)', () => {
       expect(capped.truncated).toBe(true);
     });
 
-    it('detects no_text_layer after probing N leading empty pages and stops without reading remaining pages', async () => {
+    it('warns on partial empty pages (e.g. 10 leading image pages) without blocking search, and blocks only when all pages have no text', async () => {
+      // PDF có 10 trang đầu là ảnh nhưng trang 11..14 có chữ -> KHÔNG chặn, chỉ bật cảnh báo partialNoTextLayer
+      const mixedPages: TextItemLike[][] = [
+        ...Array.from({ length: 10 }, () => [{ str: '   ' }]),
+        [makeBoxItem('Chương 1: Hệ thống tín hiệu đường sắt', 50, 700, 220)],
+        [makeBoxItem('Chương 2: Quy định an toàn', 50, 700, 180)],
+        [],
+        [makeBoxItem('Phụ lục đường sắt đô thị', 50, 700, 190)]
+      ];
+      const mixedPdf = makeMockPdf(mixedPages);
+      const mixedSnapshots: SearchSnapshot[] = [];
+      const mixedEngine = helpers.createPdfSearchEngine({
+        pdf: mixedPdf,
+        batchSize: 4,
+        yieldToMain: async () => Promise.resolve(),
+        onUpdate: snap => mixedSnapshots.push(snap)
+      });
+
+      mixedEngine.setQuery('đường sắt');
+      const mixedFinal = await mixedEngine.startIndexing();
+      expect(mixedFinal.status).toBe('ready');
+      expect(mixedFinal.hasTextLayer).toBe(true);
+      expect(mixedFinal.pagesWithText).toBe(3);
+      expect(mixedFinal.emptyTextPages).toBe(11);
+      expect(mixedFinal.partialNoTextLayer).toBe(true);
+      expect(mixedFinal.matches.map(m => m.pageNum)).toEqual([11, 14]);
+      // Trong lúc đang quét lô đầu chưa có chữ -> chỉ đánh dấu provisionalNoText, không dừng sớm
+      expect(mixedSnapshots.some(s => s.status === 'indexing' && s.provisionalNoText)).toBe(true);
+
+      // PDF toàn bộ trang đều là ảnh (không có chữ ở bất kỳ trang nào) -> no_text_layer và chặn tìm kiếm
       const requestedPages: number[] = [];
-      const twentyFiveEmptyPages = Array.from({ length: 25 }, () => [{ str: '   ' }]);
-      const pdf = makeMockPdf(twentyFiveEmptyPages, {
+      const twelveEmptyPages = Array.from({ length: 12 }, () => [{ str: '   ' }]);
+      const emptyPdf = makeMockPdf(twelveEmptyPages, {
         onGetPage: p => requestedPages.push(p)
       });
 
-      const engine = helpers.createPdfSearchEngine({
-        pdf,
+      const emptyEngine = helpers.createPdfSearchEngine({
+        pdf: emptyPdf,
         batchSize: 4,
-        noTextProbePages: 10,
         yieldToMain: async () => Promise.resolve()
       });
 
-      const finalSnap = await engine.startIndexing();
+      const finalSnap = await emptyEngine.startIndexing();
       expect(finalSnap.status).toBe('no_text_layer');
       expect(finalSnap.hasTextLayer).toBe(false);
-      expect(requestedPages).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(finalSnap.partialNoTextLayer).toBe(false);
+      expect(requestedPages).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
-      const afterQuery = engine.setQuery('đường sắt');
+      const afterQuery = emptyEngine.setQuery('đường sắt');
       expect(afterQuery.status).toBe('no_text_layer');
       expect(afterQuery.matches).toEqual([]);
-      expect(pdf.getPage).toHaveBeenCalledTimes(10);
+      expect(emptyPdf.getPage).toHaveBeenCalledTimes(12);
 
-      // Cover-image PDF: pages 1-2 empty, page 3 has text -> NOT no_text_layer
-      const coverPdf = makeMockPdf([
-        [],
-        [{ str: ' ' }],
-        [makeBoxItem('Nội dung chính bắt đầu từ trang ba', 50, 700, 220)],
-        [makeBoxItem('Trang bốn tiếp theo', 50, 700, 150)]
-      ]);
-      const coverEngine = helpers.createPdfSearchEngine({
-        pdf: coverPdf,
-        batchSize: 2,
-        noTextProbePages: 10,
-        yieldToMain: async () => Promise.resolve()
-      });
-      const coverSnap = await coverEngine.startIndexing();
-      expect(coverSnap.status).toBe('ready');
-      expect(coverSnap.hasTextLayer).toBe(true);
-
-      // Short preview PDF with 3 empty pages (totalPages < noTextProbePages)
+      // Preview ngắn 3 trang rỗng -> không bao giờ gọi getPage(4)
       const shortRequested: number[] = [];
       const shortEmptyPdf = makeMockPdf([[], [], []], {
         onGetPage: p => shortRequested.push(p)
@@ -456,7 +503,6 @@ describe('PDF in-document search core (S1)', () => {
       const shortEngine = helpers.createPdfSearchEngine({
         pdf: shortEmptyPdf,
         batchSize: 4,
-        noTextProbePages: 10,
         yieldToMain: async () => Promise.resolve()
       });
       const shortSnap = await shortEngine.startIndexing();

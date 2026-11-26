@@ -187,8 +187,8 @@ describe('gắn DOM: mục file tiêu chuẩn trên trang chi tiết', () => {
     expect(indexHtml).toContain('id="detail-standard-file-section"');
     expect(indexHtml).toContain('id="detail-standard-file-body"');
     expect(indexHtml).toContain('id="detail-nopdf-note"');
-    expect(indexHtml).toContain('playground.css?v=16');
-    expect(indexHtml).toContain('playground.js?v=16');
+    expect(indexHtml).toContain('playground.css?v=17');
+    expect(indexHtml).toContain('playground.js?v=17');
   });
 
   it('renderDetailResult tải mục file; refreshElibAuth tải lại khi quyền đổi', () => {
