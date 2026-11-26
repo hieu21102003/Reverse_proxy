@@ -2798,7 +2798,425 @@
     return { activeMark, dirty: nextDirty };
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError, PDF_SEARCH_MIN_QUERY_LENGTH, PDF_SEARCH_MAX_RESULTS, PDF_SEARCH_SNIPPET_MAX_LENGTH, PDF_SEARCH_BATCH_SIZE, PDF_SEARCH_NO_TEXT_PROBE_PAGES, extractPageText, normalizeSearchTextWithMap, normalizeSearchQuery, mapRawRangeToItemRanges, buildMatchSnippet, searchPageText, createPdfSearchEngine, VIEWER_TEXT_SELECTABLE, resolveViewerTextLayerBehavior, applyTextLayerSelectability, isViewerPreviewOnly, shouldInterceptViewerFindShortcut, formatSearchCounter, computeTextLayerScale, createSearchResultsDom, applyHighlightsToTextDivs };
+  /**
+   * Bộ điều khiển giao diện tìm kiếm trong PDF viewer (dùng chung cho runtime và DOM test S3):
+   * quản lý mở/đóng thanh tìm, phím tắt Ctrl/Cmd+F / Enter / Shift+Enter / Esc, hủy lập chỉ mục
+   * khi đóng viewer hoặc chuyển tài liệu, và giới hạn trang trong chế độ xem trước.
+   */
+  function createPdfViewerSearchSession(deps = {}) {
+    const docFactory = deps.docFactory;
+    const els = deps.elements || {};
+    const translate = typeof deps.translate === 'function' ? deps.translate : (k => k);
+    const isMobile = typeof deps.isMobile === 'function' ? deps.isMobile : () => false;
+
+    let open = false;
+    let state = null; // { doc, mode, totalPages, engine, snapshot, query, activeIndex, renderedLimit, debounceTimer, caseSensitive, ignoreDiacritics }
+
+    const isOpen = () => open;
+    const hasPane = () => Boolean(state && (open || (state.query && state.query.trim().length > 0)));
+    const getActiveIndex = () => (state ? state.activeIndex : -1);
+    const getSnapshot = () => (state ? state.snapshot : null);
+
+    const getPageMatches = (pageNum) => {
+      if (!state || !open) return [];
+      const list = state.snapshot?.matches || [];
+      const out = [];
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i].pageNum === pageNum) {
+          out.push({ globalIndex: i, match: list[i] });
+        }
+      }
+      return out;
+    };
+
+    const render = () => {
+      const {
+        searchBar, searchInput, counterEl, prevBtn, nextBtn, caseBtn, diaBtn,
+        closeBtn, metaEl, tabCountEl, resultsStatusEl, resultsListEl, moreWrapEl
+      } = els;
+      if (!searchBar || !searchInput || !counterEl || !prevBtn || !nextBtn || !metaEl) return;
+
+      const s = state;
+      const snap = s?.snapshot || null;
+      const matches = snap?.matches || [];
+      const totalMatches = matches.length;
+      const isNoText = snap?.status === 'no_text_layer';
+      const isIndexing = snap?.status === 'indexing';
+      const previewOnly = Boolean(s && isViewerPreviewOnly(s.doc, s.mode));
+      const totalPages = s?.totalPages || snap?.totalPages || 0;
+
+      if (s) {
+        if (s.activeIndex >= totalMatches) {
+          s.activeIndex = totalMatches > 0 ? 0 : -1;
+        } else if (s.activeIndex < 0 && totalMatches > 0) {
+          s.activeIndex = 0;
+        }
+      }
+
+      searchInput.disabled = isNoText;
+      if (caseBtn) {
+        const cs = Boolean(s?.caseSensitive);
+        caseBtn.disabled = isNoText;
+        caseBtn.classList?.toggle('is-active', cs);
+        caseBtn.setAttribute?.('aria-pressed', String(cs));
+        caseBtn.setAttribute?.('aria-label', translate('pdfSearchMatchCase'));
+        caseBtn.title = translate('pdfSearchMatchCase');
+      }
+      if (diaBtn) {
+        const ign = s ? s.ignoreDiacritics !== false : true;
+        diaBtn.disabled = isNoText;
+        diaBtn.classList?.toggle('is-active', ign);
+        diaBtn.setAttribute?.('aria-pressed', String(ign));
+        diaBtn.setAttribute?.('aria-label', translate('pdfSearchIgnoreDiacritics'));
+        diaBtn.title = translate('pdfSearchIgnoreDiacritics');
+      }
+      prevBtn.disabled = isNoText || totalMatches === 0;
+      nextBtn.disabled = isNoText || totalMatches === 0;
+      prevBtn.setAttribute?.('aria-label', translate('pdfSearchPrev'));
+      nextBtn.setAttribute?.('aria-label', translate('pdfSearchNext'));
+      closeBtn?.setAttribute?.('aria-label', translate('pdfSearchClose'));
+
+      counterEl.textContent = formatSearchCounter(s?.activeIndex ?? -1, totalMatches, Boolean(snap?.truncated));
+      if (tabCountEl) {
+        if (totalMatches > 0) {
+          tabCountEl.hidden = false;
+          tabCountEl.textContent = `(${totalMatches}${snap?.truncated ? '+' : ''})`;
+        } else {
+          tabCountEl.hidden = true;
+          tabCountEl.textContent = '';
+        }
+      }
+
+      const notices = [];
+      let tone = '';
+      if (isNoText) {
+        notices.push(translate('pdfSearchNoTextLayer'));
+        tone = 'is-error';
+      } else {
+        if (previewOnly && totalPages > 0) {
+          notices.push(translate('pdfSearchPreviewOnly', { n: totalPages }));
+        }
+        if (isIndexing && totalPages > 0) {
+          notices.push(translate('pdfSearchIndexing', { x: snap.indexedPages, total: totalPages }));
+        }
+        if (snap?.partialNoTextLayer) {
+          notices.push(translate('pdfSearchPartialNoText'));
+          if (!tone) tone = 'is-warning';
+        }
+        if (snap?.queryTooShort) {
+          notices.push(translate('pdfSearchTooShort'));
+        } else if (snap && snap.normQuery && snap.normQuery.length >= PDF_SEARCH_MIN_QUERY_LENGTH && !isIndexing && totalMatches === 0) {
+          notices.push(translate('pdfSearchNoResults'));
+        } else if (snap?.truncated) {
+          notices.push(translate('pdfSearchTruncated', { max: PDF_SEARCH_MAX_RESULTS }));
+          if (!tone) tone = 'is-warning';
+        }
+      }
+
+      metaEl.classList?.remove?.('is-warning', 'is-error');
+      if (tone) metaEl.classList?.add?.(tone);
+      if (notices.length > 0) {
+        metaEl.hidden = false;
+        metaEl.textContent = notices.join(' · ');
+      } else {
+        metaEl.hidden = true;
+        metaEl.textContent = '';
+      }
+
+      if (resultsStatusEl) {
+        if (notices.length > 0) {
+          resultsStatusEl.hidden = false;
+          resultsStatusEl.textContent = notices.join(' · ');
+        } else {
+          resultsStatusEl.hidden = true;
+          resultsStatusEl.textContent = '';
+        }
+      }
+
+      if (resultsListEl && s && docFactory) {
+        const limit = Math.min(totalMatches, Math.max(s.renderedLimit, (s.activeIndex >= 0 ? s.activeIndex + 20 : 0)));
+        s.renderedLimit = Math.max(200, limit);
+        const visibleMatches = matches.slice(0, limit);
+        const items = createSearchResultsDom(docFactory, visibleMatches, {
+          activeIndex: s.activeIndex,
+          pageLabel: p => translate('pdfSearchPageLabel', { n: p }),
+          onSelect: (idx) => {
+            goToMatch(idx);
+            if (isMobile()) {
+              deps.onCloseMobileDrawer?.();
+            }
+          }
+        });
+        if (typeof resultsListEl.replaceChildren === 'function') {
+          resultsListEl.replaceChildren(...items);
+        }
+        if (moreWrapEl) {
+          moreWrapEl.hidden = !(totalMatches > visibleMatches.length);
+        }
+      }
+      deps.onRefreshHighlights?.();
+    };
+
+    const goToMatch = (targetIndex) => {
+      if (!state) return;
+      const matches = state.snapshot?.matches || [];
+      if (matches.length === 0) return;
+      const wrapped = ((targetIndex % matches.length) + matches.length) % matches.length;
+      state.activeIndex = wrapped;
+      const match = matches[wrapped];
+      if (!match) return;
+      if (match.pageNum > state.totalPages) {
+        deps.onPreviewBlocked?.();
+        return;
+      }
+      render();
+      deps.onScrollResultRowIntoView?.(wrapped);
+      deps.onJumpToPage?.(match.pageNum);
+      const rendered = deps.onEnsurePageRendered?.(match.pageNum);
+      if (rendered && typeof rendered.then === 'function') {
+        void rendered.then(() => {
+          if (state?.activeIndex === wrapped && open) {
+            deps.onHighlightActivePage?.(match.pageNum);
+          }
+        });
+      }
+    };
+
+    const runQuery = (immediate = false) => {
+      if (!state) return;
+      clearTimeout(state.debounceTimer);
+      const exec = () => {
+        if (!state) return;
+        const q = els.searchInput ? String(els.searchInput.value ?? '') : '';
+        state.query = q;
+        state.renderedLimit = 200;
+        const prevActiveMatch = state.activeIndex >= 0
+          ? state.snapshot?.matches?.[state.activeIndex]
+          : null;
+        const snap = state.engine.setQuery(q, {
+          caseSensitive: state.caseSensitive,
+          ignoreDiacritics: state.ignoreDiacritics
+        });
+        state.snapshot = snap;
+        if (snap.matches.length === 0) {
+          state.activeIndex = -1;
+        } else if (!prevActiveMatch || prevActiveMatch.id !== snap.matches[0]?.id) {
+          state.activeIndex = 0;
+        }
+        if (snap.normQuery && snap.normQuery.length >= PDF_SEARCH_MIN_QUERY_LENGTH) {
+          deps.onQueryActivated?.();
+        }
+        deps.onSidebarChange?.();
+        render();
+        if (snap.matches.length > 0 && state.activeIndex === 0) {
+          const first = snap.matches[0];
+          if (first.pageNum <= state.totalPages) {
+            deps.onJumpToPage?.(first.pageNum);
+            const p = deps.onEnsurePageRendered?.(first.pageNum);
+            if (p && typeof p.then === 'function') {
+              void p.then(() => {
+                if (state?.activeIndex === 0 && open) {
+                  deps.onHighlightActivePage?.(first.pageNum);
+                }
+              });
+            }
+          } else {
+            deps.onPreviewBlocked?.();
+          }
+        }
+      };
+      if (immediate) exec();
+      else state.debounceTimer = setTimeout(exec, 90);
+    };
+
+    const close = () => {
+      if (state) {
+        clearTimeout(state.debounceTimer);
+        state.engine?.cancel();
+      }
+      state = null;
+      open = false;
+      const {
+        searchBar, searchToggle, searchInput, counterEl, metaEl,
+        tabCountEl, resultsListEl, resultsStatusEl, moreWrapEl
+      } = els;
+      if (searchBar) searchBar.hidden = true;
+      if (searchToggle) {
+        searchToggle.hidden = true;
+        searchToggle.setAttribute?.('aria-expanded', 'false');
+      }
+      if (searchInput) { searchInput.value = ''; searchInput.disabled = false; }
+      if (counterEl) counterEl.textContent = '0/0';
+      if (metaEl) { metaEl.hidden = true; metaEl.textContent = ''; }
+      if (tabCountEl) { tabCountEl.hidden = true; tabCountEl.textContent = ''; }
+      if (resultsListEl && typeof resultsListEl.replaceChildren === 'function') resultsListEl.replaceChildren();
+      if (resultsStatusEl) { resultsStatusEl.hidden = true; resultsStatusEl.textContent = ''; }
+      if (moreWrapEl) moreWrapEl.hidden = true;
+      deps.onResetSidebarTab?.();
+      deps.onRefreshHighlights?.();
+    };
+
+    const attachPdf = ({ doc, mode, pdf, totalPages }) => {
+      close();
+      const safeTotal = Math.max(0, Math.trunc(Number(totalPages ?? pdf?.numPages) || 0));
+      const engine = createPdfSearchEngine({
+        pdf,
+        batchSize: deps.batchSize,
+        yieldToMain: deps.yieldToMain,
+        onUpdate: (snap) => {
+          if (!state || state.engine !== engine) return;
+          const prevMatches = state.snapshot?.matches?.length || 0;
+          state.snapshot = snap;
+          if (prevMatches === 0 && snap.matches.length > 0 && state.activeIndex < 0) {
+            state.activeIndex = 0;
+          }
+          render();
+        }
+      });
+      state = {
+        doc,
+        mode,
+        totalPages: safeTotal,
+        engine,
+        snapshot: engine.getSnapshot(),
+        query: '',
+        activeIndex: -1,
+        renderedLimit: 200,
+        debounceTimer: null,
+        caseSensitive: false,
+        ignoreDiacritics: true
+      };
+      if (els.searchToggle) {
+        els.searchToggle.hidden = false;
+        els.searchToggle.setAttribute?.('aria-expanded', 'false');
+      }
+      if (els.overlay && !els.overlay.hidden) {
+        const active = docFactory?.activeElement;
+        const alreadyInside = Boolean(active && typeof els.overlay.contains === 'function' && els.overlay.contains(active));
+        if (!alreadyInside) {
+          els.overlay.focus?.({ preventScroll: true });
+        }
+      }
+      return state;
+    };
+
+    const openSearch = (focusInput = true) => {
+      if (!state || state.mode === 'image') return false;
+      if (!els.searchBar || !els.searchInput) return false;
+      open = true;
+      els.searchBar.hidden = false;
+      els.searchToggle?.setAttribute?.('aria-expanded', 'true');
+      void state.engine.startIndexing();
+      deps.onSidebarChange?.();
+      render();
+      if (focusInput && !els.searchInput.disabled) {
+        els.searchInput.focus?.();
+        els.searchInput.select?.();
+      }
+      return true;
+    };
+
+    const closeSearch = (returnFocus = true) => {
+      open = false;
+      if (els.searchBar) els.searchBar.hidden = true;
+      els.searchToggle?.setAttribute?.('aria-expanded', 'false');
+      if (state) {
+        clearTimeout(state.debounceTimer);
+        state.query = '';
+        state.activeIndex = -1;
+        state.snapshot = state.engine.clearQuery();
+      }
+      if (els.searchInput) els.searchInput.value = '';
+      deps.onRefreshHighlights?.();
+      deps.onSearchClosed?.();
+      deps.onSidebarChange?.();
+      if (returnFocus && els.overlay && !els.overlay.hidden) {
+        els.overlay.focus?.({ preventScroll: true });
+      }
+    };
+
+    const handleDocumentKeydown = (event, activeElement, isImageMode = false) => {
+      const overlay = els.overlay;
+      if (!overlay || overlay.hidden) return 'ignored';
+      if (shouldInterceptViewerFindShortcut(event, overlay, activeElement, isImageMode)) {
+        event.preventDefault?.();
+        openSearch(true);
+        return 'opened_search';
+      }
+      if (event?.key === 'Escape') {
+        if (open) {
+          event.preventDefault?.();
+          closeSearch(true);
+          return 'closed_search';
+        }
+        deps.onCloseViewer?.();
+        return 'closed_viewer';
+      }
+      return 'ignored';
+    };
+
+    const handleInputKeydown = (event) => {
+      if (!event) return 'ignored';
+      if (event.key === 'Escape') {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        closeSearch(true);
+        return 'closed_search';
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault?.();
+        if (!state) return 'ignored';
+        const inputVal = String(els.searchInput?.value ?? '');
+        if (state.query !== inputVal) {
+          runQuery(true);
+          return 'flushed';
+        }
+        const total = state.snapshot?.matches?.length || 0;
+        if (total > 0) {
+          const delta = event.shiftKey ? -1 : 1;
+          goToMatch((state.activeIndex < 0 ? 0 : state.activeIndex) + delta);
+          return event.shiftKey ? 'prev' : 'next';
+        }
+      }
+      return 'ignored';
+    };
+
+    return {
+      attachPdf,
+      close,
+      openSearch,
+      closeSearch,
+      runQuery,
+      goToMatch,
+      toggleCase: () => {
+        if (!state) return;
+        state.caseSensitive = !state.caseSensitive;
+        runQuery(true);
+      },
+      toggleDiacritics: () => {
+        if (!state) return;
+        state.ignoreDiacritics = !state.ignoreDiacritics;
+        runQuery(true);
+      },
+      showMore: () => {
+        if (!state) return;
+        state.renderedLimit += 200;
+        render();
+      },
+      refreshUi: () => {
+        if (state) render();
+      },
+      handleDocumentKeydown,
+      handleInputKeydown,
+      getPageMatches,
+      hasPane,
+      isOpen,
+      getActiveIndex,
+      getSnapshot
+    };
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError, PDF_SEARCH_MIN_QUERY_LENGTH, PDF_SEARCH_MAX_RESULTS, PDF_SEARCH_SNIPPET_MAX_LENGTH, PDF_SEARCH_BATCH_SIZE, PDF_SEARCH_NO_TEXT_PROBE_PAGES, extractPageText, normalizeSearchTextWithMap, normalizeSearchQuery, mapRawRangeToItemRanges, buildMatchSnippet, searchPageText, createPdfSearchEngine, VIEWER_TEXT_SELECTABLE, resolveViewerTextLayerBehavior, applyTextLayerSelectability, isViewerPreviewOnly, shouldInterceptViewerFindShortcut, formatSearchCounter, computeTextLayerScale, createSearchResultsDom, applyHighlightsToTextDivs, createPdfViewerSearchSession };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -3903,16 +4321,65 @@
     let viewerTocState = null;
     let viewerTocOpen = false;
     let viewerSidebarTab = 'toc'; // 'toc' | 'results'
-    let viewerSearchOpen = false;
-    let viewerSearchState = null;
     let viewerEndHighlightTimer = null;
 
     function isMobileViewer() {
       return typeof window !== 'undefined' && window.innerWidth <= 768;
     }
 
+    const viewerSearch = createPdfViewerSearchSession({
+      docFactory: document,
+      elements: {
+        overlay: $('#doc-viewer'),
+        searchBar: $('#doc-viewer-search-bar'),
+        searchToggle: $('#doc-viewer-search-toggle'),
+        searchInput: $('#doc-viewer-search-input'),
+        counterEl: $('#doc-viewer-search-counter'),
+        prevBtn: $('#doc-viewer-search-prev'),
+        nextBtn: $('#doc-viewer-search-next'),
+        caseBtn: $('#doc-viewer-search-case'),
+        diaBtn: $('#doc-viewer-search-diacritics'),
+        closeBtn: $('#doc-viewer-search-close'),
+        metaEl: $('#doc-viewer-search-meta'),
+        tabCountEl: $('#doc-viewer-tab-results-count'),
+        resultsStatusEl: $('#doc-viewer-results-status'),
+        resultsListEl: $('#doc-viewer-results-list'),
+        moreWrapEl: $('#doc-viewer-results-more-wrap')
+      },
+      translate: (key, vars) => t(key, vars),
+      isMobile: isMobileViewer,
+      onSidebarChange: () => applyTocVisibility(),
+      onQueryActivated: () => {
+        viewerSidebarTab = 'results';
+        if (!isMobileViewer() && !viewerTocOpen) viewerTocOpen = true;
+      },
+      onSearchClosed: () => {
+        if (viewerTocState) viewerSidebarTab = 'toc';
+        else viewerTocOpen = false;
+      },
+      onResetSidebarTab: () => {
+        viewerSidebarTab = 'toc';
+      },
+      onCloseMobileDrawer: () => {
+        viewerTocOpen = false;
+        applyTocVisibility();
+      },
+      onScrollResultRowIntoView: (idx) => {
+        const activeRow = $(`#doc-viewer-results-list [data-match-index="${idx}"]`);
+        if (activeRow && typeof activeRow.scrollIntoView === 'function') {
+          activeRow.scrollIntoView({ block: 'nearest' });
+        }
+      },
+      onJumpToPage: (page) => jumpToViewerPage(page),
+      onEnsurePageRendered: (page) => viewerState?.ensurePageRendered?.(page),
+      onHighlightActivePage: (page) => applySearchHighlightsForPage(page, true),
+      onPreviewBlocked: () => showPreviewAccessNotice(true),
+      onRefreshHighlights: () => refreshAllRenderedSearchHighlights(),
+      onCloseViewer: () => closeDocViewer()
+    });
+
     function hasViewerSearchPane() {
-      return Boolean(viewerSearchState && (viewerSearchOpen || (viewerSearchState.query && viewerSearchState.query.trim().length > 0)));
+      return viewerSearch.hasPane();
     }
 
     function syncViewerTextLayerScales() {
@@ -4014,24 +4481,12 @@
       applyTocVisibility();
     }
 
-    function getActivePageMatches(pageNum) {
-      if (!viewerSearchState || !viewerSearchOpen) return [];
-      const list = viewerSearchState.snapshot?.matches || [];
-      const out = [];
-      for (let i = 0; i < list.length; i += 1) {
-        if (list[i].pageNum === pageNum) {
-          out.push({ globalIndex: i, match: list[i] });
-        }
-      }
-      return out;
-    }
-
     function applySearchHighlightsForPage(pageNum, scrollActiveIntoView = false) {
       if (!viewerState || !(viewerState.textLayers instanceof Map)) return;
       const entry = viewerState.textLayers.get(pageNum);
       if (!entry) return;
-      const pageMatches = getActivePageMatches(pageNum);
-      const activeIdx = viewerSearchState ? viewerSearchState.activeIndex : -1;
+      const pageMatches = viewerSearch.getPageMatches(pageNum);
+      const activeIdx = viewerSearch.getActiveIndex();
       const res = applyHighlightsToTextDivs(
         document,
         entry.textDivs,
@@ -4052,285 +4507,8 @@
       }
     }
 
-    function renderViewerSearchState() {
-      const bar = $('#doc-viewer-search-bar');
-      const input = $('#doc-viewer-search-input');
-      const counterEl = $('#doc-viewer-search-counter');
-      const prevBtn = $('#doc-viewer-search-prev');
-      const nextBtn = $('#doc-viewer-search-next');
-      const caseBtn = $('#doc-viewer-search-case');
-      const diaBtn = $('#doc-viewer-search-diacritics');
-      const metaEl = $('#doc-viewer-search-meta');
-      const tabCountEl = $('#doc-viewer-tab-results-count');
-      const resultsStatusEl = $('#doc-viewer-results-status');
-      const resultsListEl = $('#doc-viewer-results-list');
-      const moreWrapEl = $('#doc-viewer-results-more-wrap');
-      if (!bar || !input || !counterEl || !prevBtn || !nextBtn || !metaEl) return;
-
-      const s = viewerSearchState;
-      const snap = s?.snapshot || null;
-      const matches = snap?.matches || [];
-      const totalMatches = matches.length;
-      const isNoText = snap?.status === 'no_text_layer';
-      const isIndexing = snap?.status === 'indexing';
-      const previewOnly = Boolean(viewerState && isViewerPreviewOnly(viewerState.doc, viewerState.mode));
-      const totalPages = viewerState?.totalPages || snap?.totalPages || 0;
-
-      if (s) {
-        if (s.activeIndex >= totalMatches) {
-          s.activeIndex = totalMatches > 0 ? 0 : -1;
-        } else if (s.activeIndex < 0 && totalMatches > 0) {
-          s.activeIndex = 0;
-        }
-      }
-
-      input.disabled = isNoText;
-      if (caseBtn) {
-        const cs = Boolean(s?.caseSensitive);
-        caseBtn.disabled = isNoText;
-        caseBtn.classList.toggle('is-active', cs);
-        caseBtn.setAttribute('aria-pressed', String(cs));
-        caseBtn.setAttribute('aria-label', t('pdfSearchMatchCase'));
-        caseBtn.title = t('pdfSearchMatchCase');
-      }
-      if (diaBtn) {
-        const ign = s ? s.ignoreDiacritics !== false : true;
-        diaBtn.disabled = isNoText;
-        diaBtn.classList.toggle('is-active', ign);
-        diaBtn.setAttribute('aria-pressed', String(ign));
-        diaBtn.setAttribute('aria-label', t('pdfSearchIgnoreDiacritics'));
-        diaBtn.title = t('pdfSearchIgnoreDiacritics');
-      }
-      prevBtn.disabled = isNoText || totalMatches === 0;
-      nextBtn.disabled = isNoText || totalMatches === 0;
-      prevBtn.setAttribute('aria-label', t('pdfSearchPrev'));
-      nextBtn.setAttribute('aria-label', t('pdfSearchNext'));
-      $('#doc-viewer-search-close')?.setAttribute('aria-label', t('pdfSearchClose'));
-
-      counterEl.textContent = formatSearchCounter(s?.activeIndex ?? -1, totalMatches, Boolean(snap?.truncated));
-      if (tabCountEl) {
-        if (totalMatches > 0) {
-          tabCountEl.hidden = false;
-          tabCountEl.textContent = `(${totalMatches}${snap?.truncated ? '+' : ''})`;
-        } else {
-          tabCountEl.hidden = true;
-          tabCountEl.textContent = '';
-        }
-      }
-
-      const notices = [];
-      let tone = '';
-      if (isNoText) {
-        notices.push(t('pdfSearchNoTextLayer'));
-        tone = 'is-error';
-      } else {
-        if (previewOnly && totalPages > 0) {
-          notices.push(t('pdfSearchPreviewOnly', { n: totalPages }));
-        }
-        if (isIndexing && totalPages > 0) {
-          notices.push(t('pdfSearchIndexing', { x: snap.indexedPages, total: totalPages }));
-        }
-        if (snap?.partialNoTextLayer) {
-          notices.push(t('pdfSearchPartialNoText'));
-          if (!tone) tone = 'is-warning';
-        }
-        if (snap?.queryTooShort) {
-          notices.push(t('pdfSearchTooShort'));
-        } else if (snap && snap.normQuery && snap.normQuery.length >= PDF_SEARCH_MIN_QUERY_LENGTH && !isIndexing && totalMatches === 0) {
-          notices.push(t('pdfSearchNoResults'));
-        } else if (snap?.truncated) {
-          notices.push(t('pdfSearchTruncated', { max: PDF_SEARCH_MAX_RESULTS }));
-          if (!tone) tone = 'is-warning';
-        }
-      }
-
-      metaEl.classList.remove('is-warning', 'is-error');
-      if (tone) metaEl.classList.add(tone);
-      if (notices.length > 0) {
-        metaEl.hidden = false;
-        metaEl.textContent = notices.join(' · ');
-      } else {
-        metaEl.hidden = true;
-        metaEl.textContent = '';
-      }
-
-      if (resultsStatusEl) {
-        if (notices.length > 0) {
-          resultsStatusEl.hidden = false;
-          resultsStatusEl.textContent = notices.join(' · ');
-        } else {
-          resultsStatusEl.hidden = true;
-          resultsStatusEl.textContent = '';
-        }
-      }
-
-      if (resultsListEl && s) {
-        const limit = Math.min(totalMatches, Math.max(s.renderedLimit, (s.activeIndex >= 0 ? s.activeIndex + 20 : 0)));
-        s.renderedLimit = Math.max(200, limit);
-        const visibleMatches = matches.slice(0, limit);
-        const items = createSearchResultsDom(document, visibleMatches, {
-          activeIndex: s.activeIndex,
-          pageLabel: p => t('pdfSearchPageLabel', { n: p }),
-          onSelect: (idx) => {
-            goToSearchMatch(idx);
-            if (isMobileViewer()) {
-              viewerTocOpen = false;
-              applyTocVisibility();
-            }
-          }
-        });
-        resultsListEl.replaceChildren(...items);
-        if (moreWrapEl) {
-          moreWrapEl.hidden = !(totalMatches > visibleMatches.length);
-        }
-      }
-      refreshAllRenderedSearchHighlights();
-    }
-
-    function goToSearchMatch(targetIndex) {
-      if (!viewerSearchState || !viewerState) return;
-      const matches = viewerSearchState.snapshot?.matches || [];
-      if (matches.length === 0) return;
-      const wrapped = ((targetIndex % matches.length) + matches.length) % matches.length;
-      viewerSearchState.activeIndex = wrapped;
-      const match = matches[wrapped];
-      if (!match) return;
-      if (match.pageNum > viewerState.totalPages) {
-        showPreviewAccessNotice(true);
-        return;
-      }
-      renderViewerSearchState();
-      const activeRow = $(`#doc-viewer-results-list [data-match-index="${wrapped}"]`);
-      if (activeRow && typeof activeRow.scrollIntoView === 'function') {
-        activeRow.scrollIntoView({ block: 'nearest' });
-      }
-      jumpToViewerPage(match.pageNum);
-      const rendered = viewerState.ensurePageRendered?.(match.pageNum);
-      if (rendered && typeof rendered.then === 'function') {
-        void rendered.then(() => {
-          if (viewerSearchState?.activeIndex === wrapped && viewerSearchOpen) {
-            applySearchHighlightsForPage(match.pageNum, true);
-          }
-        });
-      }
-    }
-
-    function runViewerSearchQuery(immediate = false) {
-      if (!viewerSearchState) return;
-      clearTimeout(viewerSearchState.debounceTimer);
-      const exec = () => {
-        if (!viewerSearchState) return;
-        const input = $('#doc-viewer-search-input');
-        const q = input ? input.value : '';
-        viewerSearchState.query = q;
-        viewerSearchState.renderedLimit = 200;
-        const prevActiveMatch = viewerSearchState.activeIndex >= 0
-          ? viewerSearchState.snapshot?.matches?.[viewerSearchState.activeIndex]
-          : null;
-        const snap = viewerSearchState.engine.setQuery(q, {
-          caseSensitive: viewerSearchState.caseSensitive,
-          ignoreDiacritics: viewerSearchState.ignoreDiacritics
-        });
-        viewerSearchState.snapshot = snap;
-        if (snap.matches.length === 0) {
-          viewerSearchState.activeIndex = -1;
-        } else if (!prevActiveMatch || prevActiveMatch.id !== snap.matches[0]?.id) {
-          viewerSearchState.activeIndex = 0;
-        }
-        if (snap.normQuery && snap.normQuery.length >= PDF_SEARCH_MIN_QUERY_LENGTH) {
-          viewerSidebarTab = 'results';
-          if (!isMobileViewer() && !viewerTocOpen) {
-            viewerTocOpen = true;
-          }
-        }
-        applyTocVisibility();
-        renderViewerSearchState();
-        if (snap.matches.length > 0 && viewerSearchState.activeIndex === 0) {
-          const first = snap.matches[0];
-          jumpToViewerPage(first.pageNum);
-          const p = viewerState?.ensurePageRendered?.(first.pageNum);
-          if (p && typeof p.then === 'function') {
-            void p.then(() => {
-              if (viewerSearchState?.activeIndex === 0 && viewerSearchOpen) {
-                applySearchHighlightsForPage(first.pageNum, true);
-              }
-            });
-          }
-        }
-      };
-      if (immediate) exec();
-      else viewerSearchState.debounceTimer = setTimeout(exec, 90);
-    }
-
-    function openViewerSearch(focusInput = true) {
-      if (!viewerState || viewerState.mode === 'image' || !viewerSearchState) return;
-      const bar = $('#doc-viewer-search-bar');
-      const toggleBtn = $('#doc-viewer-search-toggle');
-      const input = $('#doc-viewer-search-input');
-      if (!bar || !input) return;
-      viewerSearchOpen = true;
-      bar.hidden = false;
-      toggleBtn?.setAttribute('aria-expanded', 'true');
-      void viewerSearchState.engine.startIndexing();
-      applyTocVisibility();
-      renderViewerSearchState();
-      if (focusInput && !input.disabled) {
-        input.focus();
-        input.select?.();
-      }
-    }
-
-    function closeViewerSearch(returnFocus = true) {
-      const bar = $('#doc-viewer-search-bar');
-      const toggleBtn = $('#doc-viewer-search-toggle');
-      viewerSearchOpen = false;
-      if (bar) bar.hidden = true;
-      toggleBtn?.setAttribute('aria-expanded', 'false');
-      if (viewerSearchState) {
-        clearTimeout(viewerSearchState.debounceTimer);
-        viewerSearchState.query = '';
-        viewerSearchState.activeIndex = -1;
-        viewerSearchState.snapshot = viewerSearchState.engine.clearQuery();
-      }
-      const input = $('#doc-viewer-search-input');
-      if (input) input.value = '';
-      refreshAllRenderedSearchHighlights();
-      if (viewerTocState) {
-        viewerSidebarTab = 'toc';
-      } else {
-        viewerTocOpen = false;
-      }
-      applyTocVisibility();
-      if (returnFocus && !$('#doc-viewer')?.hidden) {
-        $('#doc-viewer')?.focus({ preventScroll: true });
-      }
-    }
-
     function resetViewerSearch() {
-      if (viewerSearchState) {
-        clearTimeout(viewerSearchState.debounceTimer);
-        viewerSearchState.engine?.cancel();
-      }
-      viewerSearchState = null;
-      viewerSearchOpen = false;
-      viewerSidebarTab = 'toc';
-      const bar = $('#doc-viewer-search-bar');
-      const toggleBtn = $('#doc-viewer-search-toggle');
-      const input = $('#doc-viewer-search-input');
-      const metaEl = $('#doc-viewer-search-meta');
-      const resultsList = $('#doc-viewer-results-list');
-      const resultsStatus = $('#doc-viewer-results-status');
-      const moreWrap = $('#doc-viewer-results-more-wrap');
-      if (bar) bar.hidden = true;
-      if (toggleBtn) {
-        toggleBtn.hidden = true;
-        toggleBtn.setAttribute('aria-expanded', 'false');
-      }
-      if (input) { input.value = ''; input.disabled = false; }
-      if (metaEl) { metaEl.hidden = true; metaEl.textContent = ''; }
-      if (resultsList) resultsList.replaceChildren();
-      if (resultsStatus) { resultsStatus.hidden = true; resultsStatus.textContent = ''; }
-      if (moreWrap) moreWrap.hidden = true;
+      viewerSearch.close();
     }
 
     function resetViewerToc() {
@@ -4768,33 +4946,7 @@
         viewerState.canvases = canvases;
         viewerState.textLayers = new Map();
 
-        const searchEngine = createPdfSearchEngine({
-          pdf,
-          onUpdate: (snap) => {
-            if (!viewerSearchState || viewerSearchState.engine !== searchEngine) return;
-            const prevMatches = viewerSearchState.snapshot?.matches?.length || 0;
-            viewerSearchState.snapshot = snap;
-            if (prevMatches === 0 && snap.matches.length > 0 && viewerSearchState.activeIndex < 0) {
-              viewerSearchState.activeIndex = 0;
-            }
-            renderViewerSearchState();
-          }
-        });
-        viewerSearchState = {
-          engine: searchEngine,
-          snapshot: searchEngine.getSnapshot(),
-          query: '',
-          activeIndex: -1,
-          renderedLimit: 200,
-          debounceTimer: null,
-          caseSensitive: false,
-          ignoreDiacritics: true
-        };
-        const searchToggleBtn = $('#doc-viewer-search-toggle');
-        if (searchToggleBtn) {
-          searchToggleBtn.hidden = false;
-          searchToggleBtn.setAttribute('aria-expanded', 'false');
-        }
+        viewerSearch.attachPdf({ doc, mode, pdf, totalPages: total });
 
         const renderedPromises = new Map();
         let observer = null;
@@ -6269,9 +6421,9 @@
         }
         renderViewerToc();
       }
-      if (!$('#doc-viewer').hidden && viewerSearchState) {
+      if (!$('#doc-viewer').hidden && viewerSearch.getSnapshot()) {
         applyTocVisibility();
-        renderViewerSearchState();
+        viewerSearch.refreshUi();
       }
     }
 
@@ -6774,21 +6926,7 @@
       if (id && viewerDocId !== id) void openDeepLinkedDoc(id);
     });
     document.addEventListener('keydown', (event) => {
-      const overlay = $('#doc-viewer');
-      if (!overlay || overlay.hidden) return;
-      if (shouldInterceptViewerFindShortcut(event, overlay, document.activeElement, viewerState?.mode === 'image')) {
-        event.preventDefault();
-        openViewerSearch(true);
-        return;
-      }
-      if (event.key === 'Escape') {
-        if (viewerSearchOpen) {
-          event.preventDefault();
-          closeViewerSearch(true);
-          return;
-        }
-        closeDocViewer();
-      }
+      viewerSearch.handleDocumentKeydown(event, document.activeElement, viewerState?.mode === 'image');
     });
     const scrollViewerPage = (delta) => {
       const containers = viewerState?.pageWraps?.length ? viewerState.pageWraps : viewerState?.canvases;
@@ -6800,57 +6938,27 @@
     $('#doc-viewer-prev').addEventListener('click', () => scrollViewerPage(-1));
     $('#doc-viewer-next').addEventListener('click', () => scrollViewerPage(1));
     $('#doc-viewer-search-toggle').addEventListener('click', () => {
-      if (viewerSearchOpen) closeViewerSearch(true);
-      else openViewerSearch(true);
+      if (viewerSearch.isOpen()) viewerSearch.closeSearch(true);
+      else viewerSearch.openSearch(true);
     });
-    $('#doc-viewer-search-close').addEventListener('click', () => closeViewerSearch(true));
-    $('#doc-viewer-search-input').addEventListener('input', () => runViewerSearchQuery(false));
+    $('#doc-viewer-search-close').addEventListener('click', () => viewerSearch.closeSearch(true));
+    $('#doc-viewer-search-input').addEventListener('input', () => viewerSearch.runQuery(false));
     $('#doc-viewer-search-input').addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        closeViewerSearch(true);
-        return;
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (!viewerSearchState) return;
-        const inputVal = event.target.value || '';
-        if (viewerSearchState.query !== inputVal) {
-          runViewerSearchQuery(true);
-          return;
-        }
-        const total = viewerSearchState.snapshot?.matches?.length || 0;
-        if (total > 0) {
-          goToSearchMatch((viewerSearchState.activeIndex < 0 ? 0 : viewerSearchState.activeIndex) + (event.shiftKey ? -1 : 1));
-        }
-      }
+      viewerSearch.handleInputKeydown(event);
     });
     $('#doc-viewer-search-prev').addEventListener('click', () => {
-      if (!viewerSearchState) return;
-      goToSearchMatch((viewerSearchState.activeIndex < 0 ? 0 : viewerSearchState.activeIndex) - 1);
+      const idx = viewerSearch.getActiveIndex();
+      viewerSearch.goToMatch((idx < 0 ? 0 : idx) - 1);
     });
     $('#doc-viewer-search-next').addEventListener('click', () => {
-      if (!viewerSearchState) return;
-      goToSearchMatch((viewerSearchState.activeIndex < 0 ? 0 : viewerSearchState.activeIndex) + 1);
+      const idx = viewerSearch.getActiveIndex();
+      viewerSearch.goToMatch((idx < 0 ? 0 : idx) + 1);
     });
-    $('#doc-viewer-search-case').addEventListener('click', () => {
-      if (!viewerSearchState) return;
-      viewerSearchState.caseSensitive = !viewerSearchState.caseSensitive;
-      runViewerSearchQuery(true);
-    });
-    $('#doc-viewer-search-diacritics').addEventListener('click', () => {
-      if (!viewerSearchState) return;
-      viewerSearchState.ignoreDiacritics = !viewerSearchState.ignoreDiacritics;
-      runViewerSearchQuery(true);
-    });
+    $('#doc-viewer-search-case').addEventListener('click', () => viewerSearch.toggleCase());
+    $('#doc-viewer-search-diacritics').addEventListener('click', () => viewerSearch.toggleDiacritics());
     $('#doc-viewer-tab-toc').addEventListener('click', () => setViewerSidebarTab('toc'));
     $('#doc-viewer-tab-results').addEventListener('click', () => setViewerSidebarTab('results'));
-    $('#doc-viewer-results-more').addEventListener('click', () => {
-      if (!viewerSearchState) return;
-      viewerSearchState.renderedLimit += 200;
-      renderViewerSearchState();
-    });
+    $('#doc-viewer-results-more').addEventListener('click', () => viewerSearch.showMore());
     $('#doc-viewer-toc-toggle').addEventListener('click', () => {
       if (!viewerTocState && !hasViewerSearchPane()) return;
       viewerTocOpen = !viewerTocOpen;

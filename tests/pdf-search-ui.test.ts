@@ -7,12 +7,19 @@ interface FakeNode {
   tagName?: string;
   className?: string;
   type?: string;
+  hidden?: boolean;
+  disabled?: boolean;
+  value?: string;
+  title?: string;
   textContent: string;
   attributes?: Record<string, string>;
   style?: Record<string, string>;
+  parent?: FakeNode | null;
   classList?: {
     set: Set<string>;
     toggle: (cls: string, force?: boolean) => boolean;
+    add: (...cls: string[]) => void;
+    remove: (...cls: string[]) => void;
     contains: (cls: string) => boolean;
   };
   children?: FakeNode[];
@@ -22,7 +29,41 @@ interface FakeNode {
   append?: (...items: Array<FakeNode | string>) => void;
   replaceChildren?: (...items: Array<FakeNode | string>) => void;
   addEventListener?: (ev: string, fn: (e?: unknown) => void) => void;
+  contains?: (other: unknown) => boolean;
+  focus?: (opts?: unknown) => void;
+  select?: () => void;
   click?: () => void;
+}
+
+interface SearchSession {
+  attachPdf: (args: {
+    doc: Record<string, unknown>;
+    mode: string;
+    pdf: { numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str: string; transform?: number[]; width?: number; height?: number }> }> }> };
+    totalPages?: number;
+  }) => unknown;
+  close: () => void;
+  openSearch: (focusInput?: boolean) => boolean;
+  closeSearch: (returnFocus?: boolean) => void;
+  runQuery: (immediate?: boolean) => void;
+  goToMatch: (idx: number) => void;
+  toggleCase: () => void;
+  toggleDiacritics: () => void;
+  showMore: () => void;
+  refreshUi: () => void;
+  handleDocumentKeydown: (event: Record<string, unknown>, activeElement: unknown, isImageMode?: boolean) => string;
+  handleInputKeydown: (event: Record<string, unknown>) => string;
+  getPageMatches: (pageNum: number) => unknown[];
+  hasPane: () => boolean;
+  isOpen: () => boolean;
+  getActiveIndex: () => number;
+  getSnapshot: () => {
+    status: string;
+    indexedPages: number;
+    totalPages: number;
+    matches: Array<{ pageNum: number; id: string }>;
+    totalMatches: number;
+  } | null;
 }
 
 interface SearchUiHelpers {
@@ -57,12 +98,28 @@ interface SearchUiHelpers {
     activeGlobalIndex: number,
     dirtySet?: Set<number>
   ) => { activeMark: FakeNode | null; dirty: Set<number> };
+  createPdfSearchEngine: (config: Record<string, unknown>) => {
+    startIndexing: () => Promise<{ status: string; indexedPages: number; totalPages: number }>;
+    setQuery: (q: string) => { matches: unknown[]; totalMatches: number };
+    estimateMemoryBytes: () => number;
+  };
+  createPdfViewerSearchSession: (deps: Record<string, unknown>) => SearchSession;
 }
 
 const helpers = (globalThis as unknown as { __smartrailFileHelpers: SearchUiHelpers }).__smartrailFileHelpers;
 
 function createStrictFakeDom() {
   const createdTags: string[] = [];
+  const docFactory: {
+    activeElement: FakeNode | null;
+    createElement: (tag: string) => FakeNode;
+    createTextNode: (text: string) => FakeNode;
+  } = {
+    activeElement: null,
+    createElement: (tag: string) => makeEl(tag),
+    createTextNode: (text: string): FakeNode => ({ nodeType: 3, textContent: String(text), parent: null })
+  };
+
   const makeEl = (tagName: string): FakeNode => {
     createdTags.push(tagName.toLowerCase());
     const classes = new Set<string>();
@@ -71,9 +128,14 @@ function createStrictFakeDom() {
       tagName: tagName.toLowerCase(),
       className: '',
       type: '',
+      hidden: false,
+      disabled: false,
+      value: '',
+      title: '',
       textContent: '',
       attributes: {},
       style: {},
+      parent: null,
       classList: {
         set: classes,
         toggle(cls: string, force?: boolean) {
@@ -81,6 +143,12 @@ function createStrictFakeDom() {
           if (next) classes.add(cls);
           else classes.delete(cls);
           return next;
+        },
+        add(...cls: string[]) {
+          for (const c of cls) classes.add(c);
+        },
+        remove(...cls: string[]) {
+          for (const c of cls) classes.delete(c);
         },
         contains(cls: string) {
           return classes.has(cls);
@@ -97,8 +165,9 @@ function createStrictFakeDom() {
       append(...items: Array<FakeNode | string>) {
         for (const item of items) {
           if (typeof item === 'string') {
-            this.children!.push({ nodeType: 3, textContent: item });
+            this.children!.push({ nodeType: 3, textContent: item, parent: this });
           } else if (item) {
+            item.parent = this;
             this.children!.push(item);
           }
         }
@@ -112,6 +181,18 @@ function createStrictFakeDom() {
         if (!this.listeners![event]) this.listeners![event] = [];
         this.listeners![event].push(fn);
       },
+      contains(other: unknown) {
+        let cur = other as FakeNode | null | undefined;
+        while (cur) {
+          if (cur === this) return true;
+          cur = cur.parent;
+        }
+        return false;
+      },
+      focus() {
+        docFactory.activeElement = this;
+      },
+      select() {},
       click() {
         for (const fn of this.listeners!.click || []) fn({});
       }
@@ -126,14 +207,7 @@ function createStrictFakeDom() {
     });
     return el;
   };
-  return {
-    createdTags,
-    docFactory: {
-      createElement: (tag: string) => makeEl(tag),
-      createTextNode: (text: string): FakeNode => ({ nodeType: 3, textContent: String(text) })
-    },
-    makeEl
-  };
+  return { createdTags, docFactory, makeEl };
 }
 
 function collectText(node: FakeNode): string {
@@ -361,5 +435,330 @@ describe('PDF in-document search UI & TextLayer controls (S2)', () => {
     ]) {
       expect(playgroundJs, phrase).toContain(phrase);
     }
+    // Xác nhận mở viewer có focus vào #doc-viewer (tabindex="-1") để Ctrl/Cmd+F ăn ngay
+    expect(indexHtml).toContain('id="doc-viewer" hidden tabindex="-1"');
+    expect(playgroundJs).toContain('overlay.focus?.({ preventScroll: true });');
+  });
+});
+
+function createSearchUiHarness(overrides: Record<string, unknown> = {}) {
+  const { docFactory, makeEl } = createStrictFakeDom();
+  const overlay = makeEl('div');
+  const searchBar = makeEl('div');
+  searchBar.hidden = true;
+  const searchToggle = makeEl('button');
+  searchToggle.hidden = true;
+  const searchInput = makeEl('input');
+  const counterEl = makeEl('span');
+  const prevBtn = makeEl('button');
+  const nextBtn = makeEl('button');
+  const caseBtn = makeEl('button');
+  const diaBtn = makeEl('button');
+  const closeBtn = makeEl('button');
+  const metaEl = makeEl('div');
+  metaEl.hidden = true;
+  const tabCountEl = makeEl('span');
+  tabCountEl.hidden = true;
+  const resultsStatusEl = makeEl('p');
+  resultsStatusEl.hidden = true;
+  const resultsListEl = makeEl('ul');
+  const moreWrapEl = makeEl('div');
+  moreWrapEl.hidden = true;
+  const outsideEl = makeEl('input');
+
+  overlay.append(searchToggle, searchBar, resultsListEl);
+  searchBar.append(searchInput, counterEl, prevBtn, nextBtn, caseBtn, diaBtn, closeBtn, metaEl);
+
+  const dict: Record<string, string> = {
+    pdfSearchMatchCase: 'Phân biệt hoa/thường',
+    pdfSearchIgnoreDiacritics: 'Bỏ dấu tiếng Việt',
+    pdfSearchPrev: 'Kết quả trước',
+    pdfSearchNext: 'Kết quả tiếp',
+    pdfSearchClose: 'Đóng tìm kiếm',
+    pdfSearchIndexing: 'Đang lập chỉ mục {x}/{total} trang',
+    pdfSearchPreviewOnly: 'Chỉ tìm trong phần xem trước ({n} trang)',
+    pdfSearchPartialNoText: 'Một số trang không có lớp chữ',
+    pdfSearchNoTextLayer: 'Tài liệu này không có lớp chữ để tìm kiếm.',
+    pdfSearchTooShort: 'Nhập ít nhất 2 ký tự để tìm.',
+    pdfSearchNoResults: 'Không tìm thấy kết quả phù hợp.',
+    pdfSearchTruncated: 'Hiển thị tối đa {max} kết quả đầu tiên.',
+    pdfSearchPageLabel: 'Trang {n}'
+  };
+  const translate = (key: string, vars: Record<string, unknown> = {}) => {
+    let text = dict[key] || key;
+    for (const [k, v] of Object.entries(vars)) text = text.replace(`{${k}}`, String(v));
+    return text;
+  };
+
+  const jumpedPages: number[] = [];
+  const onCloseViewer = vi.fn();
+  const onPreviewBlocked = vi.fn();
+  const onHighlightActivePage = vi.fn();
+  const session = helpers.createPdfViewerSearchSession({
+    docFactory,
+    elements: {
+      overlay, searchBar, searchToggle, searchInput, counterEl, prevBtn, nextBtn,
+      caseBtn, diaBtn, closeBtn, metaEl, tabCountEl, resultsStatusEl, resultsListEl, moreWrapEl
+    },
+    translate,
+    batchSize: 1,
+    yieldToMain: async () => Promise.resolve(),
+    onJumpToPage: (p: number) => jumpedPages.push(p),
+    onEnsurePageRendered: async () => Promise.resolve(),
+    onHighlightActivePage,
+    onPreviewBlocked,
+    onCloseViewer,
+    ...overrides
+  });
+
+  return {
+    docFactory,
+    overlay,
+    searchBar,
+    searchToggle,
+    searchInput,
+    counterEl,
+    metaEl,
+    resultsStatusEl,
+    resultsListEl,
+    outsideEl,
+    jumpedPages,
+    onCloseViewer,
+    onPreviewBlocked,
+    session
+  };
+}
+
+function makeSimplePdf(pageTexts: Array<string | (() => Promise<string>)>) {
+  const requestedPages: number[] = [];
+  return {
+    requestedPages,
+    pdf: {
+      numPages: pageTexts.length,
+      getPage: vi.fn(async (pageNum: number) => {
+        requestedPages.push(pageNum);
+        if (pageNum < 1 || pageNum > pageTexts.length) {
+          throw new Error(`Out-of-bounds getPage(${pageNum})`);
+        }
+        const raw = pageTexts[pageNum - 1];
+        return {
+          getTextContent: vi.fn(async () => {
+            const text = typeof raw === 'function' ? await raw() : raw;
+            return {
+              items: text ? [{ str: text, transform: [10, 0, 0, 10, 50, 700], width: text.length * 5, height: 10 }] : []
+            };
+          })
+        };
+      })
+    }
+  };
+}
+
+describe('PDF search DOM flows, UI cancellation, preview boundary & performance (S3)', () => {
+  it('auto-focuses #doc-viewer on open so Ctrl/Cmd+F works immediately, and ignores Ctrl+F when focus is outside viewer', async () => {
+    const h = createSearchUiHarness();
+    const { pdf } = makeSimplePdf(['Trang một đường sắt', 'Trang hai đường sắt']);
+    h.docFactory.activeElement = h.outsideEl;
+
+    h.session.attachPdf({ doc: { id: 'd1', can_view_full: true }, mode: 'full', pdf, totalPages: 2 });
+    // Tự động focus vào #doc-viewer ngay khi mở
+    expect(h.docFactory.activeElement).toBe(h.overlay);
+
+    // Ctrl+F ngay lập tức -> chặn mặc định trình duyệt, mở thanh tìm, focus ô nhập
+    const prevent1 = vi.fn();
+    expect(h.session.handleDocumentKeydown({ ctrlKey: true, key: 'f', preventDefault: prevent1 }, h.docFactory.activeElement, false)).toBe('opened_search');
+    expect(prevent1).toHaveBeenCalledTimes(1);
+    expect(h.searchBar.hidden).toBe(false);
+    expect(h.docFactory.activeElement).toBe(h.searchInput);
+
+    // Đóng thanh tìm -> trả focus về #doc-viewer; sau đó chuyển focus ra ngoài viewer
+    h.session.closeSearch(true);
+    expect(h.searchBar.hidden).toBe(true);
+    expect(h.docFactory.activeElement).toBe(h.overlay);
+
+    h.docFactory.activeElement = h.outsideEl;
+    const preventOutside = vi.fn();
+    expect(h.session.handleDocumentKeydown({ ctrlKey: true, key: 'f', preventDefault: preventOutside }, h.docFactory.activeElement, false)).toBe('ignored');
+    expect(preventOutside).not.toHaveBeenCalled();
+    expect(h.searchBar.hidden).toBe(true);
+  });
+
+  it('navigates matches with Enter / Shift+Enter and closes search bar before closing viewer on Escape', async () => {
+    const h = createSearchUiHarness();
+    const { pdf } = makeSimplePdf([
+      'Hệ thống đường sắt đô thị',
+      'Tiêu chuẩn đường sắt cao tốc',
+      'An toàn đường sắt quốc gia'
+    ]);
+    h.session.attachPdf({ doc: { id: 'd1', can_view_full: true }, mode: 'full', pdf, totalPages: 3 });
+    h.session.openSearch(true);
+    await vi.waitFor(() => {
+      expect(h.session.getSnapshot()?.status).toBe('ready');
+    });
+
+    h.searchInput.value = 'đường sắt';
+    const preventEnter = vi.fn();
+    expect(h.session.handleInputKeydown({ key: 'Enter', preventDefault: preventEnter })).toBe('flushed');
+    expect(h.counterEl.textContent).toBe('1/3');
+    expect(h.jumpedPages[h.jumpedPages.length - 1]).toBe(1);
+
+    expect(h.session.handleInputKeydown({ key: 'Enter', preventDefault: preventEnter })).toBe('next');
+    expect(h.counterEl.textContent).toBe('2/3');
+    expect(h.jumpedPages[h.jumpedPages.length - 1]).toBe(2);
+
+    expect(h.session.handleInputKeydown({ key: 'Enter', preventDefault: preventEnter })).toBe('next');
+    expect(h.counterEl.textContent).toBe('3/3');
+    expect(h.jumpedPages[h.jumpedPages.length - 1]).toBe(3);
+
+    expect(h.session.handleInputKeydown({ key: 'Enter', shiftKey: true, preventDefault: preventEnter })).toBe('prev');
+    expect(h.counterEl.textContent).toBe('2/3');
+    expect(h.jumpedPages[h.jumpedPages.length - 1]).toBe(2);
+
+    // Esc lần 1: đóng thanh tìm, trả focus về #doc-viewer, CHƯA đóng viewer
+    const preventEsc1 = vi.fn();
+    const stopEsc1 = vi.fn();
+    expect(h.session.handleInputKeydown({ key: 'Escape', preventDefault: preventEsc1, stopPropagation: stopEsc1 })).toBe('closed_search');
+    expect(h.searchBar.hidden).toBe(true);
+    expect(h.docFactory.activeElement).toBe(h.overlay);
+    expect(h.onCloseViewer).not.toHaveBeenCalled();
+
+    // Esc lần 2: thanh tìm đã đóng -> đóng viewer
+    expect(h.session.handleDocumentKeydown({ key: 'Escape', preventDefault: vi.fn() }, h.docFactory.activeElement, false)).toBe('closed_viewer');
+    expect(h.onCloseViewer).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels background indexing at UI level on closing viewer and on switching documents without leaking stale results', async () => {
+    // Trường hợp 1: Đóng viewer giữa lúc đang lập chỉ mục
+    let resolvePage2A!: (text: string) => void;
+    const delayedPage2A = new Promise<string>((resolve) => { resolvePage2A = resolve; });
+    const docA = makeSimplePdf([
+      'Trang 1 đường sắt',
+      () => delayedPage2A,
+      'Trang 3 không được phép đọc',
+      'Trang 4 không được phép đọc'
+    ]);
+    const h = createSearchUiHarness();
+    h.session.attachPdf({ doc: { id: 'doc-a', can_view_full: true }, mode: 'full', pdf: docA.pdf, totalPages: 4 });
+    h.session.openSearch(true);
+    h.searchInput.value = 'đường sắt';
+    h.session.runQuery(true);
+
+    await vi.waitFor(() => {
+      expect(docA.requestedPages).toEqual([1, 2]);
+    });
+
+    h.session.close();
+    expect(h.searchBar.hidden).toBe(true);
+    expect(h.resultsListEl.children).toHaveLength(0);
+
+    resolvePage2A('Trang 2 đường sắt về muộn');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(docA.requestedPages).toEqual([1, 2]);
+    expect(h.resultsListEl.children).toHaveLength(0);
+    expect(h.metaEl.hidden).toBe(true);
+
+    // Trường hợp 2: Đổi sang tài liệu khác (doc-b) khi doc-a đang lập chỉ mục dở
+    let resolvePage2B!: (text: string) => void;
+    const delayedPage2B = new Promise<string>((resolve) => { resolvePage2B = resolve; });
+    const oldDoc = makeSimplePdf([
+      'Tài liệu cũ đường sắt',
+      () => delayedPage2B,
+      'Trang 3 tài liệu cũ'
+    ]);
+    const newDoc = makeSimplePdf([
+      'Tài liệu mới tiêu chuẩn TCVN',
+      'Phụ lục tiêu chuẩn đường bộ'
+    ]);
+
+    h.session.attachPdf({ doc: { id: 'doc-old', can_view_full: true }, mode: 'full', pdf: oldDoc.pdf, totalPages: 3 });
+    h.session.openSearch(true);
+    h.searchInput.value = 'đường sắt';
+    h.session.runQuery(true);
+    await vi.waitFor(() => {
+      expect(oldDoc.requestedPages).toEqual([1, 2]);
+    });
+
+    // Chuyển ngay sang tài liệu mới
+    h.session.attachPdf({ doc: { id: 'doc-new', can_view_full: true }, mode: 'full', pdf: newDoc.pdf, totalPages: 2 });
+    resolvePage2B('Trang 2 cũ đường sắt về muộn');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(oldDoc.requestedPages).toEqual([1, 2]);
+
+    h.session.openSearch(true);
+    await vi.waitFor(() => {
+      expect(h.session.getSnapshot()?.status).toBe('ready');
+    });
+    h.searchInput.value = 'tiêu chuẩn';
+    h.session.runQuery(true);
+    expect(h.counterEl.textContent).toBe('1/2');
+    expect(h.resultsListEl.children).toHaveLength(2);
+    expect(collectText(h.resultsListEl)).not.toContain('Tài liệu cũ');
+  });
+
+  it('shows preview limit notice and NEVER calls getPage outside preview PDF page count', async () => {
+    const previewDoc = {
+      id: 'preview-doc',
+      can_view_full: false,
+      file: { page_count: 40, preview_pages: 3 }
+    };
+    const { pdf, requestedPages } = makeSimplePdf([
+      'Trang xem trước 1 về đường sắt',
+      'Trang xem trước 2 về tín hiệu',
+      'Trang xem trước 3 về đường sắt đô thị'
+    ]);
+    const h = createSearchUiHarness();
+    h.session.attachPdf({ doc: previewDoc, mode: 'preview', pdf, totalPages: 3 });
+    h.session.openSearch(true);
+    await vi.waitFor(() => {
+      expect(h.session.getSnapshot()?.status).toBe('ready');
+    });
+
+    expect(h.metaEl.textContent).toContain('Chỉ tìm trong phần xem trước (3 trang)');
+    expect(h.resultsStatusEl.textContent).toContain('Chỉ tìm trong phần xem trước (3 trang)');
+
+    h.searchInput.value = 'đường sắt';
+    h.session.runQuery(true);
+    expect(h.counterEl.textContent).toBe('1/2');
+    h.session.goToMatch(1);
+    expect(h.counterEl.textContent).toBe('2/2');
+
+    // Mọi lệnh gọi getPage tuyệt đối nằm trong [1..3], không bao giờ chạm trang 4..40
+    expect(requestedPages.every(p => p >= 1 && p <= 3)).toBe(true);
+    expect(requestedPages).toEqual([1, 2, 3]);
+    expect(h.jumpedPages.every(p => p >= 1 && p <= 3)).toBe(true);
+  });
+
+  it('indexes a 120-page document in non-blocking batches with bounded memory and fast search', async () => {
+    const pageBody = 'Tiêu chuẩn kỹ thuật quốc gia về hệ thống đường sắt đô thị và an toàn chạy tàu RAMS. '.repeat(28);
+    const pages = Array.from({ length: 120 }, (_, i) => `Trang ${i + 1}: ${pageBody}`);
+    const { pdf } = makeSimplePdf(pages);
+    let yieldCount = 0;
+
+    const t0 = performance.now();
+    const engine = helpers.createPdfSearchEngine({
+      pdf,
+      batchSize: 4,
+      yieldToMain: async () => {
+        yieldCount += 1;
+        await Promise.resolve();
+      }
+    });
+    const snap = await engine.startIndexing();
+    const indexMs = performance.now() - t0;
+
+    expect(snap.status).toBe('ready');
+    expect(snap.indexedPages).toBe(120);
+    expect(yieldCount).toBe(29); // 120 / 4 - 1 lần nhường luồng giữa các lô
+
+    const q0 = performance.now();
+    const res = engine.setQuery('đường sắt đô thị');
+    const searchMs = performance.now() - q0;
+
+    expect(res.totalMatches).toBe(2000); // bị chặn sạch ở ngưỡng 2000 kết quả
+    expect(indexMs).toBeLessThan(2000);
+    expect(searchMs).toBeLessThan(1000);
+    // Ước lượng bộ nhớ hợp lý cho 120 trang (~280KB text) < 15MB
+    expect(engine.estimateMemoryBytes()).toBeGreaterThan(0);
+    expect(engine.estimateMemoryBytes()).toBeLessThan(15 * 1024 * 1024);
   });
 });
