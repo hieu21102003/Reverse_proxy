@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=14">
-    <script src="/playground.js?v=14" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=16">
+    <script src="/playground.js?v=16" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -45,6 +45,10 @@
             <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span data-i18n="navAdminUsers">Quản trị người dùng</span>
             <span class="nav-badge" id="nav-pending-count" hidden></span>
+          </button>
+          <button class="nav-item" data-view="admin-tocs" id="nav-admin-tocs" type="button" hidden>
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            <span data-i18n="navAdminTocs">Quản trị mục lục</span>
           </button>
           <button class="nav-item" data-view="library" type="button">
             <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -743,6 +747,147 @@
         <div class="empty-state" id="admin-manage-empty" hidden><strong data-i18n="adminManageEmptyTitle">Không có người dùng nào ở trạng thái này</strong><p data-i18n="adminManageEmptyText">Thử chọn trạng thái khác.</p></div>
       </section>
 
+      <!-- Quản trị mục lục PDF (elib, chỉ admin, P3) -->
+      <section class="view-panel" id="view-admin-tocs" aria-labelledby="admin-tocs-title" hidden>
+        <div class="page-heading">
+          <div>
+            <h1 id="admin-tocs-title" data-i18n="adminTocsTitle">Quản trị mục lục PDF</h1>
+            <p class="page-subtitle" data-i18n="adminTocsSubtitle">Rà soát mục lục trích xuất tự động và chỉnh sửa mục lục thủ công cho tài liệu PDF. Chỉ quản trị viên mới thấy mục này.</p>
+          </div>
+          <div class="endpoint-chip"><span class="method method-get">ELIB</span><code>/api/elib/admin/tocs</code></div>
+        </div>
+
+        <div class="elib-banner" id="admin-tocs-banner" hidden role="alert"></div>
+        <div class="loading-skeleton" id="admin-tocs-loading" hidden><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+
+        <div id="admin-tocs-list-panel">
+          <form class="admin-toc-filters elib-card" id="admin-tocs-filters">
+            <label class="field"><span class="field-label" data-i18n="adminTocFilterAutoStatus">Trạng thái tự động</span>
+              <select id="admin-toc-filter-auto-status">
+                <option value="" data-i18n="adminTocAll">Tất cả</option>
+                <option value="ok" data-i18n="adminTocStatusOk">Đạt (ok)</option>
+                <option value="partial" data-i18n="adminTocStatusPartial">Chưa đủ (partial)</option>
+                <option value="needs_ocr" data-i18n="adminTocStatusNeedsOcr">Cần OCR (needs_ocr)</option>
+                <option value="failed" data-i18n="adminTocStatusFailed">Thất bại (failed)</option>
+                <option value="unsupported" data-i18n="adminTocStatusUnsupported">Không hỗ trợ (unsupported)</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="adminTocFilterJobStatus">Trạng thái job</span>
+              <select id="admin-toc-filter-job-status">
+                <option value="" data-i18n="adminTocAll">Tất cả</option>
+                <option value="pending" data-i18n="adminTocJobPending">Đang chờ (pending)</option>
+                <option value="processing" data-i18n="adminTocJobProcessing">Đang xử lý (processing)</option>
+                <option value="done" data-i18n="adminTocJobDone">Hoàn tất (done)</option>
+                <option value="failed" data-i18n="adminTocJobFailed">Lỗi (failed)</option>
+                <option value="unsupported" data-i18n="adminTocJobUnsupported">Không hỗ trợ (unsupported)</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="adminTocFilterFlag">Cờ (flag)</span>
+              <input id="admin-toc-filter-flag" type="text" maxlength="100" list="admin-toc-flag-list" data-i18n-placeholder="adminTocFilterFlagPlaceholder" placeholder="VD: contents_level1_only">
+              <datalist id="admin-toc-flag-list">
+                <option value="contents_level1_only"></option>
+                <option value="printed_toc_fallback"></option>
+                <option value="low_confidence"></option>
+                <option value="needs_ocr"></option>
+              </datalist>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="adminTocFilterManual">Bản thủ công</span>
+              <select id="admin-toc-filter-manual">
+                <option value="" data-i18n="adminTocAll">Tất cả</option>
+                <option value="true" data-i18n="adminTocManualYes">Có ghi đè thủ công</option>
+                <option value="false" data-i18n="adminTocManualNo">Chưa có bản thủ công</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label" data-i18n="adminTocFilterStandards">Phạm vi tài liệu</span>
+              <select id="admin-toc-filter-standards">
+                <option value="" data-i18n="adminTocAll">Tất cả</option>
+                <option value="true" data-i18n="adminTocStandardsOnly">Chỉ tiêu chuẩn</option>
+                <option value="false" data-i18n="adminTocNonStandards">Tài liệu khác</option>
+              </select>
+            </label>
+            <label class="admin-toc-check-field">
+              <input id="admin-toc-filter-outdated" type="checkbox">
+              <span data-i18n="adminTocFilterOutdated">Thuật toán cũ hơn hiện tại</span>
+            </label>
+            <div class="admin-toc-filter-actions">
+              <button class="button button-terracotta button-small" id="admin-toc-filter-apply" type="submit"><span data-i18n="adminTocFilterApply">Lọc danh sách</span></button>
+              <button class="button button-secondary button-small" id="admin-toc-filter-reset" type="button"><span data-i18n="adminTocFilterReset">Đặt lại</span></button>
+            </div>
+          </form>
+
+          <p class="admin-toc-summary" id="admin-tocs-summary"></p>
+          <div class="admin-toc-list" id="admin-tocs-list"></div>
+          <div class="empty-state" id="admin-tocs-empty" hidden><strong data-i18n="adminTocEmptyTitle">Không có file PDF nào khớp bộ lọc</strong><p data-i18n="adminTocEmptyText">Thử bỏ bớt điều kiện lọc hoặc kiểm tra lại sau.</p></div>
+          <div class="admin-toc-pagination" id="admin-tocs-pagination" hidden>
+            <button class="button button-secondary button-small" id="admin-tocs-prev" type="button">← <span data-i18n="prevPage">Trang trước</span></button>
+            <span id="admin-tocs-page-info"></span>
+            <button class="button button-secondary button-small" id="admin-tocs-next" type="button"><span data-i18n="nextPage">Trang sau</span> →</button>
+          </div>
+        </div>
+
+        <div id="admin-tocs-detail-panel" hidden>
+          <div class="admin-toc-detail-head">
+            <button class="button button-secondary button-small" id="admin-toc-back" type="button">← <span data-i18n="adminTocBack">Quay lại danh sách</span></button>
+            <h2 class="admin-toc-detail-title" id="admin-toc-detail-title"></h2>
+          </div>
+          <div class="error-banner" id="admin-toc-detail-error" role="alert" hidden></div>
+          <div class="admin-toc-meta-box" id="admin-toc-detail-meta"></div>
+
+          <div class="admin-toc-workspace">
+            <div class="admin-toc-editor-col">
+              <section class="admin-toc-card" id="admin-toc-auto-card">
+                <div class="admin-toc-card-head">
+                  <h3 data-i18n="adminTocAutoHeading">Cây mục lục tự động</h3>
+                </div>
+                <div class="admin-toc-auto-info" id="admin-toc-auto-info"></div>
+                <ul class="doc-viewer-toc-list admin-toc-auto-tree" id="admin-toc-auto-tree"></ul>
+              </section>
+
+              <section class="admin-toc-card" id="admin-toc-editor-card">
+                <div class="admin-toc-card-head">
+                  <h3 data-i18n="adminTocManualHeading">Trình sửa mục lục thủ công</h3>
+                </div>
+                <div class="admin-toc-actions">
+                  <button class="button button-primary button-small" id="admin-toc-save-btn" type="button"><span data-i18n="adminTocSaveManual">Lưu bản thủ công</span></button>
+                  <button class="button button-secondary button-small" id="admin-toc-promote-btn" type="button"><span data-i18n="adminTocPromoteAuto">Chép từ bản tự động</span></button>
+                  <button class="button button-secondary button-small" id="admin-toc-delete-btn" type="button"><span data-i18n="adminTocDeleteManual">Gỡ bản thủ công</span></button>
+                  <button class="button button-secondary button-small" id="admin-toc-reextract-btn" type="button"><span data-i18n="adminTocReextract">Chạy lại trích xuất</span></button>
+                </div>
+                <p class="admin-toc-reextract-note" id="admin-toc-reextract-note" data-i18n="adminTocReextractNote">Lưu ý: người đọc vẫn thấy bản thủ công hiện hành cho tới khi quản trị viên duyệt xong hoặc gỡ bản thủ công.</p>
+                <div class="error-banner" id="admin-toc-editor-error" role="alert" hidden></div>
+                <label class="field admin-toc-note-field">
+                  <span class="field-label" data-i18n="adminTocNoteLabel">Ghi chú kiểm duyệt (tùy chọn)</span>
+                  <input id="admin-toc-note" type="text" maxlength="500" data-i18n-placeholder="adminTocNotePlaceholder" placeholder="Ghi chú nội bộ về chỉnh sửa mục lục...">
+                </label>
+                <div class="admin-toc-row-toolbar">
+                  <button class="button button-secondary button-small" id="admin-toc-add-node-btn" type="button"><span data-i18n="adminTocAddNode">+ Thêm mục</span></button>
+                  <button class="button button-secondary button-small" id="admin-toc-clear-nodes-btn" type="button"><span data-i18n="adminTocClearNodes">Xóa hết mục</span></button>
+                </div>
+                <div class="admin-toc-editor-rows" id="admin-toc-editor-rows"></div>
+                <p class="admin-toc-editor-empty" id="admin-toc-editor-empty" hidden data-i18n="adminTocEditorEmpty">Chưa có mục nào trong bản thủ công. Bạn có thể thêm mục, chép từ bản tự động, hoặc lưu danh sách rỗng để chủ động ẩn mục lục.</p>
+              </section>
+            </div>
+
+            <aside class="admin-toc-preview-col admin-toc-card" aria-label="Xem thử trang PDF">
+              <div class="admin-toc-preview-head">
+                <h3 data-i18n="adminTocPreviewHeading">Khung xem thử PDF</h3>
+                <div class="admin-toc-preview-controls">
+                  <button class="button button-secondary button-small" id="admin-toc-pdf-prev" type="button">←</button>
+                  <input id="admin-toc-pdf-page-input" type="number" min="1" value="1" aria-label="Trang">
+                  <span id="admin-toc-pdf-page-total"></span>
+                  <button class="button button-secondary button-small" id="admin-toc-pdf-next" type="button">→</button>
+                </div>
+              </div>
+              <p class="admin-toc-version-warn" id="admin-toc-pdf-version-warn" hidden data-i18n="adminTocPreviewNonCurrentWarn">Khung xem thử hiện chỉ tải được phiên bản hiện hành của tài liệu; bạn đang sửa một phiên bản khác.</p>
+              <p class="admin-toc-pdf-status" id="admin-toc-pdf-status" hidden></p>
+              <div class="admin-toc-pdf-canvas-wrap">
+                <canvas id="admin-toc-pdf-canvas"></canvas>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
       <!-- 06 My Library -->
       <section class="view-panel" id="view-library" aria-labelledby="library-title" hidden>
         <h1 id="library-title" data-i18n="libraryTitle">Thư viện cá nhân</h1>
@@ -801,6 +946,7 @@
     <!-- Document viewer (Phase B): pdf.js lazy-loaded on open -->
     <div class="doc-viewer" id="doc-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="doc-viewer-title">
       <div class="doc-viewer-bar">
+        <button class="button button-secondary button-small doc-viewer-toc-toggle" id="doc-viewer-toc-toggle" type="button" hidden aria-expanded="false" aria-controls="doc-viewer-toc"><span data-i18n="tocToggle">Mục lục</span></button>
         <span class="doc-viewer-title" id="doc-viewer-title"></span>
         <span class="doc-viewer-pageinfo" id="doc-viewer-pageinfo"></span>
         <span class="doc-viewer-actions">
@@ -811,14 +957,33 @@
           <button class="button button-primary button-small" id="doc-viewer-close" type="button"><span data-i18n="viewerClose">Đóng</span></button>
         </span>
       </div>
-      <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
-      <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
-      <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>
-      <div class="doc-viewer-end" id="doc-viewer-end" hidden>
-        <strong data-i18n="previewEndTitle">Đã hết phần xem trước</strong>
-        <p id="doc-viewer-end-text"></p>
-        <a class="doc-viewer-end-contact" id="doc-viewer-end-contact" target="_blank" rel="noreferrer" hidden></a>
-        <button class="button button-primary button-small" id="doc-viewer-end-login" type="button"><span data-i18n="login">Đăng nhập</span></button>
+      <div class="doc-viewer-body">
+        <aside class="doc-viewer-toc" id="doc-viewer-toc" hidden aria-label="Mục lục">
+          <div class="doc-viewer-toc-head">
+            <strong data-i18n="tocTitle">Mục lục</strong>
+            <button class="doc-viewer-toc-close" id="doc-viewer-toc-close" type="button" aria-label="Đóng mục lục">×</button>
+          </div>
+          <div class="doc-viewer-toc-search-wrap" id="doc-viewer-toc-search-wrap" hidden>
+            <input class="doc-viewer-toc-search" id="doc-viewer-toc-search" type="search" data-i18n-placeholder="tocSearchPlaceholder" placeholder="Tìm trong mục lục..." autocomplete="off">
+          </div>
+          <p class="doc-viewer-toc-status" id="doc-viewer-toc-status" hidden></p>
+          <nav class="doc-viewer-toc-nav" id="doc-viewer-toc-nav" aria-label="Danh sách mục lục">
+            <ul class="doc-viewer-toc-list" id="doc-viewer-toc-list"></ul>
+          </nav>
+          <div class="doc-viewer-toc-foot" id="doc-viewer-toc-foot" hidden></div>
+        </aside>
+        <div class="doc-viewer-toc-backdrop" id="doc-viewer-toc-backdrop" hidden></div>
+        <div class="doc-viewer-stage" id="doc-viewer-stage">
+          <p class="doc-viewer-status" id="doc-viewer-status" hidden></p>
+          <div class="doc-viewer-pages" id="doc-viewer-pages"></div>
+          <img class="doc-viewer-img" id="doc-viewer-img" alt="" hidden>
+          <div class="doc-viewer-end" id="doc-viewer-end" hidden>
+            <strong data-i18n="previewEndTitle">Đã hết phần xem trước</strong>
+            <p id="doc-viewer-end-text"></p>
+            <a class="doc-viewer-end-contact" id="doc-viewer-end-contact" target="_blank" rel="noreferrer" hidden></a>
+            <button class="button button-primary button-small" id="doc-viewer-end-login" type="button"><span data-i18n="login">Đăng nhập</span></button>
+          </div>
+        </div>
       </div>
     </div>
   </body>

@@ -58,6 +58,8 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   GET  /api/documents/:id/files/:fileId/download
  *   GET  /api/documents/:id/preview   (limited-page preview, Phase B)
  *   GET  /api/documents/:id/view      (full view, owner+admin, Phase B)
+ *   GET  /api/documents/:id/toc       (PDF TOC for current version)
+ *   GET  /api/documents/:id/files/:fileId/toc (PDF TOC for specific version)
  *   PATCH /api/documents/:id          (visibility change, admin/owner, Phase A2/B2)
  *   GET  /api/standards/:code/files   (standard PDF + versions, Phase B standard-pdf)
  *   PATCH /api/documents/:id/current-version (admin resets current version, Phase B standard-pdf)
@@ -67,6 +69,12 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   PATCH /api/admin/users/:id        (Phase B3)
  *   GET  /api/admin/standards/:code   (manual metadata, summary-detail)
  *   PUT  /api/admin/standards/:code   (manual metadata, summary-detail)
+ *   GET  /api/admin/tocs              (admin TOC review list, P3)
+ *   GET  /api/admin/files/:fileId/toc (admin TOC detail, P3)
+ *   PUT  /api/admin/files/:fileId/toc/manual (save manual TOC, P3)
+ *   DELETE /api/admin/files/:fileId/toc/manual (clear manual TOC, P3)
+ *   POST /api/admin/files/:fileId/toc/promote-auto (promote auto TOC, P3)
+ *   POST /api/admin/files/:fileId/toc/reextract (queue TOC reextract, P3)
  * Anything else (including elib's /internal/*, which is never under
  * /api/ and must stay unreachable from browsers) is refused here
  * instead of being forwarded.
@@ -81,6 +89,9 @@ const ELIB_ALLOWLIST_EXACT = new Set([
 const ELIB_ALLOWLIST_DOWNLOAD = /^documents\/[^/]+\/files\/[^/]+\/download$/;
 /** Preview/full-view are read-only: GET only, exactly these two shapes. */
 const ELIB_ALLOWLIST_PREVIEW_VIEW = /^documents\/[^/]+\/(preview|view)$/;
+/** PDF TOC read routes: GET/HEAD only, current version or specific file version. */
+const ELIB_ALLOWLIST_DOCUMENT_TOC = /^documents\/[^/]+\/toc$/;
+const ELIB_ALLOWLIST_FILE_TOC = /^documents\/[^/]+\/files\/[^/]+\/toc$/;
 /** Visibility change (Phase A2): PATCH only, exactly documents/<id>. */
 const ELIB_ALLOWLIST_DOCUMENT_PATCH = /^documents\/[^/]+$/;
 /** Self-registration + forced password change (Phase B3): POST only. */
@@ -101,6 +112,11 @@ const ELIB_ALLOWLIST_CURRENT_VERSION = /^documents\/[^/]+\/current-version$/;
  * above — a known separate gap, deliberately not handled here.
  */
 const ELIB_ALLOWLIST_ADMIN_STANDARD = /^admin\/standards\/[^/]+$/;
+/** Admin PDF TOC management (P3): exact method+pattern pairs (admin + CSRF enforced by elib). */
+const ELIB_ALLOWLIST_ADMIN_TOCS_LIST = /^admin\/tocs$/;
+const ELIB_ALLOWLIST_ADMIN_FILE_TOC = /^admin\/files\/[^/]+\/toc$/;
+const ELIB_ALLOWLIST_ADMIN_FILE_TOC_MANUAL = /^admin\/files\/[^/]+\/toc\/manual$/;
+const ELIB_ALLOWLIST_ADMIN_FILE_TOC_ACTION = /^admin\/files\/[^/]+\/toc\/(promote-auto|reextract)$/;
 
 /**
  * Path-traversal guard for the wildcard segment. Checks both the raw
@@ -117,6 +133,9 @@ function hasTraversal(rawPath: string, wildcard: string): boolean {
 
 function isAllowlisted(wildcard: string, method: string): boolean {
   if (ELIB_ALLOWLIST_PREVIEW_VIEW.test(wildcard)) {
+    return method === 'GET' || method === 'HEAD';
+  }
+  if (ELIB_ALLOWLIST_DOCUMENT_TOC.test(wildcard) || ELIB_ALLOWLIST_FILE_TOC.test(wildcard)) {
     return method === 'GET' || method === 'HEAD';
   }
   if (ELIB_ALLOWLIST_DOCUMENT_PATCH.test(wildcard)) {
@@ -153,6 +172,15 @@ function isAllowlisted(wildcard: string, method: string): boolean {
   // (admin session enforced by elib).
   if (ELIB_ALLOWLIST_ADMIN_STANDARD.test(wildcard)) {
     return method === 'GET' || method === 'PUT';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_TOCS_LIST.test(wildcard) || ELIB_ALLOWLIST_ADMIN_FILE_TOC.test(wildcard)) {
+    return method === 'GET';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_FILE_TOC_MANUAL.test(wildcard)) {
+    return method === 'PUT' || method === 'DELETE';
+  }
+  if (ELIB_ALLOWLIST_ADMIN_FILE_TOC_ACTION.test(wildcard)) {
+    return method === 'POST';
   }
   return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);
 }

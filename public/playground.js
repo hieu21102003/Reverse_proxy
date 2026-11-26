@@ -949,7 +949,592 @@
     return 'manualSaveFailed';
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey };
+  // ---- PDF Table of Contents (P2) ----
+  const TOC_POLL_INTERVAL_MS = 4000;
+  const TOC_POLL_MAX_RETRIES = 2;
+
+  /**
+   * Đường dẫn proxy lấy mục lục PDF:
+   * - có fileId tường minh hoặc file đang xem khác current_file_id -> /documents/:id/files/:fileId/toc
+   * - mặc định -> /documents/:id/toc (phiên bản hiện hành).
+   */
+  function elibTocPath(doc, fileId) {
+    const docId = doc?.id ? String(doc.id).trim() : '';
+    if (!docId) return null;
+    const explicitFileId = fileId !== undefined && fileId !== null ? String(fileId).trim() : '';
+    if (explicitFileId) {
+      return `/api/elib/documents/${encodeURIComponent(docId)}/files/${encodeURIComponent(explicitFileId)}/toc`;
+    }
+    const currentId = doc?.current_file_id ? String(doc.current_file_id).trim() : '';
+    const docFileId = doc?.file?.id ? String(doc.file.id).trim() : '';
+    if (currentId && docFileId && docFileId !== currentId) {
+      return `/api/elib/documents/${encodeURIComponent(docId)}/files/${encodeURIComponent(docFileId)}/toc`;
+    }
+    return `/api/elib/documents/${encodeURIComponent(docId)}/toc`;
+  }
+
+  /**
+   * Chuẩn hóa phản hồi API mục lục thành trạng thái hiển thị cho người đọc:
+   * - state='processing' -> hiện thông báo đang tạo và poll tối đa 2 lần.
+   * - displayable=true và có ít nhất 1 node -> ready (ẩn khi nodes rỗng,
+   *   kể cả trường hợp admin lưu nodes: [] với effective_source='manual').
+   * - Mọi trường hợp còn lại (failed/unsupported/not_enabled/partial/needs_ocr,
+   *   404/403/502/503/lỗi mạng) -> hidden lặng lẽ.
+   */
+  function resolveTocViewState(result) {
+    if (!result || typeof result !== 'object' || result.status !== 200 || !result.payload || typeof result.payload !== 'object') {
+      return { kind: 'hidden' };
+    }
+    const payload = result.payload;
+    const state = typeof payload.state === 'string' ? payload.state : null;
+    if (state === 'processing') {
+      return { kind: 'processing' };
+    }
+    const displayable = payload.displayable === true;
+    const rawNodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    if (!displayable || rawNodes.length === 0) {
+      return { kind: 'hidden' };
+    }
+    const effectiveSource = payload.effective_source === 'manual' || payload.effective_source === 'auto'
+      ? payload.effective_source
+      : null;
+    const flags = Array.isArray(payload.flags) ? payload.flags.filter(flag => typeof flag === 'string') : [];
+    return {
+      kind: 'ready',
+      nodes: rawNodes,
+      previewOnly: payload.preview_only === true,
+      effectiveSource,
+      flags,
+      showLevel1Note: flags.includes('contents_level1_only'),
+      showManualBadge: effectiveSource === 'manual'
+    };
+  }
+
+  function shouldPollToc(tocState, retryCount) {
+    const count = Number(retryCount);
+    return Boolean(tocState && tocState.kind === 'processing' && Number.isFinite(count) && count < TOC_POLL_MAX_RETRIES);
+  }
+
+  /** Chỉ hiển thị tối đa 2 nhãn phụ ở chân sidebar; ẩn toàn bộ cờ kỹ thuật khác. */
+  function tocFooterKeys(tocState) {
+    if (!tocState || tocState.kind !== 'ready') return [];
+    const keys = [];
+    if (tocState.showLevel1Note) keys.push('tocSummaryLevel1');
+    if (tocState.showManualBadge) keys.push('tocManualVerified');
+    return keys;
+  }
+
+  /**
+   * Dựng cây mục lục từ mảng phẳng bằng một lượt duyệt stack theo `level`:
+   * - Sắp xếp ổn định theo `sort`.
+   * - Nhảy cấp (vd 1 -> 3) hoặc bắt đầu từ level > 1: gắn vào cha gần nhất có
+   *   level nhỏ hơn, không sinh node ảo trung gian, không crash.
+   * - Đọc trực tiếp cờ `locked` từ backend (khi `previewOnly === false` luôn mở khóa).
+   * - Thêm node ảo "Trang đầu" -> trang 1 ở đầu cây khi cây có ít nhất 1 mục.
+   */
+  function buildTocTree(flatNodes, options = {}) {
+    if (!Array.isArray(flatNodes) || flatNodes.length === 0) return [];
+    const prepared = flatNodes
+      .map((node, origIdx) => ({ node, origIdx }))
+      .filter(item => item.node && typeof item.node === 'object');
+    if (prepared.length === 0) return [];
+
+    prepared.sort((a, b) => {
+      const sa = Number.isFinite(Number(a.node.sort)) ? Number(a.node.sort) : a.origIdx + 1;
+      const sb = Number.isFinite(Number(b.node.sort)) ? Number(b.node.sort) : b.origIdx + 1;
+      return sa !== sb ? sa - sb : a.origIdx - b.origIdx;
+    });
+
+    const roots = [];
+    const stack = [];
+    for (let idx = 0; idx < prepared.length; idx += 1) {
+      const raw = prepared[idx].node;
+      const rawLevel = Math.trunc(Number(raw.level));
+      const level = Number.isFinite(rawLevel) ? Math.min(6, Math.max(1, rawLevel)) : 1;
+      const rawPage = Math.trunc(Number(raw.page_pdf));
+      const pagePdf = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const sort = Number.isFinite(Number(raw.sort)) ? Number(raw.sort) : idx + 1;
+      const locked = options.previewOnly === false ? false : raw.locked === true;
+      const entry = {
+        id: `toc-node-${idx}`,
+        title: typeof raw.title === 'string' ? raw.title : String(raw.title ?? ''),
+        level,
+        page_pdf: pagePdf,
+        sort,
+        source: typeof raw.source === 'string' ? raw.source : null,
+        confidence: typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? raw.confidence : null,
+        locked,
+        virtual: false,
+        children: []
+      };
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+      if (stack.length > 0) {
+        stack[stack.length - 1].children.push(entry);
+      } else {
+        roots.push(entry);
+      }
+      stack.push(entry);
+    }
+
+    if (roots.length > 0 && options.includeFirstPage !== false) {
+      const firstLabel = typeof options.firstPageLabel === 'string' && options.firstPageLabel.trim()
+        ? options.firstPageLabel.trim()
+        : 'Trang đầu';
+      roots.unshift({
+        id: 'toc-virtual-first',
+        title: firstLabel,
+        level: 1,
+        page_pdf: 1,
+        sort: 0,
+        source: null,
+        confidence: null,
+        locked: false,
+        virtual: true,
+        children: []
+      });
+    }
+    return roots;
+  }
+
+  /** Chuẩn hóa chuỗi tiếng Việt để tìm kiếm không phân biệt dấu và hoa/thường. */
+  function normalizeTocSearchText(value) {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[đĐ]/g, 'd')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Lọc cây mục lục theo từ khóa, giữ nhánh cha của các mục con khớp. */
+  function filterTocTree(tree, query) {
+    if (!Array.isArray(tree) || tree.length === 0) return [];
+    const q = normalizeTocSearchText(query);
+    if (!q) return tree;
+    const visit = (nodes) => {
+      const out = [];
+      for (const node of nodes) {
+        const selfMatch = normalizeTocSearchText(node.title).includes(q);
+        const matchedChildren = Array.isArray(node.children) && node.children.length > 0
+          ? visit(node.children)
+          : [];
+        if (selfMatch || matchedChildren.length > 0) {
+          out.push({
+            ...node,
+            children: matchedChildren,
+            matched: selfMatch,
+            autoExpand: matchedChildren.length > 0
+          });
+        }
+      }
+      return out;
+    };
+    return visit(tree);
+  }
+
+  /** Tìm id mục đang đọc gần nhất (unlocked, có page_pdf <= currentPage). */
+  function findActiveTocNodeId(tree, currentPage) {
+    const page = Number(currentPage);
+    if (!Array.isArray(tree) || tree.length === 0 || !Number.isFinite(page) || page < 1) return null;
+    let best = null;
+    const walk = (nodes) => {
+      for (const node of nodes) {
+        if (node && node.locked !== true && Number.isFinite(node.page_pdf) && node.page_pdf <= page) {
+          if (!best || node.page_pdf >= best.page_pdf) best = node;
+        }
+        if (node && Array.isArray(node.children) && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(tree);
+    return best ? best.id : null;
+  }
+
+  /** Quyết định hành động khi bấm vào 1 mục trong sidebar (locked không bao giờ nhảy trang). */
+  function tocNodeClickAction(node, totalLoadedPages) {
+    if (!node || typeof node !== 'object') return { action: 'noop' };
+    if (node.locked === true) return { action: 'locked' };
+    const page = Math.trunc(Number(node.page_pdf));
+    if (!Number.isFinite(page) || page < 1) return { action: 'noop' };
+    if (typeof totalLoadedPages === 'number' && Number.isFinite(totalLoadedPages) && totalLoadedPages > 0 && page > totalLoadedPages) {
+      return { action: 'locked' };
+    }
+    return { action: 'jump', page };
+  }
+
+  /**
+   * Dựng DOM cho cây mục lục bằng textContent/createElement thuần (tuyệt đối
+   * không dùng innerHTML vì tiêu đề mục lục lấy từ PDF không đáng tin cậy).
+   */
+  function createTocListDom(docFactory, nodes, opts = {}) {
+    if (!docFactory || !Array.isArray(nodes) || nodes.length === 0) return [];
+    const labels = opts.labels || {};
+    const collapsedIds = opts.collapsedIds instanceof Set ? opts.collapsedIds : null;
+    const isSearching = Boolean(opts.isSearching);
+    const activeId = opts.activeId || null;
+
+    const makeLockSvg = () => {
+      if (typeof docFactory.createElementNS !== 'function') {
+        const fallback = docFactory.createElement('span');
+        fallback.textContent = '🔒';
+        return fallback;
+      }
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = docFactory.createElementNS(ns, 'svg');
+      svg.setAttribute('width', '12');
+      svg.setAttribute('height', '12');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2.2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.setAttribute('aria-hidden', 'true');
+      const rect = docFactory.createElementNS(ns, 'rect');
+      rect.setAttribute('x', '4');
+      rect.setAttribute('y', '11');
+      rect.setAttribute('width', '16');
+      rect.setAttribute('height', '10');
+      rect.setAttribute('rx', '2');
+      const path = docFactory.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M8 11V7a4 4 0 0 1 8 0v4');
+      svg.append(rect, path);
+      return svg;
+    };
+
+    const buildItems = (items) => items.map((node) => {
+      const li = docFactory.createElement('li');
+      li.className = `toc-item toc-level-${node.level}`;
+      li.setAttribute('data-toc-id', node.id);
+
+      const row = docFactory.createElement('div');
+      row.className = 'toc-row';
+
+      const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+      const isCollapsed = hasChildren && !isSearching && Boolean(collapsedIds && collapsedIds.has(node.id));
+
+      if (hasChildren) {
+        const caret = docFactory.createElement('button');
+        caret.type = 'button';
+        caret.className = 'toc-caret';
+        caret.textContent = isCollapsed ? '▸' : '▾';
+        caret.setAttribute('aria-expanded', String(!isCollapsed));
+        caret.setAttribute('aria-label', isCollapsed ? (labels.expand || 'Mở rộng mục con') : (labels.collapse || 'Thu gọn mục con'));
+        caret.addEventListener('click', (event) => {
+          event?.stopPropagation?.();
+          opts.onToggleCollapse?.(node.id);
+        });
+        row.append(caret);
+      } else {
+        const spacer = docFactory.createElement('span');
+        spacer.className = 'toc-caret-spacer';
+        spacer.setAttribute('aria-hidden', 'true');
+        row.append(spacer);
+      }
+
+      const btn = docFactory.createElement('button');
+      btn.type = 'button';
+      const classes = ['toc-node-btn'];
+      if (node.locked) classes.push('is-locked');
+      if (node.id === activeId) classes.push('is-active');
+      if (node.virtual) classes.push('is-virtual');
+      if (isSearching && node.matched) classes.push('is-match');
+      btn.className = classes.join(' ');
+      btn.setAttribute('data-toc-id', node.id);
+      btn.setAttribute('data-page', String(node.page_pdf));
+      if (node.id === activeId) btn.setAttribute('aria-current', 'location');
+      if (node.locked) {
+        btn.setAttribute('data-locked', 'true');
+        btn.setAttribute('aria-label', `${node.title} — ${labels.lockedLabel || 'Cần quyền xem toàn văn'}`);
+      }
+
+      const titleSpan = docFactory.createElement('span');
+      titleSpan.className = 'toc-node-title';
+      titleSpan.textContent = node.title;
+      btn.append(titleSpan);
+
+      const meta = docFactory.createElement('span');
+      meta.className = 'toc-node-meta';
+      if (node.locked) {
+        const lockSpan = docFactory.createElement('span');
+        lockSpan.className = 'toc-node-lock';
+        lockSpan.setAttribute('aria-hidden', 'true');
+        lockSpan.append(makeLockSvg());
+        meta.append(lockSpan);
+      }
+      const pageSpan = docFactory.createElement('span');
+      pageSpan.className = 'toc-node-page';
+      pageSpan.textContent = String(node.page_pdf);
+      meta.append(pageSpan);
+      btn.append(meta);
+
+      btn.addEventListener('click', () => {
+        const totalLoaded = typeof opts.getTotalLoadedPages === 'function'
+          ? opts.getTotalLoadedPages()
+          : (opts.totalLoadedPages ?? null);
+        const action = tocNodeClickAction(node, totalLoaded);
+        if (action.action === 'locked') {
+          opts.onLocked?.(node);
+          return;
+        }
+        if (action.action === 'jump') {
+          opts.onJump?.(action.page, node);
+        }
+      });
+
+      row.append(btn);
+      li.append(row);
+
+      if (hasChildren) {
+        const ul = docFactory.createElement('ul');
+        ul.className = 'toc-children';
+        ul.hidden = isCollapsed;
+        for (const childLi of buildItems(node.children)) ul.append(childLi);
+        li.append(ul);
+      }
+      return li;
+    });
+
+    return buildItems(nodes);
+  }
+
+  // ---- Admin PDF TOC management (P3) ----
+  const ADMIN_TOC_MAX_NODES = 2000;
+  const ADMIN_TOC_MAX_TITLE_LENGTH = 200;
+  const ADMIN_TOC_MAX_NOTE_LENGTH = 500;
+  const ADMIN_TOC_DEFAULT_LIMIT = 20;
+
+  /** Chỉ admin đang hoạt động mới thấy màn hình quản trị mục lục (khớp canManageToc ở elib). */
+  function canManageAdminTocs(user) {
+    return Boolean(
+      user &&
+      typeof user === 'object' &&
+      user.role === 'admin' &&
+      (user.status === undefined || user.status === 'active')
+    );
+  }
+
+  /** Đường dẫn GET danh sách rà soát mục lục kèm lọc và phân trang limit/offset. */
+  function adminTocsListPath(filters = {}, limit = ADMIN_TOC_DEFAULT_LIMIT, offset = 0) {
+    const f = filters && typeof filters === 'object' ? filters : {};
+    const params = new URLSearchParams();
+    if (typeof f.auto_status === 'string' && f.auto_status.trim()) {
+      params.set('auto_status', f.auto_status.trim());
+    }
+    if (typeof f.flag === 'string' && f.flag.trim()) {
+      params.set('flag', f.flag.trim());
+    }
+    if (typeof f.job_status === 'string' && f.job_status.trim()) {
+      params.set('job_status', f.job_status.trim());
+    }
+    if (f.manual_override === true || f.manual_override === 'true') {
+      params.set('manual_override', 'true');
+    } else if (f.manual_override === false || f.manual_override === 'false') {
+      params.set('manual_override', 'false');
+    }
+    if (f.standards_only === true || f.standards_only === 'true') {
+      params.set('standards_only', 'true');
+    } else if (f.standards_only === false || f.standards_only === 'false') {
+      params.set('standards_only', 'false');
+    }
+    if (f.outdated_algorithm === true || f.outdated_algorithm === 'true') {
+      params.set('outdated_algorithm', 'true');
+    }
+    const safeLimit = Number.isInteger(Number(limit))
+      ? Math.min(100, Math.max(1, Number(limit)))
+      : ADMIN_TOC_DEFAULT_LIMIT;
+    const safeOffset = Number.isInteger(Number(offset)) && Number(offset) >= 0 ? Number(offset) : 0;
+    params.set('limit', String(safeLimit));
+    params.set('offset', String(safeOffset));
+    return `/admin/tocs?${params.toString()}`;
+  }
+
+  function adminFileTocPath(fileId) {
+    const id = fileId !== undefined && fileId !== null ? String(fileId).trim() : '';
+    if (!id) return null;
+    return `/admin/files/${encodeURIComponent(id)}/toc`;
+  }
+
+  /** Ánh xạ thao tác admin TOC sang route + HTTP method + body đúng hợp đồng elib. */
+  function adminTocActionRequest(action, fileId, payload) {
+    const id = fileId !== undefined && fileId !== null ? String(fileId).trim() : '';
+    if (!id) return null;
+    const encId = encodeURIComponent(id);
+    if (action === 'save') {
+      return {
+        method: 'PUT',
+        path: `/admin/files/${encId}/toc/manual`,
+        body: JSON.stringify(payload && typeof payload === 'object' ? payload : { nodes: [] })
+      };
+    }
+    if (action === 'delete') {
+      return {
+        method: 'DELETE',
+        path: `/admin/files/${encId}/toc/manual`,
+        body: undefined
+      };
+    }
+    if (action === 'promote') {
+      return {
+        method: 'POST',
+        path: `/admin/files/${encId}/toc/promote-auto`,
+        body: JSON.stringify(payload && typeof payload === 'object' ? payload : { activate: true })
+      };
+    }
+    if (action === 'reextract') {
+      return {
+        method: 'POST',
+        path: `/admin/files/${encId}/toc/reextract`,
+        body: '{}'
+      };
+    }
+    return null;
+  }
+
+  function adminTocTotalPages(detail) {
+    const raw = detail?.page_count ?? detail?.auto_payload?.totalPages ?? null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 1 ? n : null;
+  }
+
+  function canReextractToc(detail) {
+    return Boolean(detail && typeof detail === 'object' && detail.file_id && detail.job_status !== 'processing');
+  }
+
+  /**
+   * Khung xem thử PDF ở màn admin hiện chỉ dùng bản hiện hành (/view, dự phòng /preview)
+   * vì elib chưa có route xem theo fileId riêng lẻ.
+   */
+  function adminTocPreviewPath(detail) {
+    const docId = detail?.document_id ? String(detail.document_id).trim() : '';
+    if (!docId) return null;
+    const encDoc = encodeURIComponent(docId);
+    return {
+      url: `/api/elib/documents/${encDoc}/view`,
+      fallbackUrl: `/api/elib/documents/${encDoc}/preview`,
+      isCurrentVersion: detail.is_current_version === true
+    };
+  }
+
+  /**
+   * Kiểm tra cây mục lục thủ công phía client trước khi PUT:
+   * - Cho phép nodes: [] (chủ động ẩn mục lục).
+   * - Tiêu đề 1..200 ký tự (sau chuẩn hóa NFC + trim).
+   * - Cấp (level) số nguyên 1..6.
+   * - Trang (page_pdf) số nguyên trong 1..totalPages (khi đã biết totalPages).
+   */
+  function validateAdminTocNodes(nodes, totalPages, note = null) {
+    if (!Array.isArray(nodes)) {
+      return { ok: false, error: { key: 'adminTocErrInvalid' } };
+    }
+    if (nodes.length > ADMIN_TOC_MAX_NODES) {
+      return { ok: false, error: { key: 'adminTocErrTooManyNodes', vars: { max: ADMIN_TOC_MAX_NODES } } };
+    }
+    let cleanNote = null;
+    if (typeof note === 'string') {
+      const trimmedNote = note.trim();
+      if (trimmedNote.length > ADMIN_TOC_MAX_NOTE_LENGTH) {
+        return { ok: false, error: { key: 'adminTocErrNoteTooLong', vars: { max: ADMIN_TOC_MAX_NOTE_LENGTH } } };
+      }
+      cleanNote = trimmedNote || null;
+    }
+
+    const validTotal = typeof totalPages === 'number' && Number.isInteger(totalPages) && totalPages >= 1
+      ? totalPages
+      : null;
+    const normalized = [];
+    for (let i = 0; i < nodes.length; i += 1) {
+      const row = nodes[i] && typeof nodes[i] === 'object' ? nodes[i] : {};
+      const title = String(row.title ?? '').normalize('NFC').trim();
+      if (title.length < 1) {
+        return { ok: false, error: { key: 'adminTocErrTitleEmpty', vars: { index: i + 1 } } };
+      }
+      if (title.length > ADMIN_TOC_MAX_TITLE_LENGTH) {
+        return {
+          ok: false,
+          error: { key: 'adminTocErrTitleTooLong', vars: { index: i + 1, max: ADMIN_TOC_MAX_TITLE_LENGTH } }
+        };
+      }
+      const rawLevel = row.level;
+      const level = typeof rawLevel === 'string' && rawLevel.trim() === '' ? NaN : Number(rawLevel);
+      if (!Number.isInteger(level) || level < 1 || level > 6) {
+        return { ok: false, error: { key: 'adminTocErrLevelRange', vars: { index: i + 1 } } };
+      }
+      const rawPage = row.page_pdf;
+      const pagePdf = typeof rawPage === 'string' && rawPage.trim() === '' ? NaN : Number(rawPage);
+      if (!Number.isInteger(pagePdf) || pagePdf < 1) {
+        return { ok: false, error: { key: 'adminTocErrPageInvalid', vars: { index: i + 1 } } };
+      }
+      if (validTotal !== null && pagePdf > validTotal) {
+        return {
+          ok: false,
+          error: { key: 'adminTocErrPageRange', vars: { index: i + 1, page: pagePdf, totalPages: validTotal } }
+        };
+      }
+      normalized.push({ title, level, page_pdf: pagePdf });
+    }
+    return { ok: true, payload: { note: cleanNote, nodes: normalized } };
+  }
+
+  function adminTocMoveNode(nodes, index, delta) {
+    if (!Array.isArray(nodes)) return [];
+    const target = index + delta;
+    if (index < 0 || index >= nodes.length || target < 0 || target >= nodes.length || target === index) {
+      return nodes.slice();
+    }
+    const next = nodes.slice();
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    return next;
+  }
+
+  function adminTocInsertNode(nodes, index, template = {}) {
+    const list = Array.isArray(nodes) ? nodes.slice() : [];
+    const tpl = template && typeof template === 'object' ? template : {};
+    const entry = {
+      title: typeof tpl.title === 'string' ? tpl.title : '',
+      level: Number.isInteger(Number(tpl.level)) ? Math.min(6, Math.max(1, Number(tpl.level))) : 1,
+      page_pdf: Number.isInteger(Number(tpl.page_pdf)) && Number(tpl.page_pdf) >= 1 ? Number(tpl.page_pdf) : 1
+    };
+    const insertAt = typeof index === 'number' && index >= -1 && index < list.length ? index + 1 : list.length;
+    list.splice(insertAt, 0, entry);
+    return list;
+  }
+
+  function adminTocRemoveNode(nodes, index) {
+    if (!Array.isArray(nodes) || index < 0 || index >= nodes.length) return Array.isArray(nodes) ? nodes.slice() : [];
+    return nodes.filter((_, i) => i !== index);
+  }
+
+  function adminTocErrorKey(status, code) {
+    if (status === 409 || code === 'TOC_ALREADY_PROCESSING' || code === 'JOB_PROCESSING') return 'adminTocErrProcessing';
+    if (code === 'TOC_AUTO_NOT_AVAILABLE') return 'adminTocErrNoAuto';
+    if (code === 'TOC_UNSUPPORTED_FORMAT') return 'adminTocErrUnsupported';
+    if (code === 'INVALID_TOC_TITLE' || code === 'INVALID_TOC_NODES' || code === 'INVALID_PAGE_RANGE' || status === 400) {
+      return 'adminTocErrInvalid';
+    }
+    if (status === 401) return 'adminErrLoginRequired';
+    if (status === 403) return 'adminErrForbidden';
+    if (status === 404) return 'adminTocErrNotFound';
+    return 'adminTocErrFailed';
+  }
+
+  function formatAdminTocError(result, translate) {
+    const status = result?.status ?? 0;
+    const code = result?.errorCode || null;
+    const serverMsg = typeof result?.payload?.error?.message === 'string' ? result.payload.error.message.trim() : '';
+    if (serverMsg && (status === 400 || status === 403 || status === 404 || status === 409)) {
+      return serverMsg;
+    }
+    const key = adminTocErrorKey(status, code);
+    return typeof translate === 'function' ? translate(key) : key;
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey, TOC_POLL_INTERVAL_MS, TOC_POLL_MAX_RETRIES, elibTocPath, resolveTocViewState, shouldPollToc, tocFooterKeys, buildTocTree, normalizeTocSearchText, filterTocTree, findActiveTocNodeId, tocNodeClickAction, createTocListDom, ADMIN_TOC_MAX_NODES, ADMIN_TOC_MAX_TITLE_LENGTH, ADMIN_TOC_MAX_NOTE_LENGTH, ADMIN_TOC_DEFAULT_LIMIT, canManageAdminTocs, adminTocsListPath, adminFileTocPath, adminTocActionRequest, adminTocTotalPages, canReextractToc, adminTocPreviewPath, validateAdminTocNodes, adminTocMoveNode, adminTocInsertNode, adminTocRemoveNode, adminTocErrorKey, formatAdminTocError };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -1150,6 +1735,102 @@
         previewLoadError: 'Không tải được bản xem trước. Vui lòng thử lại sau.',
         viewerLoading: 'Đang tải tài liệu...', viewerClose: 'Đóng', viewerPrev: 'Trang trước', viewerNext: 'Trang sau',
         viewerDownload: 'Tải xuống', viewerPrint: 'In / mở bản gốc',
+        tocTitle: 'Mục lục', tocToggle: 'Mục lục', tocClose: 'Đóng mục lục',
+        tocFirstPage: 'Trang đầu', tocProcessing: 'Đang tạo mục lục…',
+        tocSearchPlaceholder: 'Tìm trong mục lục...', tocNoMatches: 'Không có mục phù hợp.',
+        tocSummaryLevel1: 'Mục lục tóm tắt cấp chương/phần',
+        tocManualVerified: 'Mục lục đã kiểm duyệt',
+        tocLockedNotice: 'Mục này cần quyền xem toàn văn tài liệu.',
+        tocExpand: 'Mở rộng mục con', tocCollapse: 'Thu gọn mục con',
+        tocLockedLabel: 'Cần quyền xem toàn văn',
+        navAdminTocs: 'Quản trị mục lục',
+        adminTocsTitle: 'Quản trị mục lục PDF',
+        adminTocsSubtitle: 'Rà soát mục lục trích xuất tự động và chỉnh sửa mục lục thủ công cho tài liệu PDF. Chỉ quản trị viên mới thấy mục này.',
+        adminTocBack: 'Quay lại danh sách',
+        adminTocFilterAutoStatus: 'Trạng thái tự động',
+        adminTocFilterJobStatus: 'Trạng thái job',
+        adminTocFilterFlag: 'Cờ (flag)',
+        adminTocFilterFlagPlaceholder: 'VD: contents_level1_only',
+        adminTocFilterManual: 'Bản thủ công',
+        adminTocFilterStandards: 'Phạm vi tài liệu',
+        adminTocFilterOutdated: 'Thuật toán cũ hơn hiện tại',
+        adminTocFilterApply: 'Lọc danh sách',
+        adminTocFilterReset: 'Đặt lại',
+        adminTocAll: 'Tất cả',
+        adminTocManualYes: 'Có ghi đè thủ công',
+        adminTocManualNo: 'Chưa có bản thủ công',
+        adminTocStandardsOnly: 'Chỉ tiêu chuẩn',
+        adminTocNonStandards: 'Tài liệu khác',
+        adminTocStatusOk: 'Đạt (ok)',
+        adminTocStatusPartial: 'Chưa đủ (partial)',
+        adminTocStatusNeedsOcr: 'Cần OCR (needs_ocr)',
+        adminTocStatusFailed: 'Thất bại (failed)',
+        adminTocStatusUnsupported: 'Không hỗ trợ (unsupported)',
+        adminTocJobPending: 'Đang chờ (pending)',
+        adminTocJobProcessing: 'Đang xử lý (processing)',
+        adminTocJobDone: 'Hoàn tất (done)',
+        adminTocJobFailed: 'Lỗi (failed)',
+        adminTocJobUnsupported: 'Không hỗ trợ (unsupported)',
+        adminTocHasManual: 'Đang dùng bản thủ công',
+        adminTocOutdatedAlgo: 'Thuật toán cũ',
+        adminTocCurrentAlgo: 'Thuật toán hiện tại: {ver}',
+        adminTocOpenDetail: 'Mở sửa TOC',
+        adminTocEmptyTitle: 'Không có file PDF nào khớp bộ lọc',
+        adminTocEmptyText: 'Thử bỏ bớt điều kiện lọc hoặc kiểm tra lại sau.',
+        adminTocListSummary: 'Hiển thị {from}–{to} / {total} file · Thuật toán hiện tại: {ver}',
+        adminTocAutoHeading: 'Cây mục lục tự động',
+        adminTocAutoEmpty: 'Chưa có mục lục tự động (hoặc không trích được mục nào).',
+        adminTocAutoReason: 'Lý do tự động: {reason}',
+        adminTocAutoFlags: 'Cờ: {flags}',
+        adminTocNeedsOcrPages: 'Trang cần OCR: {pages}',
+        adminTocLastError: 'Lỗi job gần nhất: {err}',
+        adminTocManualHeading: 'Trình sửa mục lục thủ công',
+        adminTocManualHiddenActive: 'Đang bật bản thủ công rỗng (chủ động ẩn mục lục với người đọc)',
+        adminTocManualActive: 'Đang dùng bản thủ công ({count} mục)',
+        adminTocManualNone: 'Chưa có bản thủ công (đang hiển thị theo bản tự động nếu đạt).',
+        adminTocNoteLabel: 'Ghi chú kiểm duyệt (tùy chọn)',
+        adminTocNotePlaceholder: 'Ghi chú nội bộ về chỉnh sửa mục lục...',
+        adminTocAddNode: '+ Thêm mục',
+        adminTocClearNodes: 'Xóa hết mục',
+        adminTocColTitle: 'Tiêu đề mục',
+        adminTocColLevel: 'Cấp',
+        adminTocColPage: 'Trang PDF',
+        adminTocJumpPage: 'Xem trang',
+        adminTocMoveUp: 'Lên',
+        adminTocMoveDown: 'Xuống',
+        adminTocInsertBelow: '+ Dưới',
+        adminTocRemoveNode: 'Xóa',
+        adminTocEditorEmpty: 'Chưa có mục nào trong bản thủ công. Bạn có thể thêm mục, chép từ bản tự động, hoặc lưu danh sách rỗng để chủ động ẩn mục lục.',
+        adminTocSaveManual: 'Lưu bản thủ công',
+        adminTocPromoteAuto: 'Chép từ bản tự động',
+        adminTocDeleteManual: 'Gỡ bản thủ công',
+        adminTocReextract: 'Chạy lại trích xuất',
+        adminTocReextractNote: 'Lưu ý: người đọc vẫn thấy bản thủ công hiện hành cho tới khi quản trị viên duyệt xong hoặc gỡ bản thủ công.',
+        adminTocSaveEmptyConfirm: 'Danh sách mục đang rỗng. Lưu bản thủ công rỗng sẽ chủ động ẨN mục lục đối với người đọc. Bạn có chắc muốn lưu?',
+        adminTocDeleteManualConfirm: 'Gỡ bản mục lục thủ công của phiên bản file này và quay lại dùng kết quả trích xuất tự động?',
+        adminTocSaved: 'Đã lưu bản mục lục thủ công.',
+        adminTocPromoted: 'Đã chép cây tự động sang bản thủ công.',
+        adminTocDeleted: 'Đã gỡ bản mục lục thủ công.',
+        adminTocReextractQueued: 'Đã đưa file vào hàng đợi trích xuất lại mục lục.',
+        adminTocPreviewHeading: 'Khung xem thử PDF',
+        adminTocPreviewNonCurrentWarn: 'Khung xem thử hiện chỉ tải được phiên bản hiện hành của tài liệu; bạn đang sửa một phiên bản khác.',
+        adminTocPreviewLoading: 'Đang tải PDF xem thử...',
+        adminTocPreviewError: 'Không tải được PDF xem thử.',
+        adminTocPreviewPageOf: '/ {total}',
+        adminTocErrTitleEmpty: 'Mục #{index}: tiêu đề không được để trống.',
+        adminTocErrTitleTooLong: 'Mục #{index}: tiêu đề vượt quá {max} ký tự.',
+        adminTocErrLevelRange: 'Mục #{index}: cấp phải là số nguyên từ 1 đến 6.',
+        adminTocErrPageInvalid: 'Mục #{index}: số trang phải là số nguyên >= 1.',
+        adminTocErrPageRange: 'Mục #{index}: số trang ({page}) vượt ngoài phạm vi 1..{totalPages}.',
+        adminTocErrTooManyNodes: 'Số lượng mục vượt quá giới hạn tối đa ({max} mục).',
+        adminTocErrNoteTooLong: 'Ghi chú không được dài quá {max} ký tự.',
+        adminTocErrProcessing: 'File này đang được trích xuất mục lục, vui lòng chờ hoàn tất rồi thử lại.',
+        adminTocErrNoAuto: 'Chưa có cây mục lục tự động để chép sang bản thủ công.',
+        adminTocErrUnsupported: 'Chỉ hỗ trợ trích xuất lại mục lục cho file PDF.',
+        adminTocErrInvalid: 'Dữ liệu mục lục không hợp lệ. Vui lòng kiểm tra lại.',
+        adminTocErrNotFound: 'Không tìm thấy file tài liệu.',
+        adminTocErrFailed: 'Thao tác quản trị mục lục không thành công. Vui lòng thử lại sau.',
+        adminTocLoadFailed: 'Không tải được danh sách mục lục. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
         uploadedOn: 'Ngày tải lên', recentEmpty: 'Chưa có tài liệu nào được tải lên.',
         recentError: 'Không tải được tài liệu mới cập nhật. Dịch vụ tài liệu (elib) có thể đang bảo trì.',
         heroEyebrow: 'Viện Công nghệ Đường sắt & TOD · Tra cứu trực tuyến',
@@ -1341,6 +2022,102 @@
         previewLoadError: 'Could not load the preview. Please try again later.',
         viewerLoading: 'Loading document...', viewerClose: 'Close', viewerPrev: 'Previous page', viewerNext: 'Next page',
         viewerDownload: 'Download', viewerPrint: 'Print / open original',
+        tocTitle: 'Table of contents', tocToggle: 'Contents', tocClose: 'Close table of contents',
+        tocFirstPage: 'First page', tocProcessing: 'Generating table of contents…',
+        tocSearchPlaceholder: 'Search table of contents...', tocNoMatches: 'No matching headings.',
+        tocSummaryLevel1: 'Summary table of contents (chapter/part level)',
+        tocManualVerified: 'Curated table of contents',
+        tocLockedNotice: 'Full access is required to view this section.',
+        tocExpand: 'Expand subsections', tocCollapse: 'Collapse subsections',
+        tocLockedLabel: 'Full access required',
+        navAdminTocs: 'TOC admin',
+        adminTocsTitle: 'PDF TOC administration',
+        adminTocsSubtitle: 'Review automatically extracted tables of contents and curate manual TOCs for PDFs. Only administrators see this section.',
+        adminTocBack: 'Back to list',
+        adminTocFilterAutoStatus: 'Auto status',
+        adminTocFilterJobStatus: 'Job status',
+        adminTocFilterFlag: 'Flag',
+        adminTocFilterFlagPlaceholder: 'e.g. contents_level1_only',
+        adminTocFilterManual: 'Manual override',
+        adminTocFilterStandards: 'Document scope',
+        adminTocFilterOutdated: 'Outdated algorithm',
+        adminTocFilterApply: 'Apply filters',
+        adminTocFilterReset: 'Reset',
+        adminTocAll: 'All',
+        adminTocManualYes: 'Has manual override',
+        adminTocManualNo: 'No manual override',
+        adminTocStandardsOnly: 'Standards only',
+        adminTocNonStandards: 'Other documents',
+        adminTocStatusOk: 'OK (ok)',
+        adminTocStatusPartial: 'Partial (partial)',
+        adminTocStatusNeedsOcr: 'Needs OCR (needs_ocr)',
+        adminTocStatusFailed: 'Failed (failed)',
+        adminTocStatusUnsupported: 'Unsupported (unsupported)',
+        adminTocJobPending: 'Pending (pending)',
+        adminTocJobProcessing: 'Processing (processing)',
+        adminTocJobDone: 'Done (done)',
+        adminTocJobFailed: 'Failed (failed)',
+        adminTocJobUnsupported: 'Unsupported (unsupported)',
+        adminTocHasManual: 'Manual TOC active',
+        adminTocOutdatedAlgo: 'Outdated algorithm',
+        adminTocCurrentAlgo: 'Current algorithm: {ver}',
+        adminTocOpenDetail: 'Edit TOC',
+        adminTocEmptyTitle: 'No PDF files match these filters',
+        adminTocEmptyText: 'Try relaxing the filters or check again later.',
+        adminTocListSummary: 'Showing {from}–{to} of {total} files · Current algorithm: {ver}',
+        adminTocAutoHeading: 'Automatic TOC tree',
+        adminTocAutoEmpty: 'No automatic TOC entries extracted.',
+        adminTocAutoReason: 'Auto reason: {reason}',
+        adminTocAutoFlags: 'Flags: {flags}',
+        adminTocNeedsOcrPages: 'Pages needing OCR: {pages}',
+        adminTocLastError: 'Last job error: {err}',
+        adminTocManualHeading: 'Manual TOC editor',
+        adminTocManualHiddenActive: 'Empty manual TOC active (TOC is hidden from readers)',
+        adminTocManualActive: 'Manual TOC active ({count} entries)',
+        adminTocManualNone: 'No manual override (readers see the automatic TOC when ok).',
+        adminTocNoteLabel: 'Review note (optional)',
+        adminTocNotePlaceholder: 'Internal note about manual TOC edits...',
+        adminTocAddNode: '+ Add entry',
+        adminTocClearNodes: 'Clear all',
+        adminTocColTitle: 'Heading title',
+        adminTocColLevel: 'Level',
+        adminTocColPage: 'PDF page',
+        adminTocJumpPage: 'View page',
+        adminTocMoveUp: 'Up',
+        adminTocMoveDown: 'Down',
+        adminTocInsertBelow: '+ Below',
+        adminTocRemoveNode: 'Delete',
+        adminTocEditorEmpty: 'No entries in the manual TOC yet. Add entries, promote from automatic extraction, or save an empty list to hide the TOC from readers.',
+        adminTocSaveManual: 'Save manual TOC',
+        adminTocPromoteAuto: 'Promote from auto',
+        adminTocDeleteManual: 'Delete manual TOC',
+        adminTocReextract: 'Re-extract TOC',
+        adminTocReextractNote: 'Note: readers will continue seeing the active manual TOC until an administrator reviews or removes the manual override.',
+        adminTocSaveEmptyConfirm: 'The entry list is empty. Saving an empty manual TOC will intentionally HIDE the table of contents from readers. Continue?',
+        adminTocDeleteManualConfirm: 'Remove the manual TOC override for this file version and revert to the automatic extraction?',
+        adminTocSaved: 'Manual TOC saved.',
+        adminTocPromoted: 'Automatic TOC copied to manual override.',
+        adminTocDeleted: 'Manual TOC removed.',
+        adminTocReextractQueued: 'File queued for TOC re-extraction.',
+        adminTocPreviewHeading: 'PDF preview pane',
+        adminTocPreviewNonCurrentWarn: 'The preview pane can only load the current version of this document; you are editing a different version.',
+        adminTocPreviewLoading: 'Loading preview PDF...',
+        adminTocPreviewError: 'Could not load preview PDF.',
+        adminTocPreviewPageOf: '/ {total}',
+        adminTocErrTitleEmpty: 'Entry #{index}: title must not be empty.',
+        adminTocErrTitleTooLong: 'Entry #{index}: title exceeds {max} characters.',
+        adminTocErrLevelRange: 'Entry #{index}: level must be an integer between 1 and 6.',
+        adminTocErrPageInvalid: 'Entry #{index}: page number must be an integer >= 1.',
+        adminTocErrPageRange: 'Entry #{index}: page ({page}) is outside 1..{totalPages}.',
+        adminTocErrTooManyNodes: 'Entry count exceeds the maximum of {max} entries.',
+        adminTocErrNoteTooLong: 'Note must not exceed {max} characters.',
+        adminTocErrProcessing: 'TOC extraction is already processing for this file.',
+        adminTocErrNoAuto: 'No automatic TOC tree is available to promote.',
+        adminTocErrUnsupported: 'TOC re-extraction is only supported for PDF files.',
+        adminTocErrInvalid: 'Invalid TOC data. Please check the entries.',
+        adminTocErrNotFound: 'Document file not found.',
+        adminTocErrFailed: 'TOC admin action failed. Please try again later.',
+        adminTocLoadFailed: 'Could not load the TOC review list. The document service (elib) may be under maintenance.',
         uploadedOn: 'Uploaded', recentEmpty: 'No documents have been uploaded yet.',
         recentError: 'Could not load recent documents. The document service (elib) may be under maintenance.',
         heroEyebrow: 'Institute of Railway Technology & TOD · Live Search',
@@ -1554,6 +2331,8 @@
       if (name === 'library') renderLibrary();
       if (name === 'documents') void loadDocumentsView();
       if (name === 'admin-users') void loadAdminUsersView();
+      if (name === 'admin-tocs') void loadAdminTocsView();
+      else destroyAdminTocPdf();
       if (push) {
         const url = new URL(location.href);
         if (name === 'home') { url.search = ''; } else { url.searchParams.set('view', name); if (name !== 'search') { url.searchParams.delete('q'); url.searchParams.delete('page'); } if (name !== 'detail') { url.searchParams.delete('code'); url.searchParams.delete('source'); } }
@@ -1819,6 +2598,275 @@
     }
 
     let viewerState = null;
+    let viewerTocSeq = 0;
+    let viewerTocTimer = null;
+    let viewerTocState = null;
+    let viewerTocOpen = false;
+    let viewerEndHighlightTimer = null;
+
+    function isMobileViewer() {
+      return typeof window !== 'undefined' && window.innerWidth <= 768;
+    }
+
+    function applyTocVisibility() {
+      const tocEl = $('#doc-viewer-toc');
+      const toggleBtn = $('#doc-viewer-toc-toggle');
+      const backdropEl = $('#doc-viewer-toc-backdrop');
+      if (!tocEl || !toggleBtn || !backdropEl) return;
+      if (!viewerTocState) {
+        tocEl.hidden = true;
+        tocEl.classList.remove('is-drawer-open');
+        tocEl.removeAttribute('aria-hidden');
+        toggleBtn.hidden = true;
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        backdropEl.hidden = true;
+        return;
+      }
+      toggleBtn.hidden = false;
+      toggleBtn.setAttribute('aria-expanded', String(viewerTocOpen));
+      if (isMobileViewer()) {
+        tocEl.hidden = false;
+        tocEl.classList.toggle('is-drawer-open', viewerTocOpen);
+        tocEl.setAttribute('aria-hidden', String(!viewerTocOpen));
+        backdropEl.hidden = !viewerTocOpen;
+      } else {
+        tocEl.classList.remove('is-drawer-open');
+        tocEl.removeAttribute('aria-hidden');
+        tocEl.hidden = !viewerTocOpen;
+        backdropEl.hidden = true;
+      }
+    }
+
+    function resetViewerToc() {
+      viewerTocSeq += 1;
+      clearTimeout(viewerTocTimer);
+      viewerTocTimer = null;
+      viewerTocState = null;
+      viewerTocOpen = false;
+      const searchWrap = $('#doc-viewer-toc-search-wrap');
+      const searchInput = $('#doc-viewer-toc-search');
+      const statusEl = $('#doc-viewer-toc-status');
+      const listEl = $('#doc-viewer-toc-list');
+      const footEl = $('#doc-viewer-toc-foot');
+      if (searchWrap) searchWrap.hidden = true;
+      if (searchInput) searchInput.value = '';
+      if (statusEl) { statusEl.hidden = true; statusEl.textContent = ''; }
+      if (listEl) listEl.replaceChildren();
+      if (footEl) { footEl.hidden = true; footEl.replaceChildren(); }
+      applyTocVisibility();
+    }
+
+    function showPreviewAccessNotice(highlight = false) {
+      const endEl = $('#doc-viewer-end');
+      const endTextEl = $('#doc-viewer-end-text');
+      const endLoginEl = $('#doc-viewer-end-login');
+      if (!endEl || !endTextEl || !endLoginEl) return;
+      const kind = endOfPreviewKind(elibUser);
+      endTextEl.textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
+      endLoginEl.hidden = kind !== 'login';
+      const contact = normalizeContact(uiConfig);
+      const contactEl = $('#doc-viewer-end-contact');
+      if (contactEl) {
+        if (contact.text || contact.url) {
+          contactEl.hidden = false;
+          contactEl.textContent = contact.text || contact.url;
+          if (contact.url) contactEl.href = contact.url;
+          else contactEl.removeAttribute('href');
+        } else {
+          contactEl.hidden = true;
+        }
+      }
+      endEl.hidden = false;
+      if (highlight) {
+        endEl.classList.add('is-highlighted');
+        clearTimeout(viewerEndHighlightTimer);
+        viewerEndHighlightTimer = setTimeout(() => {
+          endEl.classList.remove('is-highlighted');
+        }, 1800);
+        showToast(t('tocLockedNotice'));
+      }
+    }
+
+    function updateActiveTocHighlight(pageNum) {
+      if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+      const nextId = findActiveTocNodeId(viewerTocState.tree, pageNum);
+      viewerTocState.activeId = nextId;
+      const listEl = $('#doc-viewer-toc-list');
+      if (!listEl) return;
+      for (const btn of listEl.querySelectorAll('.toc-node-btn')) {
+        const isActive = Boolean(nextId && btn.getAttribute('data-toc-id') === nextId);
+        btn.classList.toggle('is-active', isActive);
+        if (isActive) {
+          btn.setAttribute('aria-current', 'location');
+        } else {
+          btn.removeAttribute('aria-current');
+        }
+      }
+    }
+
+    function computeCurrentViewerPage() {
+      const pagesEl = $('#doc-viewer-pages');
+      const canvases = viewerState?.canvases;
+      if (!pagesEl || !Array.isArray(canvases) || canvases.length === 0) return 1;
+      const idx = canvases.findIndex((c) => c.offsetTop + c.offsetHeight > pagesEl.scrollTop + 24);
+      return idx < 0 ? 1 : idx + 1;
+    }
+
+    function jumpToViewerPage(pageNum) {
+      const page = Math.trunc(Number(pageNum));
+      if (!Number.isFinite(page) || page < 1 || !viewerState) return;
+      const canvases = viewerState.canvases;
+      if (!Array.isArray(canvases) || canvases.length === 0) {
+        viewerState.pendingJumpPage = page;
+        viewerState.currentPage = page;
+        updateActiveTocHighlight(page);
+        return;
+      }
+      if (page > canvases.length) {
+        showPreviewAccessNotice(true);
+        return;
+      }
+      const targetCanvas = canvases[page - 1];
+      if (!targetCanvas) return;
+      const pagesEl = $('#doc-viewer-pages');
+      viewerState.currentPage = page;
+      viewerState.pinnedPage = page;
+      clearTimeout(viewerState.pinTimer);
+      viewerState.pinTimer = setTimeout(() => {
+        if (viewerState) viewerState.pinTimer = null, viewerState.pinnedPage = null;
+      }, 900);
+      if (viewerState.mode !== 'preview') {
+        const pageInfoEl = $('#doc-viewer-pageinfo');
+        if (pageInfoEl) pageInfoEl.textContent = t('viewerPage', { n: page, total: canvases.length });
+      }
+      updateActiveTocHighlight(page);
+      if (pagesEl) {
+        pagesEl.scrollTo({ top: Math.max(0, targetCanvas.offsetTop - 8), behavior: 'smooth' });
+      }
+      viewerState.ensurePageRendered?.(page);
+    }
+
+    function renderViewerToc() {
+      const searchWrap = $('#doc-viewer-toc-search-wrap');
+      const statusEl = $('#doc-viewer-toc-status');
+      const listEl = $('#doc-viewer-toc-list');
+      const footEl = $('#doc-viewer-toc-foot');
+      if (!searchWrap || !statusEl || !listEl || !footEl || !viewerTocState) return;
+
+      if (viewerTocState.kind === 'processing') {
+        searchWrap.hidden = true;
+        listEl.replaceChildren();
+        footEl.hidden = true;
+        footEl.replaceChildren();
+        statusEl.hidden = false;
+        statusEl.textContent = t('tocProcessing');
+        return;
+      }
+
+      searchWrap.hidden = false;
+      const query = viewerTocState.query || '';
+      const isSearching = normalizeTocSearchText(query).length > 0;
+      const visibleTree = filterTocTree(viewerTocState.tree, query);
+      if (visibleTree.length === 0 && isSearching) {
+        listEl.replaceChildren();
+        statusEl.hidden = false;
+        statusEl.textContent = t('tocNoMatches');
+      } else {
+        statusEl.hidden = true;
+        statusEl.textContent = '';
+        const items = createTocListDom(document, visibleTree, {
+          activeId: viewerTocState.activeId,
+          collapsedIds: viewerTocState.collapsedIds,
+          isSearching,
+          getTotalLoadedPages: () => viewerState?.totalPages ?? null,
+          labels: {
+            expand: t('tocExpand'),
+            collapse: t('tocCollapse'),
+            lockedLabel: t('tocLockedLabel')
+          },
+          onToggleCollapse: (nodeId) => {
+            if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+            if (viewerTocState.collapsedIds.has(nodeId)) viewerTocState.collapsedIds.delete(nodeId);
+            else viewerTocState.collapsedIds.add(nodeId);
+            renderViewerToc();
+          },
+          onLocked: () => {
+            showPreviewAccessNotice(true);
+            if (isMobileViewer()) {
+              viewerTocOpen = false;
+              applyTocVisibility();
+            }
+          },
+          onJump: (page) => {
+            jumpToViewerPage(page);
+            if (isMobileViewer()) {
+              viewerTocOpen = false;
+              applyTocVisibility();
+            }
+          }
+        });
+        listEl.replaceChildren(...items);
+      }
+
+      const footKeys = tocFooterKeys(viewerTocState);
+      footEl.replaceChildren();
+      for (const key of footKeys) {
+        const badge = document.createElement('span');
+        badge.className = 'toc-foot-badge';
+        badge.textContent = t(key);
+        footEl.append(badge);
+      }
+      footEl.hidden = footKeys.length === 0;
+    }
+
+    async function loadViewerToc(doc, options, seq, retryCount = 0) {
+      const tocPath = elibTocPath(doc, options?.fileId);
+      if (!tocPath) {
+        resetViewerToc();
+        return;
+      }
+      const result = await elibFetchJson(tocPath.replace(/^\/api\/elib/, ''));
+      if (seq !== viewerTocSeq || $('#doc-viewer')?.hidden) return;
+
+      const nextState = resolveTocViewState(result);
+      if (nextState.kind === 'hidden') {
+        resetViewerToc();
+        return;
+      }
+      if (nextState.kind === 'processing') {
+        const wasOpen = Boolean(viewerTocState);
+        viewerTocState = { kind: 'processing' };
+        if (!wasOpen) viewerTocOpen = !isMobileViewer();
+        renderViewerToc();
+        applyTocVisibility();
+        if (shouldPollToc(nextState, retryCount)) {
+          viewerTocTimer = setTimeout(() => {
+            void loadViewerToc(doc, options, seq, retryCount + 1);
+          }, TOC_POLL_INTERVAL_MS);
+        }
+        return;
+      }
+
+      const tree = buildTocTree(nextState.nodes, {
+        previewOnly: nextState.previewOnly,
+        firstPageLabel: t('tocFirstPage')
+      });
+      if (tree.length === 0) {
+        resetViewerToc();
+        return;
+      }
+      const wasOpen = Boolean(viewerTocState);
+      if (!wasOpen) viewerTocOpen = !isMobileViewer();
+      viewerTocState = {
+        ...nextState,
+        tree,
+        query: '',
+        collapsedIds: new Set(),
+        activeId: findActiveTocNodeId(tree, viewerState?.currentPage || 1)
+      };
+      renderViewerToc();
+      applyTocVisibility();
+    }
 
     function closeDocViewer() {
       const overlay = $('#doc-viewer');
@@ -1826,6 +2874,13 @@
       viewerDocId = null;
       viewerDoc = null;
       clearDocDeepLink();
+      resetViewerToc();
+      clearTimeout(viewerEndHighlightTimer);
+      viewerEndHighlightTimer = null;
+      const endEl = $('#doc-viewer-end');
+      if (endEl) endEl.classList.remove('is-highlighted');
+      if (viewerState?.pinTimer) clearTimeout(viewerState.pinTimer);
+      if (viewerState?.scrollRaf) cancelAnimationFrame(viewerState.scrollRaf);
       if (viewerState?.observer) viewerState.observer.disconnect();
       if (viewerState?.loadingTask) {
         // Release pdf.js resources (worker document + rendered pages).
@@ -1919,6 +2974,21 @@
           return;
         }
 
+        viewerState = {
+          loadingTask: null,
+          doc,
+          mode,
+          canvases: [],
+          totalPages: 0,
+          currentPage: 1,
+          pendingJumpPage: null,
+          pinnedPage: null,
+          pinTimer: null,
+          scrollRaf: 0
+        };
+        const tocSeq = ++viewerTocSeq;
+        void loadViewerToc(doc, options, tocSeq, 0);
+
         const pdfjs = await loadPdfjs();
         const url = mode === 'preview' ? elibPreviewPath(doc) : viewUrl;
         let loadingTask;
@@ -1949,36 +3019,71 @@
             withCredentials: true
           });
         }
-        viewerState = { loadingTask, doc, mode };
+        if (!viewerState || overlay.hidden) {
+          loadingTask.destroy().catch(() => undefined);
+          return;
+        }
+        viewerState.loadingTask = loadingTask;
         const pdf = await loadingTask.promise;
+        if (!viewerState || viewerState.loadingTask !== loadingTask) return;
         statusEl.hidden = true;
         const total = pdf.numPages;
+        viewerState.totalPages = total;
         if (mode !== 'preview') {
-          pageInfoEl.textContent = t('viewerPage', { n: total, total });
+          pageInfoEl.textContent = t('viewerPage', { n: 1, total });
         }
-        // Render pages sequentially; preview PDFs are small, full PDFs
-        // render on scroll via IntersectionObserver to stay responsive.
-        const renderPage = async (pageNum, canvas) => {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1.5 });
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        };
+        const firstPage = total >= 1 ? await pdf.getPage(1) : null;
+        if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+        const firstViewport = firstPage ? firstPage.getViewport({ scale: 1.5 }) : null;
+
         const canvases = [];
         for (let n = 1; n <= total; n += 1) {
           const canvas = document.createElement('canvas');
           canvas.className = 'viewer-page';
           canvas.dataset.page = String(n);
+          if (firstViewport) {
+            canvas.style.width = `${firstViewport.width}px`;
+            canvas.style.aspectRatio = `${firstViewport.width} / ${firstViewport.height}`;
+          }
           pagesEl.append(canvas);
           canvases.push(canvas);
         }
-        const observer = new IntersectionObserver((entries) => {
+        viewerState.canvases = canvases;
+
+        const renderedPromises = new Map();
+        let observer = null;
+        const ensurePageRendered = (pageNum) => {
+          if (renderedPromises.has(pageNum)) return renderedPromises.get(pageNum);
+          const canvas = canvases[pageNum - 1];
+          if (!canvas) return Promise.resolve();
+          observer?.unobserve(canvas);
+          const p = (async () => {
+            if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+            const page = pageNum === 1 && firstPage ? firstPage : await pdf.getPage(pageNum);
+            if (!viewerState || viewerState.loadingTask !== loadingTask) return;
+            const viewport = page.getViewport({ scale: 1.5 });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = `${viewport.width}px`;
+            canvas.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            if (viewerState && viewerState.loadingTask === loadingTask && viewerState.pinnedPage === pageNum) {
+              pagesEl.scrollTop = Math.max(0, canvas.offsetTop - 8);
+            }
+          })().catch(() => {
+            renderedPromises.delete(pageNum);
+          });
+          renderedPromises.set(pageNum, p);
+          return p;
+        };
+        viewerState.ensurePageRendered = ensurePageRendered;
+
+        observer = new IntersectionObserver((entries) => {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
             const canvas = entry.target;
             observer.unobserve(canvas);
-            void renderPage(Number(canvas.dataset.page), canvas).catch(() => undefined);
+            void ensurePageRendered(Number(canvas.dataset.page));
           }
         }, { root: pagesEl, rootMargin: '400px' });
         canvases.forEach((c) => observer.observe(c));
@@ -1989,24 +3094,18 @@
           // (the preview PDF simply has no more pages). Contact channel
           // comes from /api/v1/ui-config (env phía Reverse_proxy);
           // empty config -> generic sentence only. No price is shown.
-          const kind = endOfPreviewKind(elibUser);
-          $('#doc-viewer-end-text').textContent = kind === 'login' ? t('previewEndLogin') : t('previewEndContact');
-          $('#doc-viewer-end-login').hidden = kind !== 'login';
-          const contact = normalizeContact(uiConfig);
-          const contactEl = $('#doc-viewer-end-contact');
-          if (contactEl) {
-            if (contact.text || contact.url) {
-              contactEl.hidden = false;
-              contactEl.textContent = contact.text || contact.url;
-              if (contact.url) contactEl.href = contact.url;
-              else contactEl.removeAttribute('href');
-            } else {
-              contactEl.hidden = true;
-            }
-          }
-          endEl.hidden = false;
+          showPreviewAccessNotice(false);
+        }
+
+        if (viewerState.pendingJumpPage) {
+          const targetPage = viewerState.pendingJumpPage;
+          viewerState.pendingJumpPage = null;
+          jumpToViewerPage(targetPage);
+        } else {
+          updateActiveTocHighlight(viewerState.currentPage || 1);
         }
       } catch (error) {
+        resetViewerToc();
         statusEl.hidden = false;
         statusEl.classList.add('viewer-error');
         if (options.deepLink && error?.status === 404) {
@@ -3361,6 +4460,20 @@
       if (!$('#view-library').hidden) renderLibrary();
       if (!$('#view-documents').hidden) { renderElibUserBar(); renderElibSession(); }
       if (!$('#view-admin-users').hidden) void loadAdminUsersView();
+      if (!$('#view-admin-tocs').hidden) {
+        if ($('#admin-tocs-detail-panel') && !$('#admin-tocs-detail-panel').hidden && adminTocDetail) {
+          renderAdminTocDetail(true);
+        } else {
+          renderAdminTocList();
+        }
+      }
+      $('#doc-viewer-toc-close')?.setAttribute('aria-label', t('tocClose'));
+      if (!$('#doc-viewer').hidden && viewerTocState) {
+        if (viewerTocState.kind === 'ready' && viewerTocState.tree[0]?.virtual) {
+          viewerTocState.tree[0].title = t('tocFirstPage');
+        }
+        renderViewerToc();
+      }
     }
 
     // ---- Tài liệu (elib via /api/elib/* proxy) ----
@@ -3422,6 +4535,8 @@
       uploadBtn.hidden = !(loggedIn && (elibUser.role === 'editor' || elibUser.role === 'admin'));
       const adminNav = $('#nav-admin-users');
       if (adminNav) adminNav.hidden = !(loggedIn && isAdminUser(elibUser));
+      const adminTocNav = $('#nav-admin-tocs');
+      if (adminTocNav) adminTocNav.hidden = !(loggedIn && canManageAdminTocs(elibUser));
       const loginNote = $('#header-login-note');
       if (loginNote) loginNote.hidden = loggedIn;
       // When elib is down/disabled, keep Đăng nhập visible (it opens the
@@ -3458,6 +4573,7 @@
       reloadStandardFiles();
       // Form nhập metadata chỉ hiện với admin: dựng lại khi quyền đổi.
       reloadManualSection();
+      if (!$('#view-admin-tocs').hidden) void loadAdminTocsView();
       return { status: elibAuthStatus, result };
     }
 
@@ -3862,15 +4978,59 @@
       if (event.key === 'Escape' && !$('#doc-viewer').hidden) closeDocViewer();
     });
     const scrollViewerPage = (delta) => {
-      const pagesEl = $('#doc-viewer-pages');
-      const canvases = [...pagesEl.querySelectorAll('canvas')];
-      if (canvases.length === 0) return;
-      const current = canvases.findIndex((c) => c.offsetTop + c.offsetHeight > pagesEl.scrollTop + 10);
-      const target = canvases[Math.min(canvases.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta))];
-      if (target) pagesEl.scrollTo({ top: target.offsetTop, behavior: 'smooth' });
+      const canvases = viewerState?.canvases;
+      if (!Array.isArray(canvases) || canvases.length === 0) return;
+      const current = viewerState?.pinnedPage ?? computeCurrentViewerPage();
+      const targetPage = Math.min(canvases.length, Math.max(1, current + delta));
+      jumpToViewerPage(targetPage);
     };
     $('#doc-viewer-prev').addEventListener('click', () => scrollViewerPage(-1));
     $('#doc-viewer-next').addEventListener('click', () => scrollViewerPage(1));
+    $('#doc-viewer-toc-toggle').addEventListener('click', () => {
+      if (!viewerTocState) return;
+      viewerTocOpen = !viewerTocOpen;
+      applyTocVisibility();
+    });
+    const closeTocDrawer = () => {
+      if (!viewerTocState) return;
+      viewerTocOpen = false;
+      applyTocVisibility();
+    };
+    $('#doc-viewer-toc-close').addEventListener('click', closeTocDrawer);
+    $('#doc-viewer-toc-backdrop').addEventListener('click', closeTocDrawer);
+    $('#doc-viewer-toc-search').addEventListener('input', (event) => {
+      if (!viewerTocState || viewerTocState.kind !== 'ready') return;
+      viewerTocState.query = event.target.value || '';
+      renderViewerToc();
+    });
+    const viewerPagesEl = $('#doc-viewer-pages');
+    viewerPagesEl.addEventListener('scroll', () => {
+      if (!viewerState || viewerState.pinnedPage) return;
+      if (viewerState.scrollRaf) return;
+      viewerState.scrollRaf = requestAnimationFrame(() => {
+        if (!viewerState) return;
+        viewerState.scrollRaf = 0;
+        const page = computeCurrentViewerPage();
+        if (viewerState.currentPage !== page) {
+          viewerState.currentPage = page;
+          if (viewerState.mode !== 'preview' && viewerState.totalPages > 0) {
+            $('#doc-viewer-pageinfo').textContent = t('viewerPage', { n: page, total: viewerState.totalPages });
+          }
+          updateActiveTocHighlight(page);
+        }
+      });
+    }, { passive: true });
+    const clearViewerPin = () => {
+      if (!viewerState) return;
+      viewerState.pinnedPage = null;
+      clearTimeout(viewerState.pinTimer);
+      viewerState.pinTimer = null;
+    };
+    viewerPagesEl.addEventListener('wheel', clearViewerPin, { passive: true });
+    viewerPagesEl.addEventListener('touchstart', clearViewerPin, { passive: true });
+    window.addEventListener('resize', () => {
+      if (!$('#doc-viewer').hidden && viewerTocState) applyTocVisibility();
+    });
     $$('.nav-item').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
     $$('[data-goto-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.gotoView)));
     $('#mobile-menu').addEventListener('click', () => {
@@ -3950,6 +5110,7 @@
       renderHeaderAuth();
       showToast(t('elibLoggedOut'));
       if (!$('#view-documents').hidden) void loadDocumentsView();
+      if (!$('#view-admin-tocs').hidden) { destroyAdminTocPdf(); void loadAdminTocsView(); }
       void loadHomeRecent();
       reloadFileResultsIfLoaded();
     });
@@ -3988,6 +5149,7 @@
       renderHeaderAuth();
       showToast(t('elibLoggedOut'));
       void loadDocumentsView();
+      if (!$('#view-admin-tocs').hidden) { destroyAdminTocPdf(); void loadAdminTocsView(); }
       void loadHomeRecent();
       reloadFileResultsIfLoaded();
     });
@@ -4059,6 +5221,718 @@
         else if (!$('#view-search').hidden) (activeSearchTab === 'files' ? $('#file-search-query') : $('#search-query'))?.focus();
         else if (!$('#view-detail').hidden) $('#detail-code-input')?.focus();
       }
+    });
+
+    // ---- Quản trị mục lục PDF (chỉ admin, P3) ----
+    let adminTocListState = {
+      offset: 0,
+      limit: ADMIN_TOC_DEFAULT_LIMIT,
+      total: 0,
+      currentAlgorithmVersion: '',
+      items: []
+    };
+    let adminTocListSeq = 0;
+    let adminTocDetailSeq = 0;
+    let adminTocDetail = null;
+    let adminTocEditorNodes = [];
+    let adminTocAutoCollapsedIds = new Set();
+    let adminTocPdfSeq = 0;
+    let adminTocPdfState = null; // { loadingTask, pdf, totalPages, currentPage, renderTask, pendingPage }
+
+    function destroyAdminTocPdf() {
+      adminTocPdfSeq += 1;
+      if (adminTocPdfState?.renderTask?.cancel) {
+        try { adminTocPdfState.renderTask.cancel(); } catch { /* ignore */ }
+      }
+      if (adminTocPdfState?.loadingTask) {
+        adminTocPdfState.loadingTask.destroy().catch(() => undefined);
+      }
+      adminTocPdfState = null;
+      const canvas = $('#admin-toc-pdf-canvas');
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      const statusEl = $('#admin-toc-pdf-status');
+      if (statusEl) { statusEl.hidden = true; statusEl.textContent = ''; statusEl.classList.remove('viewer-error'); }
+      const warnEl = $('#admin-toc-pdf-version-warn');
+      if (warnEl) warnEl.hidden = true;
+      const pageTotal = $('#admin-toc-pdf-page-total');
+      if (pageTotal) pageTotal.textContent = '';
+      const pageInput = $('#admin-toc-pdf-page-input');
+      if (pageInput) pageInput.value = '1';
+    }
+
+    async function renderAdminTocPdfPage(pageNum) {
+      const requested = Math.trunc(Number(pageNum));
+      if (!Number.isFinite(requested) || requested < 1) return;
+      if (!adminTocPdfState) return;
+      if (!adminTocPdfState.pdf) {
+        adminTocPdfState.pendingPage = requested;
+        return;
+      }
+      const total = adminTocPdfState.totalPages || adminTocPdfState.pdf.numPages || 1;
+      const clamped = Math.min(total, Math.max(1, requested));
+      adminTocPdfState.currentPage = clamped;
+      const pageInput = $('#admin-toc-pdf-page-input');
+      if (pageInput) pageInput.value = String(clamped);
+      const canvas = $('#admin-toc-pdf-canvas');
+      if (!canvas) return;
+      if (adminTocPdfState.renderTask?.cancel) {
+        try { adminTocPdfState.renderTask.cancel(); } catch { /* ignore */ }
+      }
+      const currentSeq = adminTocPdfSeq;
+      try {
+        const page = await adminTocPdfState.pdf.getPage(clamped);
+        if (currentSeq !== adminTocPdfSeq || !adminTocPdfState) return;
+        const viewport = page.getViewport({ scale: 1.15 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+        adminTocPdfState.renderTask = renderTask;
+        await renderTask.promise;
+        if (adminTocPdfState?.renderTask === renderTask) adminTocPdfState.renderTask = null;
+        if (requested > total) {
+          showToast(t('adminTocErrPageRange', { index: 1, page: requested, totalPages: total }));
+        }
+      } catch (err) {
+        if (err?.name === 'RenderingCancelledException') return;
+      }
+    }
+
+    async function loadAdminTocPdf(detail) {
+      destroyAdminTocPdf();
+      const preview = adminTocPreviewPath(detail);
+      const statusEl = $('#admin-toc-pdf-status');
+      const warnEl = $('#admin-toc-pdf-version-warn');
+      if (!preview || !statusEl) return;
+      if (warnEl) warnEl.hidden = preview.isCurrentVersion;
+      statusEl.hidden = false;
+      statusEl.classList.remove('viewer-error');
+      statusEl.textContent = t('adminTocPreviewLoading');
+
+      const seq = ++adminTocPdfSeq;
+      adminTocPdfState = { loadingTask: null, pdf: null, totalPages: 0, currentPage: 1, renderTask: null, pendingPage: 1 };
+
+      try {
+        const pdfjs = await loadPdfjs();
+        if (seq !== adminTocPdfSeq || $('#view-admin-tocs').hidden) return;
+        let loadingTask;
+        const probe = await fetch(preview.url, { credentials: 'same-origin', headers: { Range: 'bytes=0-0' } });
+        if (probe.ok || probe.status === 206) {
+          loadingTask = pdfjs.getDocument({
+            url: preview.url,
+            isEvalSupported: false,
+            standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
+            withCredentials: true
+          });
+        } else {
+          const fallbackBytes = await fetchDocBytes(preview.fallbackUrl);
+          loadingTask = pdfjs.getDocument({
+            data: fallbackBytes,
+            isEvalSupported: false,
+            standardFontDataUrl: '/vendor/pdfjs/standard_fonts/'
+          });
+        }
+        if (seq !== adminTocPdfSeq || $('#view-admin-tocs').hidden || $('#admin-tocs-detail-panel').hidden) {
+          loadingTask.destroy().catch(() => undefined);
+          return;
+        }
+        adminTocPdfState.loadingTask = loadingTask;
+        const pdf = await loadingTask.promise;
+        if (seq !== adminTocPdfSeq || !adminTocPdfState) return;
+        adminTocPdfState.pdf = pdf;
+        adminTocPdfState.totalPages = pdf.numPages;
+        const pageTotal = $('#admin-toc-pdf-page-total');
+        if (pageTotal) pageTotal.textContent = t('adminTocPreviewPageOf', { total: pdf.numPages });
+        const pageInput = $('#admin-toc-pdf-page-input');
+        if (pageInput) pageInput.max = String(pdf.numPages);
+        statusEl.hidden = true;
+        const initialPage = adminTocPdfState.pendingPage || 1;
+        adminTocPdfState.pendingPage = null;
+        await renderAdminTocPdfPage(initialPage);
+      } catch (err) {
+        if (seq !== adminTocPdfSeq) return;
+        if (adminTocPdfState?.loadingTask) {
+          adminTocPdfState.loadingTask.destroy().catch(() => undefined);
+        }
+        adminTocPdfState = null;
+        statusEl.hidden = false;
+        statusEl.classList.add('viewer-error');
+        statusEl.textContent = err?.status
+          ? t(previewErrorKey(err.status, err.code || null))
+          : t('adminTocPreviewError');
+      }
+    }
+
+    function readAdminTocFilters() {
+      return {
+        auto_status: $('#admin-toc-filter-auto-status')?.value || '',
+        job_status: $('#admin-toc-filter-job-status')?.value || '',
+        flag: $('#admin-toc-filter-flag')?.value?.trim() || '',
+        manual_override: $('#admin-toc-filter-manual')?.value || '',
+        standards_only: $('#admin-toc-filter-standards')?.value || '',
+        outdated_algorithm: Boolean($('#admin-toc-filter-outdated')?.checked)
+      };
+    }
+
+    function adminTocBadge(text, toneClass) {
+      const span = document.createElement('span');
+      span.className = `badge ${toneClass}`;
+      span.textContent = text;
+      return span;
+    }
+
+    function adminTocAutoStatusLabel(status) {
+      const map = {
+        ok: 'adminTocStatusOk',
+        partial: 'adminTocStatusPartial',
+        needs_ocr: 'adminTocStatusNeedsOcr',
+        failed: 'adminTocStatusFailed',
+        unsupported: 'adminTocStatusUnsupported'
+      };
+      return map[status] ? t(map[status]) : dash(status);
+    }
+
+    function adminTocJobStatusLabel(status) {
+      const map = {
+        pending: 'adminTocJobPending',
+        processing: 'adminTocJobProcessing',
+        done: 'adminTocJobDone',
+        failed: 'adminTocJobFailed',
+        unsupported: 'adminTocJobUnsupported'
+      };
+      return map[status] ? t(map[status]) : dash(status);
+    }
+
+    function renderAdminTocList() {
+      const listEl = $('#admin-tocs-list');
+      const emptyEl = $('#admin-tocs-empty');
+      const summaryEl = $('#admin-tocs-summary');
+      const pagingEl = $('#admin-tocs-pagination');
+      if (!listEl || !emptyEl || !summaryEl || !pagingEl) return;
+
+      listEl.replaceChildren();
+      const items = adminTocListState.items || [];
+      const total = adminTocListState.total || 0;
+      const offset = adminTocListState.offset || 0;
+      const limit = adminTocListState.limit || ADMIN_TOC_DEFAULT_LIMIT;
+      const from = total === 0 ? 0 : offset + 1;
+      const to = Math.min(total, offset + items.length);
+      summaryEl.textContent = t('adminTocListSummary', {
+        from,
+        to,
+        total,
+        ver: adminTocListState.currentAlgorithmVersion || DASH
+      });
+
+      emptyEl.hidden = items.length !== 0;
+      pagingEl.hidden = total <= limit && offset === 0;
+      $('#admin-tocs-prev').disabled = offset <= 0;
+      $('#admin-tocs-next').disabled = offset + items.length >= total;
+      $('#admin-tocs-page-info').textContent = `${from}–${to} / ${total}`;
+
+      for (const item of items) {
+        const row = document.createElement('div');
+        row.className = 'admin-toc-row';
+        const main = document.createElement('div');
+        main.className = 'admin-toc-row-main';
+        const titleEl = document.createElement('strong');
+        titleEl.textContent = item.standard_code_display
+          ? `${item.standard_code_display} — ${item.document_title || item.original_filename}`
+          : (item.document_title || item.original_filename || item.file_id);
+        const meta = document.createElement('span');
+        meta.className = 'admin-toc-row-meta';
+        const verLabel = item.version_label ? ` (${item.version_label})` : '';
+        const metaParts = [
+          t('standardVersion', { n: item.version ?? '?' }) + verLabel,
+          item.original_filename || '',
+          Number.isInteger(item.page_count) ? `${item.page_count} ${t('pagesUnit')}` : '',
+          item.algorithm_version ? `algo: ${item.algorithm_version}` : ''
+        ].filter(Boolean);
+        meta.textContent = metaParts.join(' · ');
+
+        const badges = document.createElement('div');
+        badges.className = 'admin-toc-badges';
+        if (item.is_current_version) {
+          badges.append(adminTocBadge(t('standardCurrentVersion'), 'badge-source'));
+        }
+        const autoTone = item.auto_status === 'ok'
+          ? 'badge-toc-ok'
+          : item.auto_status === 'failed'
+            ? 'badge-toc-err'
+            : 'badge-toc-warn';
+        badges.append(adminTocBadge(`auto: ${adminTocAutoStatusLabel(item.auto_status)}`, autoTone));
+        const jobTone = item.job_status === 'done'
+          ? 'badge-toc-ok'
+          : item.job_status === 'failed'
+            ? 'badge-toc-err'
+            : 'badge-toc-warn';
+        badges.append(adminTocBadge(`job: ${adminTocJobStatusLabel(item.job_status)}`, jobTone));
+        if (item.manual_override === true) {
+          badges.append(adminTocBadge(t('adminTocHasManual'), 'badge-toc-manual'));
+        }
+        if (
+          adminTocListState.currentAlgorithmVersion &&
+          item.algorithm_version !== adminTocListState.currentAlgorithmVersion
+        ) {
+          badges.append(adminTocBadge(t('adminTocOutdatedAlgo'), 'badge-toc-outdated'));
+        }
+        if (Array.isArray(item.auto_flags)) {
+          for (const flag of item.auto_flags) {
+            badges.append(adminTocBadge(String(flag), 'badge-neutral'));
+          }
+        }
+        main.append(titleEl, meta, badges);
+
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'button button-secondary button-small';
+        openBtn.textContent = t('adminTocOpenDetail');
+        openBtn.addEventListener('click', () => void loadAdminTocDetail(item.file_id));
+
+        row.append(main, openBtn);
+        listEl.append(row);
+      }
+    }
+
+    async function loadAdminTocsList(options = {}) {
+      const banner = $('#admin-tocs-banner');
+      const listPanel = $('#admin-tocs-list-panel');
+      const detailPanel = $('#admin-tocs-detail-panel');
+      if (!banner || !listPanel || !detailPanel) return;
+      banner.hidden = true;
+      if (!options.keepView) {
+        detailPanel.hidden = true;
+        listPanel.hidden = false;
+        destroyAdminTocPdf();
+      }
+      if (!canManageAdminTocs(elibUser)) {
+        listPanel.hidden = true;
+        detailPanel.hidden = true;
+        banner.hidden = false;
+        banner.textContent = t('adminErrForbidden');
+        return;
+      }
+
+      const seq = ++adminTocListSeq;
+      $('#admin-tocs-loading').hidden = false;
+      const path = adminTocsListPath(readAdminTocFilters(), adminTocListState.limit, adminTocListState.offset);
+      const result = await elibFetchJson(path);
+      if (seq !== adminTocListSeq) return;
+      $('#admin-tocs-loading').hidden = true;
+
+      if (result.status !== 200 || !result.payload || !Array.isArray(result.payload.data)) {
+        banner.hidden = false;
+        banner.textContent = result.status === 401 || result.status === 403 || result.status === 400
+          ? formatAdminTocError(result, t)
+          : t('adminTocLoadFailed');
+        return;
+      }
+
+      adminTocListState.items = result.payload.data;
+      adminTocListState.total = Number(result.payload.total ?? result.payload.data.length);
+      adminTocListState.limit = Number(result.payload.limit ?? adminTocListState.limit);
+      adminTocListState.offset = Number(result.payload.offset ?? adminTocListState.offset);
+      adminTocListState.currentAlgorithmVersion = result.payload.current_algorithm_version || '';
+      renderAdminTocList();
+    }
+
+    function renderAdminTocEditorRows() {
+      const container = $('#admin-toc-editor-rows');
+      const emptyEl = $('#admin-toc-editor-empty');
+      if (!container || !emptyEl) return;
+      container.replaceChildren();
+      emptyEl.hidden = adminTocEditorNodes.length !== 0;
+
+      for (let i = 0; i < adminTocEditorNodes.length; i += 1) {
+        const node = adminTocEditorNodes[i];
+        const row = document.createElement('div');
+        row.className = 'admin-toc-editor-row';
+        const levelVal = Math.min(6, Math.max(1, Number(node.level) || 1));
+        row.style.setProperty('--toc-indent', String(levelVal - 1));
+
+        const idxSpan = document.createElement('span');
+        idxSpan.className = 'admin-toc-row-idx';
+        idxSpan.textContent = `#${i + 1}`;
+
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.className = 'admin-toc-editor-title';
+        titleInput.maxLength = ADMIN_TOC_MAX_TITLE_LENGTH;
+        titleInput.placeholder = t('adminTocColTitle');
+        titleInput.setAttribute('aria-label', t('adminTocColTitle'));
+        titleInput.value = node.title ?? '';
+        titleInput.addEventListener('input', () => {
+          adminTocEditorNodes[i].title = titleInput.value;
+        });
+
+        const levelSelect = document.createElement('select');
+        levelSelect.setAttribute('aria-label', t('adminTocColLevel'));
+        for (let lv = 1; lv <= 6; lv += 1) {
+          const opt = document.createElement('option');
+          opt.value = String(lv);
+          opt.textContent = `L${lv}`;
+          opt.selected = levelVal === lv;
+          levelSelect.append(opt);
+        }
+        levelSelect.addEventListener('change', () => {
+          const nextLv = Number(levelSelect.value) || 1;
+          adminTocEditorNodes[i].level = nextLv;
+          row.style.setProperty('--toc-indent', String(Math.max(0, nextLv - 1)));
+        });
+
+        const pageInput = document.createElement('input');
+        pageInput.type = 'number';
+        pageInput.min = '1';
+        const totalPages = adminTocTotalPages(adminTocDetail);
+        if (totalPages) pageInput.max = String(totalPages);
+        pageInput.setAttribute('aria-label', t('adminTocColPage'));
+        pageInput.value = String(node.page_pdf ?? 1);
+        pageInput.addEventListener('input', () => {
+          adminTocEditorNodes[i].page_pdf = pageInput.value === '' ? '' : Number(pageInput.value);
+        });
+
+        const btns = document.createElement('div');
+        btns.className = 'admin-toc-row-btns';
+
+        const makeMini = (label, onClick, disabled = false) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'admin-toc-mini-btn';
+          b.textContent = label;
+          b.disabled = disabled;
+          b.addEventListener('click', onClick);
+          return b;
+        };
+
+        btns.append(
+          makeMini(t('adminTocJumpPage'), () => void renderAdminTocPdfPage(Number(pageInput.value) || 1)),
+          makeMini('↑', () => {
+            adminTocEditorNodes = adminTocMoveNode(adminTocEditorNodes, i, -1);
+            renderAdminTocEditorRows();
+          }, i === 0),
+          makeMini('↓', () => {
+            adminTocEditorNodes = adminTocMoveNode(adminTocEditorNodes, i, 1);
+            renderAdminTocEditorRows();
+          }, i === adminTocEditorNodes.length - 1),
+          makeMini(t('adminTocInsertBelow'), () => {
+            adminTocEditorNodes = adminTocInsertNode(adminTocEditorNodes, i, {
+              level: Number(levelSelect.value) || 1,
+              page_pdf: Math.max(1, Number(pageInput.value) || 1)
+            });
+            renderAdminTocEditorRows();
+          }),
+          makeMini(t('adminTocRemoveNode'), () => {
+            adminTocEditorNodes = adminTocRemoveNode(adminTocEditorNodes, i);
+            renderAdminTocEditorRows();
+          })
+        );
+
+        row.append(idxSpan, titleInput, levelSelect, pageInput, btns);
+        container.append(row);
+      }
+    }
+
+    function renderAdminTocDetail(keepEditor = false) {
+      const detail = adminTocDetail;
+      if (!detail) return;
+      const titleEl = $('#admin-toc-detail-title');
+      const metaEl = $('#admin-toc-detail-meta');
+      const autoInfoEl = $('#admin-toc-auto-info');
+      const autoTreeEl = $('#admin-toc-auto-tree');
+      const noteInput = $('#admin-toc-note');
+      if (!titleEl || !metaEl || !autoInfoEl || !autoTreeEl || !noteInput) return;
+
+      titleEl.textContent = detail.standard_code_display
+        ? `${detail.standard_code_display} — ${detail.document_title || detail.original_filename}`
+        : (detail.document_title || detail.original_filename || detail.file_id);
+
+      metaEl.replaceChildren();
+      const totalPages = adminTocTotalPages(detail);
+      const topLine = document.createElement('div');
+      topLine.textContent = [
+        t('standardVersion', { n: detail.version ?? '?' }) + (detail.version_label ? ` (${detail.version_label})` : ''),
+        detail.original_filename || '',
+        totalPages ? `${totalPages} ${t('pagesUnit')}` : '',
+        `auto: ${adminTocAutoStatusLabel(detail.auto_status)}`,
+        `job: ${adminTocJobStatusLabel(detail.job_status)}`,
+        detail.algorithm_version ? `algo: ${detail.algorithm_version}` : '',
+        detail.current_algorithm_version ? t('adminTocCurrentAlgo', { ver: detail.current_algorithm_version }) : ''
+      ].filter(Boolean).join(' · ');
+      metaEl.append(topLine);
+
+      const manualStateLine = document.createElement('div');
+      const manualNodes = Array.isArray(detail.manual_payload?.nodes) ? detail.manual_payload.nodes : [];
+      if (detail.manual_override === true) {
+        manualStateLine.textContent = manualNodes.length === 0
+          ? t('adminTocManualHiddenActive')
+          : t('adminTocManualActive', { count: manualNodes.length });
+      } else {
+        manualStateLine.textContent = t('adminTocManualNone');
+      }
+      metaEl.append(manualStateLine);
+
+      if (detail.last_error) {
+        const errLine = document.createElement('div');
+        errLine.textContent = t('adminTocLastError', { err: detail.last_error });
+        metaEl.append(errLine);
+      }
+
+      autoInfoEl.replaceChildren();
+      const autoPayload = detail.auto_payload;
+      const autoFlags = Array.isArray(detail.auto_flags) && detail.auto_flags.length > 0
+        ? detail.auto_flags
+        : (Array.isArray(autoPayload?.flags) ? autoPayload.flags : []);
+      if (autoFlags.length > 0) {
+        const p = document.createElement('span');
+        p.textContent = t('adminTocAutoFlags', { flags: autoFlags.join(', ') });
+        autoInfoEl.append(p);
+      }
+      if (autoPayload?.reason) {
+        const p = document.createElement('span');
+        p.textContent = t('adminTocAutoReason', { reason: autoPayload.reason });
+        autoInfoEl.append(p);
+      }
+      const needsOcr = Array.isArray(autoPayload?.needsOcrPages) ? autoPayload.needsOcrPages : [];
+      if (needsOcr.length > 0) {
+        const p = document.createElement('span');
+        p.textContent = t('adminTocNeedsOcrPages', { pages: needsOcr.join(', ') });
+        autoInfoEl.append(p);
+      }
+
+      autoTreeEl.replaceChildren();
+      const rawAutoNodes = Array.isArray(autoPayload?.nodes) ? autoPayload.nodes : [];
+      if (rawAutoNodes.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'doc-viewer-toc-status';
+        li.textContent = t('adminTocAutoEmpty');
+        autoTreeEl.append(li);
+      } else {
+        const autoTree = buildTocTree(rawAutoNodes, { includeFirstPage: false, previewOnly: false });
+        const renderAutoTree = () => {
+          const items = createTocListDom(document, autoTree, {
+            collapsedIds: adminTocAutoCollapsedIds,
+            labels: { expand: t('tocExpand'), collapse: t('tocCollapse') },
+            onToggleCollapse: (nodeId) => {
+              if (adminTocAutoCollapsedIds.has(nodeId)) adminTocAutoCollapsedIds.delete(nodeId);
+              else adminTocAutoCollapsedIds.add(nodeId);
+              renderAutoTree();
+            },
+            onJump: (page) => void renderAdminTocPdfPage(page)
+          });
+          autoTreeEl.replaceChildren(...items);
+        };
+        renderAutoTree();
+      }
+
+      if (!keepEditor) {
+        adminTocEditorNodes = manualNodes.map((n) => ({
+          title: String(n.title ?? ''),
+          level: Math.min(6, Math.max(1, Number(n.level) || 1)),
+          page_pdf: Math.max(1, Number(n.page_pdf) || 1)
+        }));
+        noteInput.value = detail.manual_payload?.note ?? '';
+      }
+      renderAdminTocEditorRows();
+
+      $('#admin-toc-promote-btn').disabled = rawAutoNodes.length === 0;
+      $('#admin-toc-delete-btn').disabled = !(detail.manual_override === true || detail.manual_payload !== null);
+      $('#admin-toc-reextract-btn').disabled = !canReextractToc(detail);
+    }
+
+    async function loadAdminTocDetail(fileId) {
+      const listPanel = $('#admin-tocs-list-panel');
+      const detailPanel = $('#admin-tocs-detail-panel');
+      const detailErr = $('#admin-toc-detail-error');
+      const editorErr = $('#admin-toc-editor-error');
+      const path = adminFileTocPath(fileId);
+      if (!listPanel || !detailPanel || !path) return;
+      if (!canManageAdminTocs(elibUser)) {
+        void loadAdminTocsList();
+        return;
+      }
+
+      listPanel.hidden = true;
+      detailPanel.hidden = false;
+      detailErr.hidden = true;
+      editorErr.hidden = true;
+      const seq = ++adminTocDetailSeq;
+      const result = await elibFetchJson(path);
+      if (seq !== adminTocDetailSeq) return;
+
+      if (result.status !== 200 || !result.payload) {
+        detailErr.hidden = false;
+        detailErr.textContent = formatAdminTocError(result, t);
+        return;
+      }
+
+      adminTocAutoCollapsedIds = new Set();
+      adminTocDetail = result.payload;
+      renderAdminTocDetail(false);
+      void loadAdminTocPdf(adminTocDetail);
+    }
+
+    async function loadAdminTocsView() {
+      const detailPanel = $('#admin-tocs-detail-panel');
+      if (detailPanel && !detailPanel.hidden && adminTocDetail && canManageAdminTocs(elibUser)) {
+        await loadAdminTocDetail(adminTocDetail.file_id);
+        return;
+      }
+      await loadAdminTocsList();
+    }
+
+    $('#admin-tocs-filters')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      adminTocListState.offset = 0;
+      void loadAdminTocsList();
+    });
+    $('#admin-toc-filter-reset')?.addEventListener('click', () => {
+      $('#admin-toc-filter-auto-status').value = '';
+      $('#admin-toc-filter-job-status').value = '';
+      $('#admin-toc-filter-flag').value = '';
+      $('#admin-toc-filter-manual').value = '';
+      $('#admin-toc-filter-standards').value = '';
+      $('#admin-toc-filter-outdated').checked = false;
+      adminTocListState.offset = 0;
+      void loadAdminTocsList();
+    });
+    $('#admin-tocs-prev')?.addEventListener('click', () => {
+      adminTocListState.offset = Math.max(0, adminTocListState.offset - adminTocListState.limit);
+      void loadAdminTocsList();
+    });
+    $('#admin-tocs-next')?.addEventListener('click', () => {
+      adminTocListState.offset += adminTocListState.limit;
+      void loadAdminTocsList();
+    });
+    $('#admin-toc-back')?.addEventListener('click', () => {
+      adminTocDetail = null;
+      adminTocEditorNodes = [];
+      destroyAdminTocPdf();
+      $('#admin-tocs-detail-panel').hidden = true;
+      $('#admin-tocs-list-panel').hidden = false;
+      void loadAdminTocsList({ keepView: true });
+    });
+    $('#admin-toc-add-node-btn')?.addEventListener('click', () => {
+      const last = adminTocEditorNodes[adminTocEditorNodes.length - 1];
+      adminTocEditorNodes = adminTocInsertNode(adminTocEditorNodes, adminTocEditorNodes.length - 1, {
+        level: last ? last.level : 1,
+        page_pdf: adminTocPdfState?.currentPage || (last ? last.page_pdf : 1)
+      });
+      renderAdminTocEditorRows();
+    });
+    $('#admin-toc-clear-nodes-btn')?.addEventListener('click', () => {
+      adminTocEditorNodes = [];
+      renderAdminTocEditorRows();
+    });
+    $('#admin-toc-save-btn')?.addEventListener('click', async () => {
+      if (!adminTocDetail) return;
+      const errBox = $('#admin-toc-editor-error');
+      errBox.hidden = true;
+      const totalPages = adminTocTotalPages(adminTocDetail);
+      const validation = validateAdminTocNodes(adminTocEditorNodes, totalPages, $('#admin-toc-note').value);
+      if (!validation.ok) {
+        errBox.hidden = false;
+        errBox.textContent = t(validation.error.key, validation.error.vars || {});
+        return;
+      }
+      if (validation.payload.nodes.length === 0 && !confirm(t('adminTocSaveEmptyConfirm'))) {
+        return;
+      }
+      const req = adminTocActionRequest('save', adminTocDetail.file_id, validation.payload);
+      if (!req) return;
+      const btn = $('#admin-toc-save-btn');
+      btn.disabled = true;
+      const result = await elibFetchJson(req.path, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: req.body
+      });
+      btn.disabled = false;
+      if (result.status === 200) {
+        showToast(t('adminTocSaved'));
+        void loadAdminTocDetail(adminTocDetail.file_id);
+        return;
+      }
+      errBox.hidden = false;
+      errBox.textContent = formatAdminTocError(result, t);
+    });
+    $('#admin-toc-promote-btn')?.addEventListener('click', async () => {
+      if (!adminTocDetail) return;
+      const errBox = $('#admin-toc-editor-error');
+      errBox.hidden = true;
+      const req = adminTocActionRequest('promote', adminTocDetail.file_id, {
+        activate: true,
+        note: $('#admin-toc-note').value.trim() || null
+      });
+      if (!req) return;
+      const btn = $('#admin-toc-promote-btn');
+      btn.disabled = true;
+      const result = await elibFetchJson(req.path, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: req.body
+      });
+      btn.disabled = false;
+      if (result.status === 200) {
+        showToast(t('adminTocPromoted'));
+        void loadAdminTocDetail(adminTocDetail.file_id);
+        return;
+      }
+      errBox.hidden = false;
+      errBox.textContent = formatAdminTocError(result, t);
+    });
+    $('#admin-toc-delete-btn')?.addEventListener('click', async () => {
+      if (!adminTocDetail) return;
+      if (!confirm(t('adminTocDeleteManualConfirm'))) return;
+      const errBox = $('#admin-toc-editor-error');
+      errBox.hidden = true;
+      const req = adminTocActionRequest('delete', adminTocDetail.file_id);
+      if (!req) return;
+      const btn = $('#admin-toc-delete-btn');
+      btn.disabled = true;
+      const result = await elibFetchJson(req.path, { method: req.method });
+      btn.disabled = false;
+      if (result.status === 200) {
+        showToast(t('adminTocDeleted'));
+        void loadAdminTocDetail(adminTocDetail.file_id);
+        return;
+      }
+      errBox.hidden = false;
+      errBox.textContent = formatAdminTocError(result, t);
+    });
+    $('#admin-toc-reextract-btn')?.addEventListener('click', async () => {
+      if (!adminTocDetail || !canReextractToc(adminTocDetail)) return;
+      const errBox = $('#admin-toc-editor-error');
+      errBox.hidden = true;
+      const req = adminTocActionRequest('reextract', adminTocDetail.file_id);
+      if (!req) return;
+      const btn = $('#admin-toc-reextract-btn');
+      btn.disabled = true;
+      const result = await elibFetchJson(req.path, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: req.body
+      });
+      if (result.status === 200) {
+        showToast(t('adminTocReextractQueued'));
+        void loadAdminTocDetail(adminTocDetail.file_id);
+        return;
+      }
+      btn.disabled = !canReextractToc(adminTocDetail);
+      errBox.hidden = false;
+      errBox.textContent = formatAdminTocError(result, t);
+    });
+    $('#admin-toc-pdf-prev')?.addEventListener('click', () => {
+      if (!adminTocPdfState) return;
+      void renderAdminTocPdfPage((adminTocPdfState.currentPage || 1) - 1);
+    });
+    $('#admin-toc-pdf-next')?.addEventListener('click', () => {
+      if (!adminTocPdfState) return;
+      void renderAdminTocPdfPage((adminTocPdfState.currentPage || 1) + 1);
+    });
+    $('#admin-toc-pdf-page-input')?.addEventListener('change', (event) => {
+      void renderAdminTocPdfPage(Number(event.target.value) || 1);
     });
 
     // ---- Đăng ký / đổi mật khẩu / quản trị người dùng (Giai đoạn B3) ----
@@ -4396,7 +6270,7 @@
       searchPage.value = params.get('page') || '1';
       showView('search', false);
       void searchStandards();
-    } else if (['categories', 'documents', 'library', 'search', 'detail', 'admin-users'].includes(view)) {
+    } else if (['categories', 'documents', 'library', 'search', 'detail', 'admin-users', 'admin-tocs'].includes(view)) {
       showView(view, false);
     } else {
       showView('home', false);
