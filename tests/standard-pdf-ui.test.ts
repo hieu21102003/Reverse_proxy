@@ -12,6 +12,7 @@ interface FileHelpers {
   canUploadStandardFile: (user: unknown) => boolean;
   standardFilesPath: (code: unknown) => string;
   standardFileState: (result: unknown) => string;
+  headerPdfAction: (state: unknown, doc: unknown) => string | null;
   buildStandardFileDoc: (payload: unknown) => Record<string, unknown> | null;
   codeCheckWarningKey: (file: unknown) => string | null;
   standardUploadErrorKey: (status: number, code: string | null) => string;
@@ -120,6 +121,31 @@ describe('standardFileState — trạng thái mục file tiêu chuẩn', () => {
   });
 });
 
+describe('headerPdfAction — nút PDF trên thẻ header trang chi tiết', () => {
+  it('có file + được xem toàn bộ -> full (nút "Xem PDF")', () => {
+    const doc = helpers.buildStandardFileDoc(filesPayload());
+    expect(helpers.headerPdfAction('file-view', doc)).toBe('full');
+  });
+
+  it('thấy file, không xem toàn bộ, bản xem trước sẵn sàng -> preview', () => {
+    const doc = helpers.buildStandardFileDoc(filesPayload({}, { can_view_full: false }));
+    expect(helpers.headerPdfAction('file-noaccess', doc)).toBe('preview');
+  });
+
+  it('thấy file, không xem toàn bộ, bản xem trước chưa sẵn sàng -> ẩn nút', () => {
+    const doc = helpers.buildStandardFileDoc(filesPayload({}, { can_view_full: false }, { preview_status: 'pending' }));
+    expect(helpers.headerPdfAction('file-noaccess', doc)).toBeNull();
+  });
+
+  it('chưa có file / elib lỗi / không có doc -> ẩn nút', () => {
+    const doc = helpers.buildStandardFileDoc(filesPayload());
+    expect(helpers.headerPdfAction('no-file', doc)).toBeNull();
+    expect(helpers.headerPdfAction('unavailable', doc)).toBeNull();
+    expect(helpers.headerPdfAction('file-view', null)).toBeNull();
+    expect(helpers.headerPdfAction('file-view', undefined)).toBeNull();
+  });
+});
+
 describe('buildStandardFileDoc — chuyển payload thành shape viewer dùng', () => {
   it('file = current_file, giữ can_view_full/can_download/created_by', () => {
     const doc = helpers.buildStandardFileDoc(filesPayload());
@@ -183,12 +209,17 @@ describe('gắn DOM: mục file tiêu chuẩn trên trang chi tiết', () => {
     return playgroundJs.slice(from, to);
   };
 
-  it('index.html có mục file tiêu chuẩn + cache ?v=16', () => {
+  it('index.html có mục file tiêu chuẩn + nút Xem PDF trên thẻ header + cache ?v=17', () => {
     expect(indexHtml).toContain('id="detail-standard-file-section"');
     expect(indexHtml).toContain('id="detail-standard-file-body"');
     expect(indexHtml).toContain('id="detail-nopdf-note"');
-    expect(indexHtml).toContain('playground.css?v=16');
-    expect(indexHtml).toContain('playground.js?v=16');
+    // Nút trên thẻ header (detail-hero), mặc định ẩn
+    const hero = indexHtml.slice(indexHtml.indexOf('id="detail-hero"'), indexHtml.indexOf('id="detail-meta-rows"'));
+    expect(hero).toContain('id="detail-view-pdf-btn"');
+    expect(hero).toContain('data-i18n="standardFileView"');
+    expect(hero).toContain('hidden');
+    expect(indexHtml).toContain('playground.css?v=17');
+    expect(indexHtml).toContain('playground.js?v=17');
   });
 
   it('renderDetailResult tải mục file; refreshElibAuth tải lại khi quyền đổi', () => {
@@ -206,10 +237,20 @@ describe('gắn DOM: mục file tiêu chuẩn trên trang chi tiết', () => {
     expect(loader).toContain("state === 'no-file' && !canUpload");
   });
 
-  it('"Xem PDF" mở viewer toàn bộ; không quyền xem toàn bộ thì chỉ xem trước/thông báo', () => {
+  it('nút "Xem PDF" nằm trên thẻ header: mở viewer toàn bộ; section dưới không còn nút trùng', () => {
+    const header = sliceBetween('function renderDetailHeaderPdfButton(state, doc)', 'function renderStandardFileSection');
+    expect(header).toContain('headerPdfAction(state, doc)');
+    expect(header).toContain("t(action === 'full' ? 'standardFileView' : 'viewPreview')");
+    expect(header).toContain('void openDocViewer(doc, action)');
+    expect(header).toContain('btn.hidden = true');
+    // renderStandardFileSection gọi nút header ở cả đường ẩn lẫn hiện
+    const render = sliceBetween('function renderStandardFileSection(result, model)', 'function buildStandardCurrentFile');
+    expect(render).toContain('renderDetailHeaderPdfButton(state, null)');
+    expect(render).toContain('renderDetailHeaderPdfButton(state, doc)');
+    // Section dưới: không còn nút xem toàn bộ trùng; giữ xem trước/thông báo/tải
     const current = sliceBetween('function buildStandardCurrentFile(doc, state)', 'function buildStandardVersionHistory');
-    expect(current).toContain("t('standardFileView')");
-    expect(current).toContain("openDocViewer(doc, 'full')");
+    expect(current).not.toContain("t('standardFileView')");
+    expect(current).not.toContain("openDocViewer(doc, 'full')");
     expect(current).toContain("openDocViewer(doc, 'preview')");
     expect(current).toContain("t('docNoAccess')");
     // Nút tải chỉ khi can_download (chủ + admin), dùng lại downloadFile
