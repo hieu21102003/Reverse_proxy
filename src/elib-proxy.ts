@@ -65,6 +65,8 @@ const ELIB_PROXY_BODY_LIMIT = 220 * 1024 * 1024;
  *   POST /api/admin/users/bulk-reject (Phase B3)
  *   POST /api/admin/users/:id/approve|reject|reset-password|unlock (Phase B3)
  *   PATCH /api/admin/users/:id        (Phase B3)
+ *   GET  /api/admin/standards/:code   (manual metadata, summary-detail)
+ *   PUT  /api/admin/standards/:code   (manual metadata, summary-detail)
  * Anything else (including elib's /internal/*, which is never under
  * /api/ and must stay unreachable from browsers) is refused here
  * instead of being forwarded.
@@ -91,6 +93,14 @@ const ELIB_ALLOWLIST_ADMIN_USER_PATCH = /^admin\/users\/[^/]+$/;
 const ELIB_ALLOWLIST_STANDARD_FILES = /^standards\/[^/]+\/files$/;
 /** Reset current version (Phase B standard-pdf): PATCH only. */
 const ELIB_ALLOWLIST_CURRENT_VERSION = /^documents\/[^/]+\/current-version$/;
+/**
+ * Manual standard metadata (summary-detail): read + upsert by code,
+ * GET/PUT only. The code segment is one percent-encoded segment
+ * (encodeURIComponent on the client); codes containing a literal "/"
+ * (e.g. GB/T) encode to %2F and are refused by the traversal guard
+ * above — a known separate gap, deliberately not handled here.
+ */
+const ELIB_ALLOWLIST_ADMIN_STANDARD = /^admin\/standards\/[^/]+$/;
 
 /**
  * Path-traversal guard for the wildcard segment. Checks both the raw
@@ -138,6 +148,11 @@ function isAllowlisted(wildcard: string, method: string): boolean {
   }
   if (ELIB_ALLOWLIST_CURRENT_VERSION.test(wildcard)) {
     return method === 'PATCH';
+  }
+  // Summary-detail: manual metadata read/upsert, GET/PUT only
+  // (admin session enforced by elib).
+  if (ELIB_ALLOWLIST_ADMIN_STANDARD.test(wildcard)) {
+    return method === 'GET' || method === 'PUT';
   }
   return ELIB_ALLOWLIST_EXACT.has(wildcard) || ELIB_ALLOWLIST_DOWNLOAD.test(wildcard);
 }

@@ -727,7 +727,229 @@
     return 'standardUploadFailed';
   }
 
-  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey };
+  /**
+   * Trang chi tiết "tóm tắt": một số tiêu chuẩn chỉ có ở kết quả tìm
+   * kiếm (vd TCVN 14553-1:2025 chỉ có ở VSQI search, VSQI detail 500,
+   * TCVN_VN/QT chưa có) nên API chi tiết trả 404/lỗi. Khi trang được
+   * mở từ một kết quả tìm kiếm (có dữ liệu tóm tắt của đúng mã đó),
+   * trang vẫn mở bằng dữ liệu tóm tắt: trường đã biết điền sẵn,
+   * trường thiếu để trống (—) kèm ghi chú rõ ràng. Mở trực tiếp bằng
+   * liên kết/mã gõ tay (không có tóm tắt) giữ nguyên hành vi lỗi cũ.
+   * Dữ liệu tóm tắt KHÔNG được lưu như một bản chi tiết thật
+   * (memory.detail vẫn giữ response lỗi gốc của API).
+   */
+  function summaryMatchesCode(summary, code) {
+    if (!summary || typeof summary !== 'object') return false;
+    const summaryCode = String(summary.code ?? '').trim();
+    const wanted = String(code ?? '').trim();
+    return summaryCode !== '' && wanted !== '' && summaryCode === wanted;
+  }
+
+  /**
+   * Dựng object chi tiết tổng hợp từ một mục kết quả tìm kiếm
+   * (code/name/englishName/year/status/source/ics/detailUrl) để
+   * buildDetailViewModel render như trang chi tiết thường. Trường
+   * không có trong tóm tắt để null (hiển thị —). Đánh dấu
+   * summaryOnly để UI hiện ghi chú tóm tắt và form nhập tay biết
+   * cần tra bản ghi manual đã lưu. Trả null khi tóm tắt không có mã.
+   */
+  function buildSummaryDetail(summary) {
+    if (!summary || typeof summary !== 'object') return null;
+    const code = firstText(summary.code);
+    if (!code) return null;
+    const ics = (Array.isArray(summary.ics) ? summary.ics : [])
+      .map(value => String(value ?? '').trim())
+      .filter(Boolean);
+    const yearNumber = Number(summary.year);
+    const detailUrl = safeWebUrl(summary.detailUrl) || '';
+    return {
+      code,
+      name: firstText(summary.name),
+      englishName: firstText(summary.englishName),
+      year: Number.isFinite(yearNumber) && yearNumber > 0 ? yearNumber : null,
+      status: firstText(summary.status),
+      issuedDate: null,
+      effectiveDate: null,
+      issuingAgency: null,
+      replaces: null,
+      replacedBy: null,
+      detailUrl,
+      ics,
+      source: firstText(summary.source) || 'VSQI',
+      summaryOnly: true,
+      attributes: ics.length > 0
+        ? [{ label: 'Chỉ số phân loại Quốc tế (ICS)', value: ics.join(', ') }]
+        : [],
+      relations: [],
+      raw: { page: { pageType: 'unknown', detailUrl } }
+    };
+  }
+
+  /**
+   * Quyết định có dùng trang tóm tắt thay cho lỗi chi tiết hay không:
+   * chỉ khi API chi tiết không dùng được (404/lỗi/không có data) VÀ
+   * có tóm tắt của đúng mã đang xem. Chi tiết thật dùng được thì
+   * luôn thắng (trả null). Trả object chi tiết tổng hợp hoặc null.
+   */
+  function resolveSummaryFallback(result, summary, code) {
+    const usable = Boolean(result?.ok && result.payload?.data && typeof result.payload.data === 'object');
+    if (usable) return null;
+    if (!summaryMatchesCode(summary, code)) return null;
+    return buildSummaryDetail(summary);
+  }
+
+  /** Đường dẫn elib (sau /api/elib) đọc/ghi metadata nhập tay theo mã. */
+  function adminStandardPath(code) {
+    return `/admin/standards/${encodeURIComponent(String(code ?? '').trim())}`;
+  }
+
+  /** Form nhập/sửa metadata chỉ dành cho admin (khớp elib: admin session). */
+  function canEditStandardMetadata(user) {
+    return isAdminUser(user);
+  }
+
+  /** Ô ICS nhập dạng chuỗi cách nhau bằng dấu phẩy -> mảng (bỏ rỗng, khử trùng). */
+  function parseIcsInput(value) {
+    const parts = Array.isArray(value)
+      ? value.map(item => String(item ?? ''))
+      : String(value ?? '').split(',');
+    const seen = new Set();
+    const out = [];
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+    return out;
+  }
+
+  /** Mảng ICS -> chuỗi cho ô nhập (cách nhau bằng dấu phẩy). */
+  function formatIcsInput(ics) {
+    return parseIcsInput(ics).join(', ');
+  }
+
+  /** Chuẩn hóa ngày cho <input type="date">: giữ YYYY-MM-DD, còn lại rỗng. */
+  function normalizeDateInput(value) {
+    const text = String(value ?? '').trim();
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+    return match ? match[1] : '';
+  }
+
+  /**
+   * Đọc một trường từ bản ghi manual elib trả về (GET admin/standards).
+   * Chấp nhận cả dạng phẳng lẫn bọc {standard}/{data} và khóa
+   * snake_case/camelCase, vì elib đang được xây song song theo cùng
+   * hợp đồng {title_vi, title_en, status, issued_date, effective_date,
+   * replaces, replaced_by, ics[]}.
+   */
+  const STORED_FIELD_ALIASES = {
+    title_vi: ['title_vi', 'titleVi'],
+    title_en: ['title_en', 'titleEn'],
+    status: ['status'],
+    issued_date: ['issued_date', 'issuedDate'],
+    effective_date: ['effective_date', 'effectiveDate'],
+    replaces: ['replaces'],
+    replaced_by: ['replaced_by', 'replacedBy'],
+    ics: ['ics']
+  };
+  function storedStandardField(stored, key) {
+    if (!stored || typeof stored !== 'object') return undefined;
+    const holders = [stored, stored.standard, stored.data].filter(holder => holder && typeof holder === 'object');
+    for (const holder of holders) {
+      for (const alias of STORED_FIELD_ALIASES[key] || [key]) {
+        const value = holder[alias];
+        if (Array.isArray(value) ? value.length > 0 : hasValue(value)) return value;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Giá trị điền sẵn cho form nhập tay (mọi trường là chuỗi sẵn sàng
+   * cho ô nhập; ics là chuỗi cách nhau bằng dấu phẩy):
+   * - có chi tiết thật: lấy từ chi tiết;
+   * - trang tóm tắt: lấy từ tóm tắt, bản ghi manual đã lưu (stored)
+   *   ghi đè từng trường khi có giá trị;
+   * - không có gì: để trống.
+   */
+  function buildManualPrefill(detail, summary, stored) {
+    const empty = {
+      title_vi: '', title_en: '', status: '', issued_date: '', effective_date: '',
+      replaces: '', replaced_by: '', ics: ''
+    };
+    let base = { ...empty };
+    if (detail && typeof detail === 'object') {
+      base = {
+        title_vi: firstText(detail.name) || '',
+        title_en: firstText(detail.englishName) || '',
+        status: firstText(detail.status) || '',
+        issued_date: normalizeDateInput(detail.issuedDate),
+        effective_date: normalizeDateInput(detail.effectiveDate),
+        replaces: firstText(detail.replaces) || '',
+        replaced_by: firstText(detail.replacedBy) || '',
+        ics: formatIcsInput(detail.ics)
+      };
+    } else if (summary && typeof summary === 'object') {
+      base = {
+        ...empty,
+        title_vi: firstText(summary.name) || '',
+        title_en: firstText(summary.englishName) || '',
+        status: firstText(summary.status) || '',
+        ics: formatIcsInput(summary.ics)
+      };
+    }
+    if (stored && typeof stored === 'object') {
+      const storedIcs = storedStandardField(stored, 'ics');
+      base = {
+        title_vi: firstText(storedStandardField(stored, 'title_vi')) || base.title_vi,
+        title_en: firstText(storedStandardField(stored, 'title_en')) || base.title_en,
+        status: firstText(storedStandardField(stored, 'status')) || base.status,
+        issued_date: normalizeDateInput(storedStandardField(stored, 'issued_date')) || base.issued_date,
+        effective_date: normalizeDateInput(storedStandardField(stored, 'effective_date')) || base.effective_date,
+        replaces: firstText(storedStandardField(stored, 'replaces')) || base.replaces,
+        replaced_by: firstText(storedStandardField(stored, 'replaced_by')) || base.replaced_by,
+        ics: storedIcs !== undefined ? formatIcsInput(storedIcs) : base.ics
+      };
+    }
+    return base;
+  }
+
+  /**
+   * Body PUT /api/admin/standards/:code theo hợp đồng elib (mọi
+   * trường đều tùy chọn): trường chữ/ngày trống bị bỏ qua (không gửi
+   * null để tránh elib từ chối kiểu), ics luôn gửi dạng mảng (rỗng
+   * = xóa hết ICS). Hệ quả: xóa trắng một trường chữ trong form
+   * không xóa giá trị đã lưu — cần elib xác nhận ngữ nghĩa null mới
+   * hỗ trợ xóa trường.
+   */
+  function buildManualSavePayload(values) {
+    const data = values && typeof values === 'object' ? values : {};
+    const payload = {};
+    for (const key of ['title_vi', 'title_en', 'status', 'replaces', 'replaced_by']) {
+      const text = String(data[key] ?? '').trim();
+      if (text) payload[key] = text;
+    }
+    for (const key of ['issued_date', 'effective_date']) {
+      const date = normalizeDateInput(data[key]);
+      if (date) payload[key] = date;
+    }
+    payload.ics = parseIcsInput(data.ics);
+    return payload;
+  }
+
+  /** Map mã lỗi ổn định của API metadata nhập tay sang khóa i18n. */
+  function manualSaveErrorKey(status, code) {
+    if (code === 'INVALID_STANDARD_CODE') return 'standardCodeInvalid';
+    if (status === 401) return 'manualLoginRequired';
+    if (status === 403) return 'manualForbidden';
+    if (status === 404) return 'manualNotFound';
+    if (status === 400) return 'manualInvalid';
+    if (status === 429) return 'downloadRateLimited';
+    return 'manualSaveFailed';
+  }
+
+  const fileHelpers = { fileKindFromName, needsLoginForDoc, formatFileSize, elibDownloadPath, elibPreviewPath, elibViewPath, previewAffordance, previewErrorKey, downloadAffordance, viewerToolbar, downloadErrorKey, filenameFromDisposition, endOfPreviewKind, previewStateKey, parseDocDeepLink, docDeepLinkHash, canChangeVisibility, visibilityErrorKey, normalizeContact, passwordPairErrorKey, validateRegistration, registerErrorKey, loginErrorKey, changePasswordErrorKey, adminErrorKey, isAdminUser, roleOptionsForUser, canUploadStandardFile, standardFilesPath, standardFileState, buildStandardFileDoc, codeCheckWarningKey, standardUploadErrorKey, summaryMatchesCode, buildSummaryDetail, resolveSummaryFallback, adminStandardPath, canEditStandardMetadata, parseIcsInput, formatIcsInput, normalizeDateInput, buildManualPrefill, buildManualSavePayload, manualSaveErrorKey };
 
   if (typeof document === 'undefined') {
     globalThis.__vsqiDetailModel = detailModel;
@@ -859,6 +1081,18 @@
         standardUploadForbidden: 'Chỉ quản trị viên hoặc người trong tổ chức mới tải được file tiêu chuẩn.',
         standardUploadFailed: 'Tải file tiêu chuẩn không thành công. Vui lòng thử lại sau.',
         standardNeedFile: 'Vui lòng chọn file PDF để tải lên.', pagesUnit: 'trang',
+        summaryNote: 'Chưa tải được chi tiết từ nguồn — đang hiển thị thông tin tóm tắt',
+        manualTitle: 'Nhập / sửa metadata (admin)', manualHint: 'Metadata nhập tay được lưu vào cơ sở dữ liệu tiêu chuẩn của thư viện (elib). Chỉ quản trị viên mới thấy mục này.',
+        manualTitleVi: 'Tên tiếng Việt', manualTitleEn: 'Tên tiếng Anh', manualStatus: 'Tình trạng',
+        manualIssuedDate: 'Ngày ban hành', manualEffectiveDate: 'Ngày hiệu lực',
+        manualReplaces: 'Thay thế cho', manualReplacedBy: 'Được thay thế bởi',
+        manualIcs: 'Mã ICS', manualIcsHint: 'Cách nhau bằng dấu phẩy, ví dụ: 91.010, 93.020',
+        manualSave: 'Lưu metadata', manualSaved: 'Đã lưu metadata.',
+        manualLoginRequired: 'Vui lòng đăng nhập lại để lưu metadata.',
+        manualForbidden: 'Chỉ quản trị viên mới sửa được metadata.',
+        manualNotFound: 'Không tìm thấy tiêu chuẩn trong cơ sở dữ liệu thư viện.',
+        manualInvalid: 'Dữ liệu metadata không hợp lệ. Vui lòng kiểm tra lại các trường.',
+        manualSaveFailed: 'Không lưu được metadata. Vui lòng thử lại sau.',
         navAdminUsers: 'Quản trị người dùng',
         elibShowRegister: 'Chưa có tài khoản? Đăng ký', elibShowLogin: 'Đã có tài khoản? Đăng nhập',
         elibRegisterTitle: 'Đăng ký tài khoản', elibRegisterNote: 'Tài khoản mới cần được quản trị viên duyệt trước khi đăng nhập. Bạn sẽ được thông báo khi tài khoản được duyệt.',
@@ -1038,6 +1272,18 @@
         standardUploadForbidden: 'Only admins or organization members can upload standard files.',
         standardUploadFailed: 'Standard file upload failed. Please try again later.',
         standardNeedFile: 'Please choose a PDF file to upload.', pagesUnit: 'pages',
+        summaryNote: 'Could not load details from the source — showing summary information',
+        manualTitle: 'Edit metadata (admin)', manualHint: 'Manually entered metadata is stored in the library standards database (elib). Only administrators see this section.',
+        manualTitleVi: 'Vietnamese title', manualTitleEn: 'English title', manualStatus: 'Status',
+        manualIssuedDate: 'Issued date', manualEffectiveDate: 'Effective date',
+        manualReplaces: 'Replaces', manualReplacedBy: 'Replaced by',
+        manualIcs: 'ICS codes', manualIcsHint: 'Comma-separated, e.g. 91.010, 93.020',
+        manualSave: 'Save metadata', manualSaved: 'Metadata saved.',
+        manualLoginRequired: 'Please sign in again to save metadata.',
+        manualForbidden: 'Only administrators can edit metadata.',
+        manualNotFound: 'Standard not found in the library database.',
+        manualInvalid: 'Invalid metadata. Please check the fields.',
+        manualSaveFailed: 'Could not save metadata. Please try again later.',
         navAdminUsers: 'User administration',
         elibShowRegister: 'No account yet? Register', elibShowLogin: 'Already have an account? Sign in',
         elibRegisterTitle: 'Register an account', elibRegisterNote: 'New accounts must be approved by an administrator before you can sign in. You will be notified once approved.',
@@ -1945,7 +2191,7 @@
         codeBtn.type = 'button';
         codeBtn.className = 'result-code result-code-btn';
         codeBtn.textContent = dash(record.code);
-        codeBtn.addEventListener('click', () => openDetail(record.code, record.source));
+        codeBtn.addEventListener('click', () => openDetail(record.code, record.source, record));
         const name = document.createElement('p');
         name.className = 'result-name';
         name.textContent = dash(record.name);
@@ -1968,7 +2214,7 @@
         detailBtn.type = 'button';
         detailBtn.className = 'detail-btn';
         detailBtn.textContent = `${t('viewDetail')} →`;
-        detailBtn.addEventListener('click', () => openDetail(record.code, record.source));
+        detailBtn.addEventListener('click', () => openDetail(record.code, record.source, record));
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'save-btn';
@@ -2068,6 +2314,11 @@
 
     // ---- Detail ----
     let currentDetail = null;
+    // Dữ liệu tóm tắt của kết quả tìm kiếm vừa bấm (chỉ giữ trong
+    // phiên, theo đúng mã): dùng cho trang chi tiết tóm tắt khi API
+    // chi tiết lỗi. Mở trực tiếp bằng liên kết/mã gõ tay thì null.
+    let pendingSummary = null;
+    let currentDetailIsSummary = false;
 
     function appendMetaField(target, item) {
       const field = document.createElement('div');
@@ -2139,19 +2390,42 @@
       const empty = $('#detail-empty');
       const groups = $('#detail-groups');
       const errorBox = $('#detail-error');
-      errorBox.hidden = !result.errorMessage;
+      const summaryNote = $('#detail-summary-note');
+      const requestedCode = detailInput.value;
+      // Trang tóm tắt: API chi tiết 404/lỗi nhưng trang được mở từ
+      // một kết quả tìm kiếm của đúng mã này -> render từ dữ liệu
+      // tóm tắt (memory.detail vẫn giữ response lỗi gốc, không lưu
+      // tóm tắt như chi tiết thật). Không có tóm tắt (mở trực tiếp)
+      // thì giữ nguyên hành vi lỗi cũ.
+      let data = (result.ok && result.payload?.data && typeof result.payload.data === 'object')
+        ? result.payload.data
+        : null;
+      let isSummary = false;
+      if (!data) {
+        const fallback = resolveSummaryFallback(result, pendingSummary, requestedCode);
+        if (fallback) { data = fallback; isSummary = true; }
+      }
+      let model = data ? buildDetailViewModel(data) : null;
+      if (data && model.isEmpty && !isSummary && summaryMatchesCode(pendingSummary, requestedCode)) {
+        const fallback = buildSummaryDetail(pendingSummary);
+        if (fallback) { data = fallback; isSummary = true; model = buildDetailViewModel(data); }
+      }
+      // Ở chế độ tóm tắt, ghi chú tóm tắt thay cho banner lỗi đỏ.
+      errorBox.hidden = isSummary ? true : !result.errorMessage;
       errorBox.textContent = result.errorMessage ? `${t('requestFailed')}: ${result.errorMessage}` : '';
       groups.hidden = true;
       empty.hidden = false;
       currentDetail = null;
-      if (!result.ok || !result.payload?.data || typeof result.payload.data !== 'object') {
+      currentDetailIsSummary = false;
+      if (summaryNote) summaryNote.hidden = true;
+      hideManualSection();
+      if (!data) {
         empty.querySelector('strong').textContent = result.errorMessage || t('requestFailed');
         empty.querySelector('p').textContent = t('detailEmptyText');
         return;
       }
-      const data = result.payload.data;
       currentDetail = data;
-      const model = buildDetailViewModel(data);
+      currentDetailIsSummary = isSummary;
       if (model.isEmpty) {
         empty.querySelector('strong').textContent = t('noResults');
         return;
@@ -2198,6 +2472,10 @@
         ? t('staleWarning', { days: model.db.staleDays ?? '' })
         : '';
       staleWarning.hidden = !showStale;
+      if (summaryNote) {
+        summaryNote.textContent = isSummary ? t('summaryNote') : '';
+        summaryNote.hidden = !isSummary;
+      }
 
       const metaRows = $('#detail-meta-rows');
       metaRows.replaceChildren();
@@ -2379,8 +2657,13 @@
       empty.hidden = true;
       groups.hidden = false;
       // Mục "File tiêu chuẩn": tải bất đồng bộ, lỗi elib không ảnh
-      // hưởng phần metadata (mục tự ẩn khi elib tắt/lỗi/cũ).
+      // hưởng phần metadata (mục tự ẩn khi elib tắt/lỗi/cũ). Trang
+      // tóm tắt cũng tải mục này bình thường (chỉ cần mã chuẩn).
       void loadStandardFiles(model.header.code, model);
+      // Form nhập/sửa metadata (chỉ admin): hiện cả trên trang chi
+      // tiết thật lẫn trang tóm tắt (trường hợp chính: tiêu chuẩn
+      // chỉ có ở tìm kiếm, chưa có chi tiết từ nguồn).
+      renderManualSection(model.header.code, data, isSummary);
     }
 
     function openPreview(data, model) {
@@ -2825,10 +3108,169 @@
       xhr.send(formData);
     }
 
-    async function requestDetail(codeOverride, sourceOverride) {
+    // ---- Nhập/sửa metadata thủ công (chỉ admin, elib /admin/standards) ----
+    // GET /api/elib/admin/standards/:code đọc bản ghi đã lưu (404 =
+    // chưa có), PUT cùng đường dẫn ghi metadata nhập tay. Form hiện
+    // trên cả trang chi tiết thật lẫn trang tóm tắt; trang tóm tắt
+    // là trường hợp chính (tiêu chuẩn chỉ có ở tìm kiếm).
+    let manualContext = null; // { code, data, isSummary }
+    let manualSeq = 0;
+
+    function hideManualSection() {
+      const section = $('#detail-manual-section');
+      const body = $('#detail-manual-body');
+      manualContext = null;
+      manualSeq += 1;
+      if (section) section.hidden = true;
+      if (body) body.replaceChildren();
+    }
+
+    function renderManualSection(code, data, isSummary) {
+      const section = $('#detail-manual-section');
+      const body = $('#detail-manual-body');
+      if (!section || !body) return;
+      const cleanCode = String(code || '').trim();
+      manualContext = cleanCode ? { code: cleanCode, data, isSummary: Boolean(isSummary) } : null;
+      if (!cleanCode || !canEditStandardMetadata(elibUser)) {
+        section.hidden = true;
+        body.replaceChildren();
+        return;
+      }
+      section.hidden = false;
+      const seq = ++manualSeq;
+      const els = buildManualForm(cleanCode, data, isSummary);
+      body.replaceChildren(els.box);
+      // Trang tóm tắt: tra thêm bản ghi manual đã lưu để điền sẵn
+      // (404 -> giữ giá trị tóm tắt/trống). Trang chi tiết thật:
+      // điền sẵn từ chi tiết, không gọi GET.
+      if (isSummary) void loadStoredManual(cleanCode, data, els, seq);
+    }
+
+    /** Đăng nhập/đăng xuất xong: quyền admin đổi -> dựng lại form. */
+    function reloadManualSection() {
+      if (!manualContext) return;
+      if ($('#view-detail')?.hidden) return;
+      const { code, data, isSummary } = manualContext;
+      renderManualSection(code, data, isSummary);
+    }
+
+    function buildManualForm(code, data, isSummary) {
+      const prefill = buildManualPrefill(data, isSummary ? pendingSummary : null, null);
+      const box = document.createElement('div');
+      box.className = 'manual-edit-box';
+      const hint = document.createElement('p');
+      hint.className = 'manual-edit-hint';
+      hint.textContent = t('manualHint');
+      box.append(hint);
+
+      const fields = [
+        { key: 'title_vi', labelKey: 'manualTitleVi', type: 'text' },
+        { key: 'title_en', labelKey: 'manualTitleEn', type: 'text' },
+        { key: 'status', labelKey: 'manualStatus', type: 'text' },
+        { key: 'issued_date', labelKey: 'manualIssuedDate', type: 'date' },
+        { key: 'effective_date', labelKey: 'manualEffectiveDate', type: 'date' },
+        { key: 'replaces', labelKey: 'manualReplaces', type: 'text' },
+        { key: 'replaced_by', labelKey: 'manualReplacedBy', type: 'text' },
+        { key: 'ics', labelKey: 'manualIcs', type: 'text', hintKey: 'manualIcsHint' }
+      ];
+      const grid = document.createElement('div');
+      grid.className = 'manual-edit-grid';
+      const inputs = {};
+      for (const field of fields) {
+        const wrap = document.createElement('label');
+        wrap.className = 'field';
+        const label = document.createElement('span');
+        label.className = 'field-label';
+        label.textContent = t(field.labelKey);
+        const input = document.createElement('input');
+        input.type = field.type;
+        input.className = `manual-input manual-input-${field.key}`;
+        input.value = prefill[field.key] || '';
+        if (field.hintKey) input.placeholder = t(field.hintKey);
+        inputs[field.key] = input;
+        wrap.append(label, input);
+        grid.append(wrap);
+      }
+      box.append(grid);
+
+      const errorBox = document.createElement('div');
+      errorBox.className = 'error-banner manual-edit-error';
+      errorBox.hidden = true;
+      box.append(errorBox);
+
+      const submit = document.createElement('button');
+      submit.type = 'button';
+      submit.className = 'button button-terracotta';
+      submit.textContent = t('manualSave');
+      box.append(submit);
+
+      const els = { box, inputs, errorBox, submit };
+      submit.addEventListener('click', () => void saveManual(code, els));
+      return els;
+    }
+
+    function applyManualPrefill(els, prefill) {
+      for (const [key, input] of Object.entries(els.inputs)) {
+        input.value = prefill[key] || '';
+      }
+    }
+
+    async function loadStoredManual(code, data, els, seq) {
+      const result = await elibFetchJson(adminStandardPath(code));
+      if (seq !== manualSeq) return; // đã chuyển sang tiêu chuẩn khác
+      if (result.status === 200 && result.payload && typeof result.payload === 'object') {
+        applyManualPrefill(els, buildManualPrefill(data, pendingSummary, result.payload));
+        return;
+      }
+      // 404 = chưa có bản ghi manual (hoặc elib cũ chưa có route):
+      // giữ giá trị tóm tắt/trống, không hiện lỗi.
+      if (result.status === 404) return;
+      els.errorBox.hidden = false;
+      els.errorBox.textContent = result.errorMessage || t(manualSaveErrorKey(result.status ?? 0, result.errorCode || null));
+      if (result.status === 401) void refreshElibAuth();
+    }
+
+    async function saveManual(code, els) {
+      const values = {};
+      for (const [key, input] of Object.entries(els.inputs)) values[key] = input.value;
+      const payload = buildManualSavePayload(values);
+      els.errorBox.hidden = true;
+      els.submit.disabled = true;
+      els.submit.classList.add('is-loading');
+      const result = await elibFetchJson(adminStandardPath(code), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      els.submit.disabled = false;
+      els.submit.classList.remove('is-loading');
+      if (result.status === 200 || result.status === 201) {
+        showToast(t('manualSaved'));
+        // Làm mới trang chi tiết (pendingSummary cùng mã được giữ,
+        // nên trang tóm tắt vẫn mở nếu nguồn vẫn chưa có chi tiết).
+        void requestDetail(code, detailSourceSelect.value);
+        return;
+      }
+      // Hiện lỗi elib đọc được, không bao giờ để trống: ưu tiên
+      // message của elib, thiếu thì dùng khóa i18n theo mã ổn định.
+      els.errorBox.hidden = false;
+      els.errorBox.textContent = result.errorMessage
+        || t(manualSaveErrorKey(result.status ?? 0, result.errorCode || null));
+      if (result.status === 401) void refreshElibAuth();
+    }
+
+    async function requestDetail(codeOverride, sourceOverride, summaryOverride) {
       const code = String(codeOverride ?? detailInput.value).trim().replace(/\s+/g, ' ');
       if (!code) { showToast(t('enterCode')); detailInput.focus(); return; }
       detailInput.value = code;
+      // Tóm tắt chỉ gắn với đúng mã của kết quả tìm kiếm vừa bấm:
+      // đổi mã (gõ tay/liên kết trực tiếp) thì bỏ tóm tắt cũ; tải
+      // lại cùng mã (lưu metadata, đổi ngôn ngữ) thì giữ tóm tắt.
+      if (summaryOverride && summaryMatchesCode(summaryOverride, code)) {
+        pendingSummary = summaryOverride;
+      } else if (pendingSummary && !summaryMatchesCode(pendingSummary, code)) {
+        pendingSummary = null;
+      }
       const source = sourceOverride !== undefined ? sourceOverride : detailSourceSelect.value;
       if (source) detailSourceSelect.value = source;
       const url = new URL(location.href);
@@ -2849,10 +3291,10 @@
       renderDetailResult(result);
     }
 
-    function openDetail(code, source) {
+    function openDetail(code, source, summary) {
       if (!code) return;
       showView('detail', false);
-      void requestDetail(code, source || '');
+      void requestDetail(code, source || '', summary);
     }
 
     // ---- My Library ----
@@ -2878,7 +3320,7 @@
           openBtn.type = 'button';
           openBtn.className = 'detail-btn';
           openBtn.textContent = t('open');
-          openBtn.addEventListener('click', () => openDetail(item.code, item.source));
+          openBtn.addEventListener('click', () => openDetail(item.code, item.source, item));
           row.append(orgBadge, main, openBtn);
           if (removable) {
             const removeBtn = document.createElement('button');
@@ -3014,6 +3456,8 @@
       // Mục file tiêu chuẩn trên trang chi tiết cũng phụ thuộc quyền
       // (xem toàn bộ / tải lên): tải lại khi trạng thái đăng nhập đổi.
       reloadStandardFiles();
+      // Form nhập metadata chỉ hiện với admin: dựng lại khi quyền đổi.
+      reloadManualSection();
       return { status: elibAuthStatus, result };
     }
 

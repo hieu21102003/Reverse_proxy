@@ -183,12 +183,12 @@ describe('gắn DOM: mục file tiêu chuẩn trên trang chi tiết', () => {
     return playgroundJs.slice(from, to);
   };
 
-  it('index.html có mục file tiêu chuẩn + cache ?v=13', () => {
+  it('index.html có mục file tiêu chuẩn + cache ?v=14', () => {
     expect(indexHtml).toContain('id="detail-standard-file-section"');
     expect(indexHtml).toContain('id="detail-standard-file-body"');
     expect(indexHtml).toContain('id="detail-nopdf-note"');
-    expect(indexHtml).toContain('playground.css?v=13');
-    expect(indexHtml).toContain('playground.js?v=13');
+    expect(indexHtml).toContain('playground.css?v=14');
+    expect(indexHtml).toContain('playground.js?v=14');
   });
 
   it('renderDetailResult tải mục file; refreshElibAuth tải lại khi quyền đổi', () => {
