@@ -726,7 +726,7 @@
         elibTitle: 'Tiêu đề', elibDescription: 'Mô tả', elibCategory: 'Danh mục', elibNoCategory: '— Chưa chọn danh mục —',
         elibDocType: 'Loại tài liệu', elibDocTypePlaceholder: 'Ví dụ: Tiêu chuẩn, Báo cáo, Bản vẽ...', elibLanguage: 'Ngôn ngữ',
         elibTags: 'Từ khóa (tag)', elibTagsPlaceholder: 'Cách nhau bằng dấu phẩy', elibVisibility: 'Mức hiển thị',
-        visInternal: 'Nội bộ', visPublic: 'Công khai', visPrivate: 'Riêng tư', elibStatus: 'Trạng thái',
+        visInternal: 'Nội bộ', visPublic: 'Công khai', visMembers: 'Thành viên', visPrivate: 'Riêng tư', elibStatus: 'Trạng thái',
         stDraft: 'Bản nháp', stPublished: 'Đã xuất bản', stHidden: 'Ẩn', elibUpload: 'Tải lên', elibUploading: 'Đang tải lên...',
         elibSkip: 'Bỏ qua', elibForce: 'Vẫn tạo mới', elibDuplicateFallback: 'File này đã tồn tại trong thư viện. Bạn có thể bỏ qua hoặc vẫn tạo mới.',
         elibUploadOk: 'Đã tải lên thành công: {title}', elibDownload: 'Tải xuống', elibNeedFileTitle: 'Vui lòng chọn file và nhập tiêu đề tài liệu.',
@@ -759,7 +759,7 @@
         previewUnsupported: 'Định dạng này chưa hỗ trợ xem trước.',
         previewNotAvailable: 'Tài liệu này không có bản xem trước.',
         docNoAccess: 'Bạn không có quyền xem tài liệu này.',
-        visibilityLabel: 'Mức hiển thị', visibilityPublic: 'Công khai', visibilityInternal: 'Nội bộ', visibilityPrivate: 'Riêng tư',
+        visibilityLabel: 'Mức hiển thị', visibilityPublic: 'Công khai', visibilityMembers: 'Thành viên', visibilityInternal: 'Nội bộ', visibilityPrivate: 'Riêng tư',
         visibilityUpdated: 'Đã đổi mức hiển thị.', visibilityLoginRequired: 'Vui lòng đăng nhập để đổi mức hiển thị.',
         visibilityForbidden: 'Bạn không có quyền đổi mức hiển thị của tài liệu này.', visibilityInvalid: 'Mức hiển thị không hợp lệ.',
         visibilityNotFound: 'Không tìm thấy tài liệu.', visibilityFailed: 'Không đổi được mức hiển thị. Vui lòng thử lại sau.',
@@ -887,7 +887,7 @@
         elibTitle: 'Title', elibDescription: 'Description', elibCategory: 'Category', elibNoCategory: '— No category selected —',
         elibDocType: 'Document type', elibDocTypePlaceholder: 'E.g. Standard, Report, Drawing...', elibLanguage: 'Language',
         elibTags: 'Tags', elibTagsPlaceholder: 'Comma-separated', elibVisibility: 'Visibility',
-        visInternal: 'Internal', visPublic: 'Public', visPrivate: 'Private', elibStatus: 'Status',
+        visInternal: 'Internal', visPublic: 'Public', visMembers: 'Members', visPrivate: 'Private', elibStatus: 'Status',
         stDraft: 'Draft', stPublished: 'Published', stHidden: 'Hidden', elibUpload: 'Upload', elibUploading: 'Uploading...',
         elibSkip: 'Skip', elibForce: 'Create anyway', elibDuplicateFallback: 'This file already exists in the library. You can skip it or create a new copy.',
         elibUploadOk: 'Uploaded successfully: {title}', elibDownload: 'Download', elibNeedFileTitle: 'Please choose a file and enter a document title.',
@@ -920,7 +920,7 @@
         previewUnsupported: 'This format does not support preview yet.',
         previewNotAvailable: 'This document has no preview.',
         docNoAccess: 'You do not have access to this document.',
-        visibilityLabel: 'Visibility', visibilityPublic: 'Public', visibilityInternal: 'Internal', visibilityPrivate: 'Private',
+        visibilityLabel: 'Visibility', visibilityPublic: 'Public', visibilityMembers: 'Members', visibilityInternal: 'Internal', visibilityPrivate: 'Private',
         visibilityUpdated: 'Visibility updated.', visibilityLoginRequired: 'Please sign in to change visibility.',
         visibilityForbidden: 'You do not have permission to change this document\'s visibility.', visibilityInvalid: 'Invalid visibility value.',
         visibilityNotFound: 'Document not found.', visibilityFailed: 'Could not change visibility. Please try again later.',
@@ -1377,13 +1377,13 @@
       const select = document.createElement('select');
       select.className = 'visibility-select';
       select.setAttribute('aria-label', t('visibilityLabel'));
-      for (const value of ['public', 'internal', 'private']) {
+      for (const value of ['public', 'members', 'internal', 'private']) {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = t(`visibility${value[0].toUpperCase()}${value.slice(1)}`);
         select.append(option);
       }
-      select.value = ['public', 'internal', 'private'].includes(doc.visibility) ? doc.visibility : 'internal';
+      select.value = ['public', 'members', 'internal', 'private'].includes(doc.visibility) ? doc.visibility : 'internal';
       label.append(select);
       wrap.append(label);
       select.addEventListener('change', async () => {
@@ -1403,7 +1403,7 @@
           showToast(t('visibilityUpdated'));
           return;
         }
-        select.value = ['public', 'internal', 'private'].includes(previous) ? previous : 'internal';
+        select.value = ['public', 'members', 'internal', 'private'].includes(previous) ? previous : 'internal';
         showToast(t(visibilityErrorKey(result.status ?? 0, result.errorCode || null)));
       });
       container.append(wrap);

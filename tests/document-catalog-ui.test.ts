@@ -221,6 +221,20 @@ describe('gắn DOM: bấm thẻ, deep link, ô chọn visibility, kênh liên h
     expect(control).toContain('visibilityErrorKey(result.status');
     expect(control).toContain('doc.visibility = result.payload.document.visibility');
   });
+
+  it('mức members: có trong ô chọn thẻ + form tải lên, nhãn VI/EN, PATCH giữ nguyên giá trị', () => {
+    const control = sliceBetween('function appendVisibilityControl(container, doc)', '// ---- Document preview / full viewer');
+    expect(control).toContain("['public', 'members', 'internal', 'private']");
+    expect(control).toContain('body: JSON.stringify({ visibility: next })');
+    // Nhãn i18n cho ô chọn trên thẻ (visibilityMembers) và form tải lên (visMembers)
+    expect(playgroundJs).toContain("visibilityMembers: 'Thành viên'");
+    expect(playgroundJs).toContain("visMembers: 'Thành viên'");
+    expect(playgroundJs).toContain("visibilityMembers: 'Members'");
+    expect(playgroundJs).toContain("visMembers: 'Members'");
+    // Form tải lên: option members + giá trị gửi nguyên trạng qua FormData
+    expect(indexHtml).toContain('<option value="members" data-i18n="visMembers">Thành viên</option>');
+    expect(playgroundJs).toContain("formData.append('visibility', $('#elib-visibility').value)");
+  });
 });
 
 describe('GET /api/v1/ui-config — kênh liên hệ công khai', () => {
