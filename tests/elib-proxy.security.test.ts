@@ -482,3 +482,83 @@ describe('Elib proxy — file tiêu chuẩn (Phase B standard-pdf)', () => {
     expect(hits).toBe(before);
   });
 });
+
+describe('Elib proxy — metadata nhập tay admin/standards/:code (summary-detail)', () => {
+  let server: Server;
+  let app: Awaited<ReturnType<typeof createApp>>;
+  let lastHeaders: Record<string, string | string[] | undefined> = {};
+  let lastBody = '';
+  let hits = 0;
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      hits += 1;
+      lastHeaders = req.headers;
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        lastBody = Buffer.concat(chunks).toString('utf8');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, path: req.url, method: req.method }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    app = await createApp(provider, {
+      elib: { baseUrl: `http://127.0.0.1:${port}`, enabled: true, timeoutMs: 3000 }
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('GET admin/standards/:code được cho qua (mã đã encode)', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/elib/admin/standards/TCVN%2014553-1%3A2025',
+      headers: { cookie: 'elib_session=good-token' }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().method).toBe('GET');
+    expect(lastHeaders.cookie).toBe('elib_session=good-token');
+  });
+
+  it('PUT admin/standards/:code được cho qua, body JSON giữ nguyên', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/elib/admin/standards/TCVN%2014553-1%3A2025',
+      headers: { 'content-type': 'application/json', cookie: 'elib_session=good-token' },
+      payload: JSON.stringify({ title_vi: 'Tên nhập tay', ics: ['45.020'] })
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().method).toBe('PUT');
+    expect(JSON.parse(lastBody)).toEqual({ title_vi: 'Tên nhập tay', ics: ['45.020'] });
+  });
+
+  it('method sai / route gần giống bị chặn 404, không forward', async () => {
+    const before = hits;
+    const blocked: Array<[string, string]> = [
+      ['POST', '/api/elib/admin/standards/TCVN%2014553-1%3A2025'],
+      ['PATCH', '/api/elib/admin/standards/TCVN%2014553-1%3A2025'],
+      ['DELETE', '/api/elib/admin/standards/TCVN%2014553-1%3A2025'],
+      ['GET', '/api/elib/admin/standards'],
+      ['PUT', '/api/elib/admin/standards'],
+      ['GET', '/api/elib/admin/standards/TCVN%2014553/files'],
+      ['PUT', '/api/elib/admin/standards/TCVN%2014553/files'],
+      ['GET', '/api/elib/admin/standards/TCVN%2014553/extra'],
+      ['GET', '/api/elib/admin/standard/TCVN%2014553'],
+      ['PUT', '/api/elib/admin/standard/TCVN%2014553'],
+      ['GET', '/api/elib/standards/TCVN%2014553'],
+      ['PUT', '/api/elib/standards/TCVN%2014553'],
+      ['GET', '/api/elib/admin/standards/TCVN%2014553/files/extra']
+    ];
+    for (const [method, url] of blocked) {
+      const res = await app.inject({ method: method as never, url });
+      expect(res.statusCode, `${method} ${url}`).toBe(404);
+      expect(res.json().error.code).toBe('ELIB_ROUTE_NOT_FOUND');
+    }
+    expect(hits).toBe(before);
+  });
+});

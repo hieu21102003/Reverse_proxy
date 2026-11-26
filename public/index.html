@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/playground.css?v=13">
-    <script src="/playground.js?v=13" defer></script>
+    <link rel="stylesheet" href="/playground.css?v=14">
+    <script src="/playground.js?v=14" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -499,6 +499,7 @@
                   <span class="detail-year badge badge-neutral" id="detail-year" hidden></span>
                 </div>
                 <div class="detail-stale-warning" id="detail-stale-warning" role="alert" hidden></div>
+                <div class="detail-summary-note" id="detail-summary-note" role="note" data-i18n="summaryNote" hidden>Chưa tải được chi tiết từ nguồn — đang hiển thị thông tin tóm tắt</div>
                 <h2 class="detail-code" id="detail-page-title"></h2>
                 <p class="detail-title-vi" id="detail-title-vi"></p>
                 <p class="detail-title-en" id="detail-title-en"></p>
@@ -527,6 +528,10 @@
               <section class="detail-section standard-file-section" id="detail-standard-file-section" hidden>
                 <div class="detail-section-heading"><h3 data-i18n="standardFileTitle">File tiêu chuẩn</h3></div>
                 <div id="detail-standard-file-body"></div>
+              </section>
+              <section class="detail-section manual-edit-section" id="detail-manual-section" hidden>
+                <div class="detail-section-heading"><h3 data-i18n="manualTitle">Nhập / sửa metadata (admin)</h3></div>
+                <div id="detail-manual-body"></div>
               </section>
               <div class="response-tabs" role="tablist" aria-label="Chi tiết">
                 <button class="response-tab is-active" data-response-tab="detail-fields" type="button" role="tab"><span data-i18n="fieldsTab">Thông tin</span></button>
